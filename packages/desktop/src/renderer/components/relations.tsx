@@ -1,7 +1,8 @@
 import { useMemo } from 'preact/hooks';
-import { familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, WorldIndex, type Entry, type RelationGroup, type World } from '@lore-forge/core';
+import { familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, WorldIndex, type Entry, type IconName, type RelationGroup, type World } from '@lore-forge/core';
 import { FamilyTreeSvg, RelationWebSvg } from './graphs.tsx';
 import { EntryLabel, EntryLink } from './type.tsx';
+import { Icon } from './icon.tsx';
 
 interface Link {
   /** e.g. "parent of", "killed by". */
@@ -26,8 +27,8 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen }: { 
   if (!entry) {
     return (
       <section class="relations">
-        <h2>🕸️ Relationships</h2>
-        <div class="empty-state"><span class="empty-emoji" aria-hidden="true">🧭</span><p>Pick an entry in the sidebar to see who and what it is tied to.</p></div>
+        <h2><Icon name="spider-web" /> Relationships</h2>
+        <div class="empty-state"><Icon class="empty-icon" name="compass" /><p>Pick an entry in the sidebar to see who and what it is tied to.</p></div>
       </section>
     );
   }
@@ -44,14 +45,14 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen }: { 
   }
   const events = world.entries.filter((e) => e.type === 'event' && [...(e.participants ?? []).map((p) => p.id), ...(e.actions ?? []).flatMap((a) => [a.actor, a.target ?? '']), e.place ?? ''].some((ref) => ix.resolve(ref)?.id === entry.id));
   const groups = (Object.keys(RELATION_GROUPS) as RelationGroup[]).map((g) => [g, links.filter((l) => l.group === g)] as const).filter(([, ls]) => ls.length > 0);
-  const modes: [Mode, string, string][] = [['tree', '🌳', 'Family tree'], ['web', '🕸️', 'Relationship web']];
+  const modes: [Mode, IconName, string][] = [['tree', 'family-tree', 'Family tree'], ['web', 'spider-web', 'Relationship web']];
   return (
     <section class="relations" aria-labelledby="relations-title">
       <header class="view-head">
         <h2 id="relations-title" tabIndex={-1}>Relationships of <EntryLabel entry={entry} /></h2>
         <div class="segmented" role="group" aria-label="Show">
-          {modes.map(([m, emoji, label]) => (
-            <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}><span aria-hidden="true">{emoji} </span>{label}</button>
+          {modes.map(([m, icon, label]) => (
+            <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}><Icon name={icon} /> {label}</button>
           ))}
         </div>
       </header>
@@ -65,13 +66,13 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen }: { 
             <div class="graph-scroll"><FamilyTreeSvg tree={tree} onOpen={onOpen} /></div>
             <ul class="legend" aria-label="Legend">
               <li><span class="lg lg-parent" aria-hidden="true" /> parent → child</li>
-              <li><span aria-hidden="true">💍</span> spouses</li>
+              <li><Icon name="diamond-ring" /> spouses</li>
               <li><span class="lg lg-sibling" aria-hidden="true" /> siblings</li>
-              <li><span aria-hidden="true">✝️</span> dead (shown faded)</li>
+              <li><Icon name="tombstone" /> dead (shown faded)</li>
             </ul>
           </>
         ) : (
-          <div class="empty-state"><span class="empty-emoji" aria-hidden="true">🌱</span><p>{entry.type === 'character' ? `${entry.name} has no family yet.` : 'No families yet.'} Add <strong>parent of</strong>, <strong>child of</strong>, <strong>spouse of</strong> or <strong>sibling of</strong> relationships in the editor to grow a tree.</p></div>
+          <div class="empty-state"><Icon class="empty-icon" name="sprout" /><p>{entry.type === 'character' ? `${entry.name} has no family yet.` : 'No families yet.'} Add <strong>parent of</strong>, <strong>child of</strong>, <strong>spouse of</strong> or <strong>sibling of</strong> relationships in the editor to grow a tree.</p></div>
         ))}
         {mode === 'web' && web && (web.nodes.length > 1 ? (
           <>
@@ -79,19 +80,19 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen }: { 
             <div class="graph-scroll"><RelationWebSvg web={web} onOpen={onOpen} /></div>
           </>
         ) : (
-          <div class="empty-state"><span class="empty-emoji" aria-hidden="true">🕸️</span><p>Nothing is tied to {entry.name} yet. Add allies, enemies, members, rulers or owners in the editor.</p></div>
+          <div class="empty-state"><Icon class="empty-icon" name="spider-web" /><p>Nothing is tied to {entry.name} yet. Add allies, enemies, members, rulers or owners in the editor.</p></div>
         ))}
       </div>
 
       <div class="rel-grid">
         {groups.map(([g, ls]) => (
           <section class={`rel-card g-${g}`} key={g}>
-            <h3><span aria-hidden="true">{RELATION_GROUPS[g].emoji} </span>{RELATION_GROUPS[g].label}</h3>
+            <h3><Icon name={RELATION_GROUPS[g].icon} /> {RELATION_GROUPS[g].label}</h3>
             <ul>
               {ls.map((l, i) => (
                 <li key={i}>
                   <span class="rel-label">{l.label}</span>{' '}
-                  {l.other ? <EntryLink entry={l.other} onOpen={onOpen} /> : <span class="missing"><span aria-hidden="true">✖ </span>{l.otherRef} (missing)</span>}
+                  {l.other ? <EntryLink entry={l.other} onOpen={onOpen} /> : <span class="missing"><Icon name="cancel" /> {l.otherRef} (missing)</span>}
                   {l.when && <span class="muted"> · {l.when}</span>}
                 </li>
               ))}
@@ -99,7 +100,7 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen }: { 
           </section>
         ))}
         <section class="rel-card">
-          <h3><span aria-hidden="true">⚔️ </span>Events</h3>
+          <h3><Icon name="crossed-swords" /> Events</h3>
           {events.length === 0 ? <p class="muted">Not in any event yet.</p> : (
             <ul>
               {events.map((e) => (

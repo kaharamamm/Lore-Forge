@@ -1,10 +1,12 @@
 import { Fragment } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { docSheets, inlineRuns, storyBook, TYPE_EMOJI, TYPE_LABELS, worldCodex, type Block, type ChapterGrouping, type Doc, type EntryType, type World } from '@lore-forge/core';
+import { docSheets, inlineRuns, storyBook, TYPE_ICON, TYPE_LABELS, worldCodex, type Block, type ChapterGrouping, type Doc, type EntryType, type World } from '@lore-forge/core';
 import type { PdfKind, PublishOptions } from '../../shared/api.ts';
+import { Icon } from './icon.tsx';
 
 const ALL_TYPES: EntryType[] = ['character', 'place', 'faction', 'item', 'event', 'note'];
-const TITLE: Record<PdfKind, string> = { codex: '📖 World Codex', book: '📚 Story Book' };
+const TITLE: Record<PdfKind, string> = { codex: 'World Codex', book: 'Story Book' };
+const TITLE_ICON = { codex: 'book-cover', book: 'open-book' } as const;
 
 /** Build the Doc exactly as the PDF export does (same core function, same options). */
 export function previewDoc(world: World, kind: PdfKind, options: PublishOptions): Doc {
@@ -35,7 +37,7 @@ function DocImage({ dir, file, caption }: { dir: string; file: string; caption: 
     return () => void (live = false);
   }, [dir, file]);
   if (src === undefined) return <div class="doc-img-missing">Loading image…</div>;
-  if (src === null) return <div class="doc-img-missing"><span aria-hidden="true">🖼️ </span>Image file missing: {file}</div>;
+  if (src === null) return <div class="doc-img-missing"><Icon name="photo-camera" /> Image file missing: {file}</div>;
   return <img src={src} alt={caption} />;
 }
 
@@ -45,7 +47,7 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
   switch (b.kind) {
     case 'heading': {
       const H = (`h${b.level + 1}`) as 'h2' | 'h3' | 'h4';
-      return <H id={anchorId(b, i)} class={`doc-h doc-h${b.level}`}>{b.text}</H>;
+      return <H id={anchorId(b, i)} class={`doc-h doc-h${b.level}`}>{b.icon && <><Icon name={b.icon} /> </>}{b.text}{b.mark && <> <Icon class="doc-mark" name={b.mark} /></>}</H>;
     }
     case 'para': return <p class={`doc-p${b.style ? ` doc-${b.style}` : ''}`}><Inline text={b.text} /></p>;
     case 'facts':
@@ -147,11 +149,11 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
     <div class="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="preview" role="dialog" aria-modal="true" aria-labelledby="preview-title" ref={dialog}>
         <header class="preview-head">
-          <h2 id="preview-title" tabIndex={-1}>{TITLE[kind]} <span class="muted">preview</span></h2>
+          <h2 id="preview-title" tabIndex={-1}><Icon name={TITLE_ICON[kind]} /> {TITLE[kind]} <span class="muted">preview</span></h2>
           <p class="muted">{sheets.length + 1} sheets here; the PDF paginates further. This is the same content the PDF gets.</p>
           <div class="preview-actions">
             <button type="button" class="primary" disabled={busy || (kind === 'codex' && types.length === 0)} onClick={() => void save()}>
-              <span aria-hidden="true">💾 </span>{busy ? 'Saving…' : 'Save PDF…'}
+              <Icon name="save" /> {busy ? 'Saving…' : 'Save PDF…'}
             </button>
             <button type="button" class="ghost" onClick={onClose}>Close <kbd>Esc</kbd></button>
           </div>
@@ -165,15 +167,15 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
                   {ALL_TYPES.map((t) => (
                     <label key={t} class={`check t-${t}`}>
                       <input type="checkbox" checked={types.includes(t)} onChange={() => toggleType(t)} />
-                      <span aria-hidden="true">{TYPE_EMOJI[t]}</span> {TYPE_LABELS[t]}
+                      <Icon name={TYPE_ICON[t]} /> {TYPE_LABELS[t]}
                     </label>
                   ))}
                   <p class="hint">{count} entries included{types.length === 0 ? ' — pick at least one type' : ''}.</p>
                 </fieldset>
                 <fieldset>
                   <legend>Extras</legend>
-                  <label class="check"><input type="checkbox" checked={artBriefs} onChange={() => setArtBriefs(!artBriefs)} /> 🎨 Art briefs and image prompts</label>
-                  <label class="check"><input type="checkbox" checked={warnings} onChange={() => setWarnings(!warnings)} /> ⚠️ Warnings appendix</label>
+                  <label class="check"><input type="checkbox" checked={artBriefs} onChange={() => setArtBriefs(!artBriefs)} /> <Icon name="palette" /> Art briefs and image prompts</label>
+                  <label class="check"><input type="checkbox" checked={warnings} onChange={() => setWarnings(!warnings)} /> <Icon name="hazard-sign" /> Warnings appendix</label>
                 </fieldset>
               </>
             ) : (

@@ -1,9 +1,11 @@
+import type { IconName } from './icons.ts';
 import type { Entry, EntryType } from './types.ts';
 
 export interface StatusOption {
   value: string;
   label: string;
   emoji: string;
+  icon: IconName;
 }
 
 /**
@@ -19,30 +21,32 @@ export interface Lifecycle {
   ended: readonly string[];
   /** Word for an ended entry, e.g. "dead", "destroyed". */
   endedWord: string;
-  /** Mark shown next to an ended entry, always together with endedWord. */
+  /** Mark shown next to an ended entry, always together with endedWord (text and Markdown). */
   endedMark: string;
+  /** The same mark as a game-icons.net icon (app and PDF). */
+  endedIcon: IconName;
 }
 
 export const LIFECYCLE: Partial<Record<EntryType, Lifecycle>> = {
   character: {
     endField: 'died', endLabel: 'Died',
-    statuses: [{ value: 'alive', label: 'Alive', emoji: '💚' }, { value: 'dead', label: 'Dead', emoji: '🪦' }, { value: 'unknown', label: 'Unknown', emoji: '❔' }],
-    ongoing: ['alive'], ended: ['dead'], endedWord: 'dead', endedMark: '🪦',
+    statuses: [{ value: 'alive', label: 'Alive', emoji: '💚', icon: 'heart-beats' }, { value: 'dead', label: 'Dead', emoji: '🪦', icon: 'tombstone' }, { value: 'unknown', label: 'Unknown', emoji: '❔', icon: 'uncertainty' }],
+    ongoing: ['alive'], ended: ['dead'], endedWord: 'dead', endedMark: '🪦', endedIcon: 'tombstone',
   },
   place: {
     endField: 'destroyed', endLabel: 'Destroyed',
-    statuses: [{ value: 'standing', label: 'Standing', emoji: '🏰' }, { value: 'destroyed', label: 'Destroyed', emoji: '🏚️' }, { value: 'unknown', label: 'Unknown', emoji: '❔' }],
-    ongoing: ['standing'], ended: ['destroyed'], endedWord: 'destroyed', endedMark: '🏚️',
+    statuses: [{ value: 'standing', label: 'Standing', emoji: '🏰', icon: 'castle' }, { value: 'destroyed', label: 'Destroyed', emoji: '🏚️', icon: 'castle-ruins' }, { value: 'unknown', label: 'Unknown', emoji: '❔', icon: 'uncertainty' }],
+    ongoing: ['standing'], ended: ['destroyed'], endedWord: 'destroyed', endedMark: '🏚️', endedIcon: 'castle-ruins',
   },
   faction: {
     endField: 'dissolved', endLabel: 'Dissolved',
-    statuses: [{ value: 'active', label: 'Active', emoji: '🚩' }, { value: 'dissolved', label: 'Dissolved', emoji: '🏳️' }, { value: 'unknown', label: 'Unknown', emoji: '❔' }],
-    ongoing: ['active'], ended: ['dissolved'], endedWord: 'dissolved', endedMark: '🏳️',
+    statuses: [{ value: 'active', label: 'Active', emoji: '🚩', icon: 'flying-flag' }, { value: 'dissolved', label: 'Dissolved', emoji: '🏳️', icon: 'broken-shield' }, { value: 'unknown', label: 'Unknown', emoji: '❔', icon: 'uncertainty' }],
+    ongoing: ['active'], ended: ['dissolved'], endedWord: 'dissolved', endedMark: '🏳️', endedIcon: 'broken-shield',
   },
   item: {
     endField: 'destroyed', endLabel: 'Destroyed',
-    statuses: [{ value: 'intact', label: 'Intact', emoji: '✨' }, { value: 'destroyed', label: 'Destroyed', emoji: '💥' }, { value: 'lost', label: 'Lost', emoji: '🌫️' }, { value: 'unknown', label: 'Unknown', emoji: '❔' }],
-    ongoing: ['intact', 'lost'], ended: ['destroyed'], endedWord: 'destroyed', endedMark: '💥',
+    statuses: [{ value: 'intact', label: 'Intact', emoji: '✨', icon: 'sparkles' }, { value: 'destroyed', label: 'Destroyed', emoji: '💥', icon: 'broken-axe' }, { value: 'lost', label: 'Lost', emoji: '🌫️', icon: 'fog' }, { value: 'unknown', label: 'Unknown', emoji: '❔', icon: 'uncertainty' }],
+    ongoing: ['intact', 'lost'], ended: ['destroyed'], endedWord: 'destroyed', endedMark: '💥', endedIcon: 'broken-axe',
   },
 };
 
@@ -65,6 +69,17 @@ export function statusLabel(e: Entry): string | undefined {
 
 /** Races to suggest: the ones already used in the world first, then common defaults. */
 export const DEFAULT_RACES = ['human', 'elf', 'dwarf', 'orc', 'camel-folk', 'ghoul', 'zombie', 'vampire', 'spirit', 'djinn'];
+
+const RACE_ICONS: Record<string, IconName> = {
+  human: 'person', elf: 'woman-elf-face', dwarf: 'dwarf-face', orc: 'orc-head', 'camel-folk': 'camel-head', camel: 'camel-head',
+  ghoul: 'daemon-skull', zombie: 'shambling-zombie', vampire: 'vampire-dracula', spirit: 'spectre', ghost: 'spectre', djinn: 'djinn', jinn: 'djinn',
+};
+
+/** Icon for a race or kind: a known one by its (singular, lower-case) word, otherwise a hooded figure. */
+export function raceIcon(race: string): IconName {
+  const key = race.trim().toLowerCase().replace(/\s+/g, '-');
+  return RACE_ICONS[key] ?? RACE_ICONS[key.replace(/s$/, '')] ?? 'hood';
+}
 export function raceSuggestions(entries: readonly Entry[]): string[] {
   const used = entries.flatMap((e) => (e.type === 'character' && e.race?.trim() ? [e.race.trim()] : []));
   return [...new Set([...used.sort((a, b) => a.localeCompare(b)), ...DEFAULT_RACES])];

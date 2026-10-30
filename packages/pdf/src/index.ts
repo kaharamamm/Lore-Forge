@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import PDFDocument from 'pdfkit';
-import { inlineRuns, toMarkdown, type Block, type Doc } from '@lore-forge/core';
+import { ICON_SIZE, ICONS, inlineRuns, toMarkdown, type Block, type Doc, type IconName } from '@lore-forge/core';
 
 type Pdf = PDFKit.PDFDocument;
 type Heading = Extract<Block, { kind: 'heading' }>;
@@ -139,14 +139,29 @@ class Layout {
         if (b.level === 1) this.outlineTop = item;
       }
     }
-    this.font('b').fontSize(size).fillColor(b.level === 3 ? INK : this.t.accent);
-    this.pdf.text(b.text, this.left, this.pdf.y, { width: this.width, lineGap: 2, ...(b.toc ? { destination: key } : {}) });
+    const color = b.level === 3 ? INK : this.t.accent;
+    const iconW = b.icon ? size * 1.3 : 0;
+    const markW = b.mark ? size * 1.2 : 0;
+    const width = this.width - iconW - markW;
+    const y0 = this.pdf.y;
+    this.font('b').fontSize(size).fillColor(color);
+    if (b.icon) this.icon(b.icon, this.left, y0 + size * 0.05, size * 0.95, color);
+    if (b.mark) this.icon(b.mark, this.left + iconW + Math.min(this.pdf.widthOfString(b.text), width) + size * 0.3, y0 + size * 0.05, size * 0.9, MUTED);
+    this.font('b').fontSize(size).fillColor(color);
+    this.pdf.text(b.text, this.left + iconW, y0, { width, lineGap: 2, ...(b.toc ? { destination: key } : {}) });
     if (b.level === 1) {
       const y = this.pdf.y + 3;
       this.pdf.moveTo(this.left, y).lineTo(this.left + this.width, y).lineWidth(0.8).strokeColor(this.t.accent).stroke();
       this.pdf.y = y + 10;
     } else this.pdf.y += 3;
     this.pdf.x = this.left;
+  }
+
+  /** A game-icons.net icon as vector paths, `size` points square, top-left at (x, y). */
+  private icon(name: IconName, x: number, y: number, size: number, color: string): void {
+    this.pdf.save().translate(x, y).scale(size / ICON_SIZE);
+    for (const d of ICONS[name]) this.pdf.path(d).fill(color);
+    this.pdf.restore();
   }
 
   private toc(): void {

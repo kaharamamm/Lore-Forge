@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   check, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, parseWorld, relationWeb, serializeEntry, serializeIntended, timelineModel, WorldIndex,
-  type Entry, type EntryType, type FactRef, type Warning, type World,
+  type Entry, type EntryType, type FactRef, type IconName, type Warning, type World,
 } from '@lore-forge/core';
 import type { PdfKind, PublishOptions } from '../shared/api.ts';
 import { EntryEditor } from './components/editor.tsx';
@@ -12,6 +12,7 @@ import { TimelineView } from './components/timeline.tsx';
 import { PreviewDialog, previewDoc, sheetsOf } from './components/preview.tsx';
 import { ToastStack, useToasts } from './components/toasts.tsx';
 import { involves, WarningsPanel, type WarningActions } from './components/warnings.tsx';
+import { Icon } from './components/icon.tsx';
 
 type View = 'editor' | 'timeline' | 'relations';
 type SaveState = { kind: 'saved' } | { kind: 'saving' } | { kind: 'failed'; message: string };
@@ -30,6 +31,9 @@ const SMOKE = new URLSearchParams(location.search).has('smoke');
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 const count = (sel: string) => document.querySelectorAll(sel).length;
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel);
+
+/** Smoke only: colour emoji in the app's own text (they show as empty boxes where no emoji font is installed). */
+const emojiIn = (el: Element | null) => [...(el as HTMLElement | null)?.innerText.matchAll(/\p{Extended_Pictographic}/gu) ?? []].map((m) => m[0]);
 
 /** Smoke only: every pane spans from below the top bar to the bottom of the window, and the page itself never scrolls. */
 function paneFit(): string[] {
@@ -165,6 +169,8 @@ export function App() {
           await tick();
           dom['editorMentions'] = count('.prose-mirror mark.mention');
           dom['statusPills'] = count('.lifecycle [role=radio]');
+          expect(count('.lifecycle [role=radio] svg.icon') === dom['statusPills'], 'status pills have icons');
+          expect(emojiIn($('.lifecycle')).length + emojiIn($('.editor-head')).length === 0, 'no emoji in the editor');
           dom['relationSelects'] = count('[data-field^="relations"] select');
           // Status: exactly one is always selected; clicking the selected one keeps it.
           expect(count('.lifecycle [aria-checked="true"]') === 1, 'one status selected');
@@ -220,11 +226,15 @@ export function App() {
         dom['timelineMarks'] = count('.tl-mark');
         dom['timelineBands'] = count('.tl-band');
         dom['timelineWarnings'] = count('.tl-warn');
+        expect(emojiIn($('.topbar')).length === 0 && emojiIn($('.sidebar')).length === 0 && emojiIn($('.warnings-panel')).length === 0, `emoji in the app chrome: ${emojiIn(document.body)}`);
+        dom['icons'] = count('svg.icon');
         for (const k of ['codex', 'book'] as const) {
           setPreview(k);
           await tick(150);
           dom[`${k}Sheets`] = count('.preview .sheet');
           dom[`${k}Headings`] = count('.preview .doc-h');
+          dom[`${k}Icons`] = count('.preview .doc-h svg.icon');
+          expect(emojiIn($('.preview-options')).length === 0 && emojiIn($('.preview-head')).length === 0, `${k} preview: emoji in UI text ${emojiIn($('.preview'))}`);
           expect(($('#preview-title')?.textContent ?? '').includes(k === 'codex' ? 'World Codex' : 'Story Book'), `${k} preview title`);
           setPreview(null);
           await tick();
@@ -340,7 +350,7 @@ export function App() {
         document.getElementById('search')?.focus();
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        void flush().then(() => toasts.push({ tone: 'ok', text: '💾 All changes saved' }));
+        void flush().then(() => toasts.push({ tone: 'ok', text: 'All changes saved' }));
       } else if (mod && ['1', '2', '3'].includes(e.key)) {
         e.preventDefault();
         setView((['editor', 'timeline', 'relations'] as const)[Number(e.key) - 1]!);
@@ -391,7 +401,7 @@ export function App() {
   if (!world || !dir) return <StartScreen onOpen={(d) => void open(d)} error={loadError} />;
 
   const savePdf = async (kind: PdfKind, options: PublishOptions) => {
-    const label = kind === 'codex' ? '📖 World Codex' : '📚 Story Book';
+    const label = kind === 'codex' ? 'World Codex' : 'Story Book';
     try {
       await flush();
       const r = await window.lore.exportPdf(dir, kind, options);
@@ -405,7 +415,7 @@ export function App() {
   const openEntry = (id: string) => { setSelectedId(id); setView('editor'); };
 
   const selected = world.entries.find((e) => e.id === selectedId);
-  const tabs: [View, string, string][] = [['editor', '✏️', 'Editor'], ['timeline', '🕰️', 'Timeline'], ['relations', '🕸️', 'Relationships']];
+  const tabs: [View, IconName, string][] = [['editor', 'quill-ink', 'Editor'], ['timeline', 'hourglass', 'Timeline'], ['relations', 'spider-web', 'Relationships']];
   return (
     <div class="app">
       <header class="topbar">
@@ -414,17 +424,17 @@ export function App() {
           <span class="muted path" title={dir}>{dir}</span>
         </div>
         <nav class="tabs" aria-label="Views">
-          {tabs.map(([v, emoji, label], i) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} title={`Ctrl+${i + 1}`}><span aria-hidden="true">{emoji} </span>{label}</button>
+          {tabs.map(([v, icon, label], i) => (
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} title={`Ctrl+${i + 1}`}><Icon name={icon} /> {label}</button>
           ))}
         </nav>
         <div class="publish-actions">
-          <button type="button" class="publish" onClick={() => setPreview('codex')} title="Preview every entry with facts, visual description, reference images and art briefs; then save as PDF">📖 World Codex</button>
-          <button type="button" class="publish" onClick={() => setPreview('book')} title="Preview your events and notes in story order as a book; then save as PDF">📚 Story Book</button>
+          <button type="button" class="publish" onClick={() => setPreview('codex')} title="Preview every entry with facts, visual description, reference images and art briefs; then save as PDF"><Icon name="book-cover" /> World Codex</button>
+          <button type="button" class="publish" onClick={() => setPreview('book')} title="Preview your events and notes in story order as a book; then save as PDF"><Icon name="open-book" /> Story Book</button>
         </div>
         <div class="top-actions">
           <span class={`save save-${save.kind}`} role="status">
-            {save.kind === 'saved' ? '✓ Saved' : save.kind === 'saving' ? '… Saving' : `✖ Save failed: ${save.message}`}
+            {save.kind === 'saved' ? <><Icon name="check-mark" /> Saved</> : save.kind === 'saving' ? '… Saving' : <><Icon name="cancel" /> Save failed: {save.message}</>}
           </span>
           <button type="button" class="ghost small" onClick={() => void flush().then(() => open(dir))} title="Reload all files from disk">Reload</button>
           <button type="button" class="ghost small" onClick={() => void flush().then(() => { setWorld(null); setDir(null); document.title = 'Lore-Forge'; })}>Close world</button>
@@ -437,7 +447,7 @@ export function App() {
             <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={updateEntry} onDelete={() => void deleteEntry(selected)} onOpen={openEntry} />
           ) : (
             <div class="empty-state">
-              <span class="empty-emoji" aria-hidden="true">{world.entries.length ? '👈' : '🌍'}</span>
+              <Icon class="empty-icon" name={world.entries.length ? 'pointing' : 'world'} />
               <p>{world.entries.length ? 'Pick an entry on the left to edit it.' : 'This world is empty. Start with a character, a place or an event: use “+ New” on the left.'}</p>
             </div>
           ))}

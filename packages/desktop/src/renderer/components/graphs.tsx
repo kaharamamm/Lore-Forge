@@ -1,4 +1,5 @@
-import { LIFECYCLE, relationKind, TREE_LAYOUT, TYPE_EMOJI, TYPE_SINGULAR, WEB_LAYOUT, type Entry, type FamilyTree, type RelationWeb } from '@lore-forge/core';
+import { SvgIcon } from './icon.tsx';
+import { LIFECYCLE, relationKind, TREE_LAYOUT, TYPE_ICON, TYPE_SINGULAR, WEB_LAYOUT, type Entry, type FamilyTree, type RelationWeb } from '@lore-forge/core';
 
 const clip = (s: string, n: number) => ([...s].length > n ? `${[...s].slice(0, n - 1).join('')}…` : s);
 
@@ -18,9 +19,9 @@ function Node(props: { e: Entry; x: number; y: number; w: number; h: number; end
       <title>{`${TYPE_SINGULAR[e.type]}: ${e.name}${ended && lc ? ` (${lc.endedWord})` : ''}${props.sub ? `\n${props.sub}` : ''}`}</title>
       <rect x={x} y={y} width={w} height={h} rx={10} />
       <rect class="node-stripe" x={x} y={y} width={6} height={h} rx={3} />
-      <text x={x + 16} y={y + h / 2 - 4} class="node-name">
-        {`${TYPE_EMOJI[e.type]} ${clip(e.name, 17)}${ended && lc ? ` ${lc.endedMark}` : ''}`}
-      </text>
+      <SvgIcon class="node-icon" name={TYPE_ICON[e.type]} x={x + 14} y={y + h / 2 - 19} size={16} />
+      <text x={x + 36} y={y + h / 2 - 5} class="node-name">{clip(e.name, 15)}</text>
+      {ended && lc && <SvgIcon class="node-mark" name={lc.endedIcon} x={x + w - 26} y={y + 8} size={16} />}
       <text x={x + 16} y={y + h / 2 + 15} class="node-sub">{clip(props.sub || TYPE_SINGULAR[e.type], 26)}</text>
     </g>
   );
@@ -46,7 +47,7 @@ export function FamilyTreeSvg({ tree, onOpen }: { tree: FamilyTree; onOpen: (id:
             return (
               <g key={i}>
                 <line class="edge edge-spouse" x1={l.x + w} y1={y} x2={r.x} y2={y} />
-                <text class="edge-icon" x={(l.x + w + r.x) / 2} y={y - 6} text-anchor="middle">💍</text>
+                <SvgIcon class="edge-icon" name="diamond-ring" x={(l.x + w + r.x) / 2 - 8} y={y - 20} size={16} />
               </g>
             );
           }

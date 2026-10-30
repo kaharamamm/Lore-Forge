@@ -24,6 +24,7 @@
     "dist:linux": "npm run build && npm run dist:linux -w @lore-forge/desktop"
   },
   "devDependencies": {
+    "@iconify-json/game-icons": "^1.2.4",
     "@types/node": "^24.19.2",
     "@types/pdfkit": "^0.17.7",
     "ajv": "^8.20.0",

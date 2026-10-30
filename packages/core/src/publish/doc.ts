@@ -4,12 +4,16 @@
  * Inline text may use **bold** and *italic*; single newlines are kept as line breaks.
  */
 import { formatDate, formatYearless, parseDate, type ParsedDate } from '../dates.ts';
+import type { IconName } from '../icons.ts';
 import type { Calendar } from '../types.ts';
 import type { WorldIndex } from '../world-index.ts';
 
 export type Block =
-  /** `toc` headings appear in the table of contents and the PDF outline. */
-  | { kind: 'heading'; level: 1 | 2 | 3; text: string; anchor?: string; toc?: boolean; newPage?: boolean }
+  /**
+   * `toc` headings appear in the table of contents and the PDF outline. `icon` is drawn before the text and
+   * `mark` after it (e.g. a tombstone); both are optional decorations, the text alone says everything.
+   */
+  | { kind: 'heading'; level: 1 | 2 | 3; text: string; anchor?: string; toc?: boolean; newPage?: boolean; icon?: IconName; mark?: IconName }
   | { kind: 'para'; text: string; style?: 'lead' | 'muted' }
   | { kind: 'facts'; rows: [label: string, value: string][] }
   | { kind: 'list'; items: string[] }

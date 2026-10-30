@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { bodyLinks, LIFECYCLE, MentionMatcher, statusOf, TYPE_SINGULAR, WorldIndex, type Entry, type Mention, type World } from '@lore-forge/core';
 import { EntryLabel, TypeBadge } from './type.tsx';
+import { Icon } from './icon.tsx';
 
 const IS_MAC = navigator.platform.toLowerCase().includes('mac');
 const MOD = IS_MAC ? '⌘' : 'Ctrl';
@@ -21,7 +22,7 @@ function EntryCard({ ix, entry }: { ix: WorldIndex; entry: Entry }) {
   return (
     <div class="card-body">
       <div class="card-title"><EntryLabel entry={entry} /></div>
-      <div class="card-meta"><TypeBadge type={entry.type} />{race && <span class="card-race"> {race}</span>} <span>{dates}</span>{status && <span> · <span aria-hidden="true">{status.emoji} </span>{status.label}</span>}</div>
+      <div class="card-meta"><TypeBadge type={entry.type} />{race && <span class="card-race"> {race}</span>} <span>{dates}</span>{status && <span> · <Icon name={status.icon} /> {status.label}</span>}</div>
       {entry.summary && <p class="card-summary">{entry.summary}</p>}
     </div>
   );
@@ -160,7 +161,7 @@ export function ProseField({ world, entry, onInput, onOpen }: { world: World; en
                 <li key={m.ids[0]}><button type="button" class="entry-chip" onClick={() => onOpen(es[0]!.id)}><EntryLabel entry={es[0]!} /><span class="sr-only">, {TYPE_SINGULAR[es[0]!.type].toLowerCase()}</span></button></li>
               ) : (
                 <li key={m.ids.join('+')} class="chip-ambiguous">
-                  <span class="chip-shared"><span aria-hidden="true">⁉️ </span>“{m.text}” is shared:</span>
+                  <span class="chip-shared"><Icon name="uncertainty" /> “{m.text}” is shared:</span>
                   {es.map((x) => <button key={x.id} type="button" class="entry-chip" onClick={() => onOpen(x.id)}><EntryLabel entry={x} /><span class="sr-only">, {TYPE_SINGULAR[x.type].toLowerCase()}</span></button>)}
                 </li>
               );
@@ -168,9 +169,9 @@ export function ProseField({ world, entry, onInput, onOpen }: { world: World; en
             {links.map((l, i) => {
               const t = ix.resolve(l.ref);
               return t ? (
-                <li key={`l${i}`}><button type="button" class="entry-chip chip-explicit" onClick={() => onOpen(t.id)} title="Explicit link"><span aria-hidden="true">🔗 </span><EntryLabel entry={t} /></button></li>
+                <li key={`l${i}`}><button type="button" class="entry-chip chip-explicit" onClick={() => onOpen(t.id)} title="Explicit link"><Icon name="linked-rings" /> <EntryLabel entry={t} /></button></li>
               ) : (
-                <li key={`l${i}`} class="chip chip-missing"><span aria-hidden="true">✖ </span>{l.ref} (missing)</li>
+                <li key={`l${i}`} class="chip chip-missing"><Icon name="cancel" /> {l.ref} (missing)</li>
               );
             })}
           </ul>

@@ -17,7 +17,7 @@
   --intended: #cdb9f0;
   --intended-bg: #2a2438;
   --ok: #9fe0a8;
-  /* Type colours: always paired with an emoji and a word. */
+  /* Type colours: always paired with an icon and a word. */
   --t-character: #ffab91;
   --t-place: #8fd18f;
   --t-faction: #f6c667;
@@ -38,7 +38,7 @@
 .t-event { --tc: var(--t-event); }
 .t-note { --tc: var(--t-note); }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 1rem/1.55 system-ui, 'Segoe UI', Ubuntu, Cantarell, 'Noto Color Emoji', sans-serif; -webkit-font-smoothing: antialiased; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 1rem/1.55 system-ui, 'Segoe UI', Ubuntu, Cantarell, sans-serif; -webkit-font-smoothing: antialiased; }
 #root { height: 100%; }
 h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
 h1 { font-size: 1.3rem; letter-spacing: -0.01em; }
@@ -186,7 +186,8 @@ button.publish:hover { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(13
 .list-row-fields { flex: 1 1 30rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.5rem 0.75rem; min-width: 0; }
 .list-editor > button { align-self: flex-start; }
 
-/* Type badges, entry labels and chips: emoji + word/name; colour is a second cue. */
+/* Type badges, entry labels and chips: icon + word/name; colour is a second cue. */
+.icon { width: 1.1em; height: 1.1em; vertical-align: -0.2em; flex: none; }
 .type-badge { display: inline-flex; gap: 0.35rem; align-items: center; color: var(--tc); font-weight: 650; letter-spacing: 0.05em; }
 .entry-label { display: inline-flex; gap: 0.3rem; align-items: baseline; min-width: 0; }
 .entry-label-name { overflow-wrap: anywhere; }
@@ -308,7 +309,9 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .graph .edge { fill: none; stroke: #8b93a7; stroke-width: 1.6; }
 .graph .edge-spouse { stroke: var(--t-character); stroke-width: 2.2; }
 .graph .edge-sibling { stroke-dasharray: 3 4; }
-.graph .edge-icon { font-size: 12px; }
+.graph .edge-icon { color: var(--gold, #d8b45a); }
+.graph .node-icon { color: var(--tc); }
+.graph .node-mark { color: var(--muted); }
 .graph .arrow-head { fill: #8b93a7; }
 .graph .edge-label { fill: var(--text); font-size: 12px; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
 .web-edge.g-family .edge { stroke: var(--t-character); }
@@ -322,7 +325,7 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 
 /* Empty states */
 .empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.4rem; padding: 2.5rem 1rem; color: var(--muted); max-width: 34rem; margin: 0 auto; }
-.empty-emoji { font-size: 2.4rem; }
+.empty-icon { font-size: 2.6rem; color: var(--gold, #d8b45a); }
 
 /* Preview dialog: page-like sheets from the same Doc the PDF uses. */
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgb(5 7 10 / 0.7); display: flex; padding: 2vh 2vw; animation: fade var(--ease); }

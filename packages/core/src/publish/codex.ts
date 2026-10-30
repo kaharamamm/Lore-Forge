@@ -1,11 +1,11 @@
 import { monthsOf } from '../dates.ts';
-import { statusLabel } from '../lifecycle.ts';
+import { isEnded, LIFECYCLE, statusLabel } from '../lifecycle.ts';
 import { checkWorld } from '../engine.ts';
 import { builtinRules } from '../rules/index.ts';
 import { GENERATOR } from '../snapshot.ts';
 import { references } from '../rules/references.ts';
 import { relationLabel } from '../relation-kinds.ts';
-import { ENTRY_TYPES, TYPE_LABELS, type EntryType, VISUAL_FIELDS, viewLabel, type Entry, type RefImage, type Warning, type World } from '../types.ts';
+import { ENTRY_TYPES, TYPE_ICON, TYPE_LABELS, type EntryType, VISUAL_FIELDS, viewLabel, type Entry, type RefImage, type Warning, type World } from '../types.ts';
 import { normalizeName, WorldIndex } from '../world-index.ts';
 import { artBrief } from './art.ts';
 import { anchorOf, bodyBlocks, dateWithEra, showDate, type Block, type Doc } from './doc.ts';
@@ -94,7 +94,8 @@ function eventsOf(e: Entry, ix: WorldIndex): string[] {
 }
 
 function entrySection(e: Entry, ix: WorldIndex, world: World, all: Triple[], mentionedIn: Map<string, string[]>, opts: Required<CodexOptions>): Block[] {
-  const blocks: Block[] = [{ kind: 'heading', level: 2, text: e.name, anchor: anchorOf(e.id), toc: true }];
+  const ended = isEnded(e) ? LIFECYCLE[e.type]?.endedIcon : undefined;
+  const blocks: Block[] = [{ kind: 'heading', level: 2, text: e.name, anchor: anchorOf(e.id), toc: true, icon: TYPE_ICON[e.type], ...(ended ? { mark: ended } : {}) }];
   if (e.summary) blocks.push({ kind: 'para', text: e.summary, style: 'lead' });
   blocks.push({ kind: 'facts', rows: entryFacts(e, ix, world.files[e.id]) });
 
@@ -187,7 +188,7 @@ export function worldCodex(world: World, options: CodexOptions = {}): Doc {
     if (!opts.types.includes(type)) continue;
     const list = world.entries.filter((e) => e.type === type).sort(byName);
     if (!list.length) continue;
-    blocks.push({ kind: 'heading', level: 1, text: TYPE_LABELS[type], toc: true, newPage: true });
+    blocks.push({ kind: 'heading', level: 1, text: TYPE_LABELS[type], toc: true, newPage: true, icon: TYPE_ICON[type] });
     for (const e of list) blocks.push(...entrySection(e, ix, world, all, mentionedIn, opts));
   }
 

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { DATE_FORMATS_HINT, describeDate, parseDate, TYPE_EMOJI, TYPE_SINGULAR, WorldIndex, type Calendar, type World } from '@lore-forge/core';
+import { DATE_FORMATS_HINT, describeDate, parseDate, TYPE_SINGULAR, WorldIndex, type Calendar, type World } from '@lore-forge/core';
+import { Icon } from './icon.tsx';
 
 /** Empty input -> undefined, so empty fields disappear from the file. */
 export const opt = (s: string): string | undefined => (s.trim() === '' ? undefined : s);
@@ -20,7 +21,7 @@ export function Field({ label, field, hint, invalid, children }: FieldProps) {
     <div class={`field${invalid ? ' field-invalid' : ''}`} data-field={field}>
       <label for={id}>{label}</label>
       {children(id, hintId)}
-      {hint !== undefined && <div class="hint" id={hintId}>{invalid && <span aria-hidden="true">✖ </span>}{hint}</div>}
+      {hint !== undefined && <div class="hint" id={hintId}>{invalid && <><Icon name="cancel" /> </>}{hint}</div>}
     </div>
   );
 }
@@ -81,11 +82,11 @@ export function RefField(props: { label: string; field: string; value: string | 
   const allowed = props.types && props.types.length ? props.types : undefined;
   const wrongType = !!target && !!allowed && !allowed.includes(target.type);
   const invalid = (!!props.value && !target) || wrongType;
-  const want = allowed ? allowed.map((t) => `${TYPE_EMOJI[t as keyof typeof TYPE_EMOJI]} ${TYPE_SINGULAR[t as keyof typeof TYPE_SINGULAR].toLowerCase()}`).join(', ') : undefined;
+  const want = allowed ? allowed.map((t) => TYPE_SINGULAR[t as keyof typeof TYPE_SINGULAR].toLowerCase()).join(', ') : undefined;
   const hint = !props.value
     ? `Type an id or name${want ? ` (${want})` : ''}`
     : !target ? 'No entry has this id or name'
-    : `${TYPE_EMOJI[target.type]} ${target.name} · ${TYPE_SINGULAR[target.type]}${wrongType ? ` (expected ${want})` : ''}`;
+    : `${target.name} · ${TYPE_SINGULAR[target.type]}${wrongType ? ` (expected ${want})` : ''}`;
   const options = props.world.entries.filter((e) => e.id !== props.exclude && (!allowed || allowed.includes(e.type))).sort((a, b) => a.name.localeCompare(b.name));
   return (
     <Field label={props.label} field={props.field} hint={hint} invalid={invalid}>
@@ -94,7 +95,7 @@ export function RefField(props: { label: string; field: string; value: string | 
           <input id={id} type="text" list={listId} value={props.value ?? ''} aria-invalid={invalid} aria-describedby={hintId} onInput={(e) => props.onChange(opt(e.currentTarget.value))} />
           <datalist id={listId}>
             {options.map((e) => (
-              <option key={e.id} value={e.id}>{`${TYPE_EMOJI[e.type]} ${e.name}`}</option>
+              <option key={e.id} value={e.id}>{`${e.name} · ${TYPE_SINGULAR[e.type].toLowerCase()}`}</option>
             ))}
           </datalist>
         </>
@@ -137,7 +138,7 @@ export function ListEditor<T>(props: {
   return (
     <fieldset class="list-editor">
       <legend>{props.title}</legend>
-      {items.length === 0 && <p class="muted empty-hint"><span aria-hidden="true">🌱 </span>None yet. Add the first one below.</p>}
+      {items.length === 0 && <p class="muted empty-hint"><Icon name="sprout" /> None yet. Add the first one below.</p>}
       {items.map((item, i) => (
         <div class="list-row" key={i} data-field={`${props.field}[${i}]`}>
           <div class="list-row-fields">{props.render(item, (x) => setAt(i, x), `${props.field}[${i}]`)}</div>

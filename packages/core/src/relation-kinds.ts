@@ -1,15 +1,16 @@
+import type { IconName } from './icons.ts';
 import { ENTRY_TYPES, type EntryType } from './types.ts';
 
 export type RelationGroup = 'family' | 'bonds' | 'power' | 'possession' | 'place' | 'story' | 'other';
 
-export const RELATION_GROUPS: Record<RelationGroup, { label: string; emoji: string }> = {
-  family: { label: 'Family', emoji: '👪' },
-  bonds: { label: 'Allies and enemies', emoji: '🤝' },
-  power: { label: 'Power and belonging', emoji: '👑' },
-  possession: { label: 'Possessions', emoji: '🎒' },
-  place: { label: 'Places and parts', emoji: '📍' },
-  story: { label: 'Deeds and events', emoji: '📖' },
-  other: { label: 'Other', emoji: '🔗' },
+export const RELATION_GROUPS: Record<RelationGroup, { label: string; emoji: string; icon: IconName }> = {
+  family: { label: 'Family', emoji: '👪', icon: 'family-tree' },
+  bonds: { label: 'Allies and enemies', emoji: '🤝', icon: 'shaking-hands' },
+  power: { label: 'Power and belonging', emoji: '👑', icon: 'crown' },
+  possession: { label: 'Possessions', emoji: '🎒', icon: 'backpack' },
+  place: { label: 'Places and parts', emoji: '📍', icon: 'position-marker' },
+  story: { label: 'Deeds and events', emoji: '📖', icon: 'open-book' },
+  other: { label: 'Other', emoji: '🔗', icon: 'linked-rings' },
 };
 
 /**

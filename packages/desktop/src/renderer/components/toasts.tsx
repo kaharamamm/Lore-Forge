@@ -1,3 +1,5 @@
+import type { IconName } from '@lore-forge/core';
+import { Icon } from './icon.tsx';
 import { useCallback, useRef, useState } from 'preact/hooks';
 
 export interface Toast {
@@ -7,7 +9,7 @@ export interface Toast {
   action?: { label: string; run: () => void };
 }
 
-const ICON: Record<Toast['tone'], string> = { ok: '✓', error: '✖', info: 'ℹ' };
+const ICON: Record<Toast['tone'], IconName> = { ok: 'check-mark', error: 'cancel', info: 'info' };
 
 export function useToasts() {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -27,7 +29,7 @@ export function ToastStack({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id:
     <div class="toasts" role="status" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} class={`toast toast-${t.tone}`}>
-          <span aria-hidden="true" class="toast-icon">{ICON[t.tone]}</span>
+          <Icon class="toast-icon" name={ICON[t.tone]} />
           <span class="toast-text">{t.text}</span>
           {t.action && <button type="button" class="ghost small" onClick={() => { t.action!.run(); dismiss(t.id); }}>{t.action.label}</button>}
           <button type="button" class="ghost small icon-btn" aria-label="Dismiss" onClick={() => dismiss(t.id)}>×</button>

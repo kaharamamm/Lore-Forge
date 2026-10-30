@@ -1,4 +1,5 @@
 export * from './types.ts';
+export * from './icons.ts';
 export * from './dates.ts';
 export * from './parse.ts';
 export * from './links.ts';

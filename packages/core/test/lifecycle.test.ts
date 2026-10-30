@@ -62,3 +62,15 @@ test('race: parsed, saved, suggested from the world first', async () => {
   assert.equal(s[0], 'ghoul');
   assert.ok(s.includes('vampire') && s.includes('human'));
 });
+
+test('every status, race and type has a game-icon', async () => {
+  const { ICONS, LIFECYCLE, TYPE_ICON, RELATION_GROUPS, raceIcon, DEFAULT_RACES } = await import('@lore-forge/core');
+  for (const lc of Object.values(LIFECYCLE)) {
+    for (const s of lc!.statuses) assert.ok(ICONS[s.icon], s.value);
+    assert.ok(ICONS[lc!.endedIcon]);
+  }
+  assert.equal(LIFECYCLE.character!.statuses.find((s) => s.value === 'dead')!.icon, 'tombstone');
+  for (const i of [...Object.values(TYPE_ICON), ...Object.values(RELATION_GROUPS).map((g) => g.icon), ...DEFAULT_RACES.map(raceIcon)]) assert.ok(ICONS[i], i);
+  assert.equal(raceIcon('Vampires'), 'vampire-dracula');
+  assert.equal(raceIcon('sand-wyrm'), 'hood');
+});

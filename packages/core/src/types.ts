@@ -1,4 +1,5 @@
 /** Lore-Forge world format, schema version 1. Mirrors schemas/*.schema.json. */
+import type { IconName } from './icons.ts';
 
 export const SCHEMA_VERSION = 1;
 
@@ -31,6 +32,15 @@ export const TYPE_EMOJI: Record<EntryType, string> = {
   item: '🗡️',
   event: '⚔️',
   note: '📜',
+};
+/** Icon (game-icons.net) for each entry type, used by the app and the PDF. */
+export const TYPE_ICON: Record<EntryType, IconName> = {
+  character: 'person',
+  place: 'castle',
+  faction: 'checked-shield',
+  item: 'broadsword',
+  event: 'crossed-swords',
+  note: 'scroll-unfurled',
 };
 export const TYPE_SINGULAR: Record<EntryType, string> = {
   character: 'Character',

@@ -1,5 +1,5 @@
 import {
-  DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_EMOJI, TYPE_SINGULAR, VISUAL_FIELDS, WorldIndex,
+  DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_ICON, TYPE_SINGULAR, VISUAL_FIELDS, WorldIndex,
   type Action, type Character, type Entry, type EntryType, type LocationSpan, type LoreEvent, type Participant, type Relation, type RelationGroup, type Warning, type World,
 } from '@lore-forge/core';
 import { useState } from 'preact/hooks';
@@ -8,6 +8,7 @@ import { ImageSlots } from './images.tsx';
 import { ProseField } from './prose.tsx';
 import { TypeBadge } from './type.tsx';
 import { WarningItem, type WarningActions } from './warnings.tsx';
+import { Icon } from './icon.tsx';
 
 interface Props {
   dir: string;
@@ -30,15 +31,15 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
       <header class="editor-head">
         <div>
           <p class="eyebrow"><TypeBadge type={entry.type} /></p>
-          <h2 id="entry-title" tabIndex={-1}><span class="title-emoji" aria-hidden="true">{TYPE_EMOJI[entry.type]} </span>{entry.name || '(no name)'}</h2>
+          <h2 id="entry-title" tabIndex={-1}><Icon class="title-icon" name={TYPE_ICON[entry.type]} /> {entry.name || '(no name)'}</h2>
           <p class="muted">id <code>{entry.id}</code> · {world.files[entry.id]}</p>
         </div>
-        <button type="button" class="ghost danger" onClick={onDelete}><span aria-hidden="true">🗑️ </span>Delete entry</button>
+        <button type="button" class="ghost danger" onClick={onDelete}><Icon name="trash-can" /> Delete entry</button>
       </header>
 
       <section class="live-warnings" aria-live="polite" aria-label="Live warnings for this entry">
         {warnings.length === 0 ? (
-          <p class="ok-line"><span aria-hidden="true">✨ </span>No warnings for this entry. Canon holds.</p>
+          <p class="ok-line"><Icon name="sparkles" /> No warnings for this entry. Canon holds.</p>
         ) : (
           <ul class="warning-list">
             {warnings.map((w) => <WarningItem key={w.id} w={w} actions={actions} compact={w.offending.entryId === entry.id} />)}
@@ -167,7 +168,7 @@ function LifecycleFields({ world, entry, onChange }: { world: World; entry: Entr
               {lc.statuses.map((o) => (
                 <button key={o.value} type="button" role="radio" aria-checked={status === o.value} tabIndex={status === o.value ? 0 : -1} class={`pill status-${o.value}`}
                   onClick={() => status !== o.value && put({ status: o.value })}>
-                  <span aria-hidden="true">{o.emoji} </span>{o.label}
+                  <Icon name={o.icon} /> {o.label}
                 </button>
               ))}
             </div>
@@ -178,7 +179,7 @@ function LifecycleFields({ world, entry, onChange }: { world: World; entry: Entr
       </div>
       {hidden && hidden.trim() !== '' && (
         <p class="hint hidden-note" data-field={lc.endField}>
-          <span aria-hidden="true">💾 </span>{lc.endLabel} “{hidden}” is still in the file but hidden while the status is {ongoing?.label ?? status}. Pick {lc.statuses.find((x) => lc.ended.includes(x.value))!.label} to edit it, or clear it there.
+          <Icon name="save" /> {lc.endLabel} “{hidden}” is still in the file but hidden while the status is {ongoing?.label ?? status}. Pick {lc.statuses.find((x) => lc.ended.includes(x.value))!.label} to edit it, or clear it there.
         </p>
       )}
       {!showEnd && !hidden && !ongoing && <p class="hint">Pick {lc.statuses.find((x) => lc.ended.includes(x.value))!.label} to add a {lc.endLabel.toLowerCase()} date.</p>}
@@ -209,16 +210,16 @@ function RelationTypeField({ world, entry, r, field, onChange }: { world: World;
       ) : (
         <select id={id} value={r.type} aria-describedby={hintId} aria-invalid={!!misfit}
           onChange={(e) => { const v = e.currentTarget.value; if (v === '__custom') setCustom(true); else onChange(v); }}>
-          {!known && r.type && <option value={r.type}>{misfit ? '⚠ ' : ''}{r.type.replace(/-/g, ' ')}{misfit ? ' (does not fit)' : ''}</option>}
+          {!known && r.type && <option value={r.type}>{misfit ? '! ' : ''}{r.type.replace(/-/g, ' ')}{misfit ? ' (does not fit)' : ''}</option>}
           {GROUP_ORDER.map((g) => {
             const ks = kinds.filter((k) => k.group === g);
             return ks.length ? (
-              <optgroup key={g} label={`${RELATION_GROUPS[g].emoji} ${RELATION_GROUPS[g].label}`}>
+              <optgroup key={g} label={RELATION_GROUPS[g].label}>
                 {ks.map((k) => <option key={k.type} value={k.type}>{k.label}</option>)}
               </optgroup>
             ) : null;
           })}
-          <option value="__custom">✏️ Custom type…</option>
+          <option value="__custom">Custom type…</option>
         </select>
       )}
     </Field>

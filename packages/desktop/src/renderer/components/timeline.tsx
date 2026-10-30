@@ -1,10 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { LIFECYCLE, TYPE_EMOJI, TYPE_LABELS, TYPE_SINGULAR, timelineModel, yearLabel, yearTicks, type EntryType, type TimelineLane, type Warning, type World } from '@lore-forge/core';
+import { LIFECYCLE, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, timelineModel, yearLabel, yearTicks, type EntryType, type TimelineLane, type Warning, type World } from '@lore-forge/core';
 import { CountBadge } from './severity.tsx';
+import { Icon } from './icon.tsx';
+import { SEVERITY_ICON } from './severity.tsx';
 
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 400;
-const SEV_ICON = { error: '✖', warning: '▲', info: 'ℹ' } as const;
 
 interface Hover { lane: TimelineLane; x: number; y: number }
 
@@ -30,8 +31,8 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
   if (!model) {
     return (
       <section class="timeline">
-        <h2>🕰️ Timeline</h2>
-        <div class="empty-state"><span class="empty-emoji" aria-hidden="true">⏳</span><p>Nothing has a date yet. Give a character a birth year, a place a founding year or an event a date, and it shows up here.</p></div>
+        <h2><Icon name="hourglass" /> Timeline</h2>
+        <div class="empty-state"><Icon class="empty-icon" name="sands-of-time" /><p>Nothing has a date yet. Give a character a birth year, a place a founding year or an event a date, and it shows up here.</p></div>
       </section>
     );
   }
@@ -70,7 +71,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
   return (
     <section class="timeline" aria-labelledby="timeline-title">
       <header class="view-head">
-        <h2 id="timeline-title" tabIndex={-1}>🕰️ Timeline</h2>
+        <h2 id="timeline-title" tabIndex={-1}><Icon name="hourglass" /> Timeline</h2>
         <p class="muted">{lanes} dated entries, {model.eras.length} eras{flagged ? `, ${flagged} with warnings` : ''}. Hold Ctrl (⌘) and scroll to zoom.</p>
       </header>
       <div class="tl-toolbar">
@@ -83,7 +84,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
         <div class="type-filters" role="group" aria-label="Show types">
           {model.groups.map((g) => (
             <button key={g.type} type="button" class={`pill t-${g.type}`} aria-pressed={!hidden.has(g.type)} onClick={() => toggle(g.type)}>
-              <span aria-hidden="true">{TYPE_EMOJI[g.type]} </span>{TYPE_LABELS[g.type]} <span class="muted">{g.lanes.length}</span>
+              <Icon name={TYPE_ICON[g.type]} /> {TYPE_LABELS[g.type]} <span class="muted">{g.lanes.length}</span>
             </button>
           ))}
         </div>
@@ -112,7 +113,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
           {groups.map((g) => (
             <div key={g.type} class={`tl-group t-${g.type}`} role="group" aria-label={TYPE_LABELS[g.type]}>
               <div class="tl-row tl-group-head">
-                <div class="tl-label"><span aria-hidden="true">{TYPE_EMOJI[g.type]} </span>{TYPE_LABELS[g.type]}</div>
+                <div class="tl-label"><Icon name={TYPE_ICON[g.type]} /> {TYPE_LABELS[g.type]}</div>
                 <div class="tl-track" style={{ width: `${width}px` }} />
               </div>
               {g.lanes.map((lane) => {
@@ -127,7 +128,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
                     <div class="tl-label">
                       <button type="button" class={`tl-name t-${e.type}${lane.ended ? ' is-ended' : ''}`} aria-label={`${label}. Open.`}
                         onClick={() => onOpen(e.id)} onFocus={(ev) => show(lane, ev)} onBlur={() => setHover(null)}>
-                        <span aria-hidden="true">{TYPE_EMOJI[e.type]} </span>{e.name}{lane.ended && lc ? <span aria-hidden="true"> {lc.endedMark}</span> : null}
+                        <Icon name={TYPE_ICON[e.type]} /> {e.name}{lane.ended && lc ? <> <Icon name={lc.endedIcon} /></> : null}
                       </button>
                       <CountBadge warnings={lane.warnings} />
                     </div>
@@ -140,7 +141,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
                       {lane.worst && (
                         <button type="button" tabIndex={-1} aria-hidden="true" class={`tl-warn sev-${lane.worst}`} style={{ left: `${left + (lane.point ? 10 : w) + 4}px` }}
                           onClick={() => onOpen(e.id)} onMouseEnter={(ev) => show(lane, ev)} onMouseLeave={() => setHover(null)}>
-                          {SEV_ICON[lane.worst]} {lane.warnings.length}
+                          <Icon name={SEVERITY_ICON[lane.worst]} /> {lane.warnings.length}
                         </button>
                       )}
                     </div>
@@ -164,9 +165,9 @@ function TimelineCard({ hover }: { hover: Hover }) {
   const top = Math.min(hover.y + 8, window.innerHeight - 200);
   return (
     <div class={`hover-card t-${e.type}`} role="tooltip" style={{ left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px` }}>
-      <p class="hover-title"><span aria-hidden="true">{TYPE_EMOJI[e.type]} </span><strong>{e.name}</strong> <span class="muted">· {TYPE_SINGULAR[e.type]}</span></p>
-      <p>{lane.dates}{lane.ended && lc ? ` · ${lc.endedMark} ${lc.endedWord}` : ''}</p>
-      {lane.warnings.slice(0, 3).map((w, i) => <p key={i} class={`hover-warn sev-${w.severity}`}><span aria-hidden="true">{SEV_ICON[w.severity]} </span>{w.message}</p>)}
+      <p class="hover-title"><Icon name={TYPE_ICON[e.type]} /> <strong>{e.name}</strong> <span class="muted">· {TYPE_SINGULAR[e.type]}</span></p>
+      <p>{lane.dates}{lane.ended && lc ? <> · <Icon name={lc.endedIcon} /> {lc.endedWord}</> : ''}</p>
+      {lane.warnings.slice(0, 3).map((w, i) => <p key={i} class={`hover-warn sev-${w.severity}`}><Icon name={SEVERITY_ICON[w.severity]} /> {w.message}</p>)}
       {lane.warnings.length > 3 && <p class="muted">and {lane.warnings.length - 3} more…</p>}
       <p class="muted small">Click to open</p>
     </div>

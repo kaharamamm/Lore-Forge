@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
-import { ENTRY_TYPES, isEnded, LIFECYCLE, normalizeName, TYPE_EMOJI, TYPE_LABELS, TYPE_SINGULAR, type Entry, type EntryType, type Warning } from '@lore-forge/core';
+import { ENTRY_TYPES, isEnded, LIFECYCLE, normalizeName, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, type Entry, type EntryType, type Warning } from '@lore-forge/core';
 import { CountBadge } from './severity.tsx';
 import { involves } from './warnings.tsx';
+import { Icon } from './icon.tsx';
 
 interface Props {
   entries: Entry[];
@@ -29,7 +30,7 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
         return (
           <section class={`type-group t-${type}`} key={type} aria-labelledby={`group-${type}`}>
             <div class="type-head">
-              <h2 id={`group-${type}`}><span aria-hidden="true">{TYPE_EMOJI[type]} </span>{TYPE_LABELS[type]} <span class="muted">({list.length})</span></h2>
+              <h2 id={`group-${type}`}><Icon name={TYPE_ICON[type]} /> {TYPE_LABELS[type]} <span class="muted">({list.length})</span></h2>
               <button type="button" class="ghost small" aria-label={`New ${TYPE_SINGULAR[type].toLowerCase()}`} onClick={() => { setCreating(type); setName(''); }}>+ New</button>
             </div>
             {creating === type && (
@@ -48,7 +49,7 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
                 return (
                 <li key={e.id}>
                   <button type="button" class={`entry-link t-${e.type}${ended ? ' is-ended' : ''}`} aria-current={e.id === selectedId ? 'page' : undefined} data-entry-id={e.id} onClick={() => onSelect(e.id)}>
-                    <span class="entry-name">{e.name}{ended && lc && <span class="ended-mark" title={lc.endedWord}> <span aria-hidden="true">{lc.endedMark}</span><span class="sr-only">({lc.endedWord})</span></span>}</span>
+                    <span class="entry-name">{e.name}{ended && lc && <span class="ended-mark" title={lc.endedWord}> <Icon name={lc.endedIcon} /><span class="sr-only">({lc.endedWord})</span></span>}</span>
                     {e.type === 'character' && e.race && <span class="entry-sub">{e.race}</span>}
                     <CountBadge warnings={warnings.filter((w) => involves(w, e.id))} />
                   </button>

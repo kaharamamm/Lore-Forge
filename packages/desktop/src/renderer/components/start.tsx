@@ -1,3 +1,4 @@
+import { Icon } from './icon.tsx';
 import { useEffect, useState } from 'preact/hooks';
 
 export function StartScreen({ onOpen, error }: { onOpen: (dir: string) => void; error: string | null }) {
@@ -22,7 +23,7 @@ export function StartScreen({ onOpen, error }: { onOpen: (dir: string) => void; 
     <main class="start">
       <h1>Lore-Forge</h1>
       <p class="muted">Write the worlds, lore and characters of your games. Each world is a plain folder you can keep in git.</p>
-      {(error || problem) && <p class="error-line" role="alert"><span aria-hidden="true">✖ </span>{error ?? problem}</p>}
+      {(error || problem) && <p class="error-line" role="alert"><Icon name="cancel" /> {error ?? problem}</p>}
       <div class="start-actions">
         <button type="button" class="primary" onClick={() => void run(() => window.lore.pickWorld())}>Open world folder…</button>
         {example && <button type="button" class="ghost" onClick={() => onOpen(example)}>Open example world</button>}
