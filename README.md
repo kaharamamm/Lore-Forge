@@ -64,8 +64,10 @@ Version 0.3.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged
 - **Entries:** characters, places, factions, items, events and notes. Each has a name, aliases, a summary,
   tags, relations, a Markdown body with `[[links]]` and `@mentions`, and type-specific fields such as
   born/died, founded/destroyed, an event date, place, participants and actions ("A killed B").
-- **Dates on your own calendar:** custom eras and months. Dates can be exact (`1920-03-12`), year-only
-  (`1920`), approximate (`~1800`), in another era (`450 OK`), or unknown (`?`).
+- **Dates on your own calendar:** custom eras and months. Dates are typed as `DD.MM.YYYY` with as much
+  as you know: `1920`, `03.1920`, `12.03.1920`, or `12.03` when the year is unknown. Also approximate (`~1800`),
+  in another era (`450 OK`), or unknown (`?`). The older `1920-03-12` form still works. Rules only warn when
+  the known parts prove a conflict (died "1800" and acted "12.03.1800" is fine).
 - **Consistency engine:** 14 starter rules (listed below). Warnings show the severity as an icon plus a word,
   the offending fact, and the canon fact it conflicts with, including that fact's source. Warnings never block
   saving. You can mark one as *intended* (for example, a resurrection) and add a note. The mark is stored in

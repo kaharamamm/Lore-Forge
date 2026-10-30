@@ -3,7 +3,7 @@
  * The same Doc becomes Markdown (toMarkdown, here in core) and PDF (@lore-forge/pdf).
  * Inline text may use **bold** and *italic*; single newlines are kept as line breaks.
  */
-import { formatDate, type ParsedDate } from '../dates.ts';
+import { formatDate, formatYearless, parseDate, type ParsedDate } from '../dates.ts';
 import type { Calendar } from '../types.ts';
 import type { WorldIndex } from '../world-index.ts';
 
@@ -89,7 +89,8 @@ export function dateWithEra(d: ParsedDate, calendar: Calendar): string {
 /** Text of a date field for documents: "1920 AS", or the raw text marked unreadable. */
 export function showDate(text: string | undefined, ix: WorldIndex): string | undefined {
   if (text === undefined || text.trim() === '') return undefined;
-  const d = ix.date(text);
-  if (d) return dateWithEra(d, ix.calendar);
-  return /^(\?|unknown)$/i.test(text.trim()) ? 'unknown' : `${text} (unreadable date)`;
+  const r = parseDate(text, ix.calendar);
+  if (r.kind === 'date') return dateWithEra(r.date, ix.calendar);
+  if (r.kind === 'yearless') return `${formatYearless(r)} (year unknown)`;
+  return r.kind === 'unknown' ? 'unknown' : `${text} (unreadable date)`;
 }

@@ -42,8 +42,9 @@ export const TYPE_SINGULAR: Record<EntryType, string> = {
 };
 
 /**
- * A date as written in the files: `[~]YEAR[-MM[-DD]] [ERA]` or `unknown`.
- * `~` means approximate. Examples: "1800", "~1800", "1920-03-12", "312 OK", "unknown".
+ * A date as written in the files: `[~]DATE [ERA]` or `unknown`, where DATE is YYYY, MM.YYYY, DD.MM.YYYY,
+ * DD.MM (year unknown) or the older YYYY-MM / YYYY-MM-DD. `~` means approximate.
+ * Examples: "1800", "~1800", "03.1920", "12.03.1920", "1920-03-12", "12.03", "312 OK", "unknown".
  */
 export type DateText = string;
 

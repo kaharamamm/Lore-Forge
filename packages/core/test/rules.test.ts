@@ -75,7 +75,7 @@ test('two-places-at-once: same day, different places; not for nested places or v
   const ev = (id: string, date: string, place: string) => ({ id, type: 'event', name: id, date, place, participants: [{ id: 'c' }] }) as const;
   const [w, ...more] = warnings([...places, c, ev('e1', '1920-03-12', 'a'), ev('e2', '1920-03-12', 'b')], 'two-places-at-once');
   assert.equal(more.length, 0);
-  assert.equal(w?.message, `Kadir can't take part in "e1" at Qarim on 1920-03-12 and also take part in "e2" at Saltmere on 1920-03-12: those overlap in time (source: Events/e2).`);
+  assert.equal(w?.message, `Kadir can't take part in "e1" at Qarim on 12.03.1920 and also take part in "e2" at Saltmere on 12.03.1920: those overlap in time (source: Events/e2).`);
   assert.equal(w?.severity, 'warning');
   assert.deepEqual(warnings([...places, c, ev('e1', '1920-03-12', 'a'), ev('e2', '1920-03-12', 'region')], 'two-places-at-once'), []);
   assert.deepEqual(warnings([...places, c, ev('e1', '1920', 'a'), ev('e2', '1920', 'b')], 'two-places-at-once'), []);
@@ -190,4 +190,16 @@ test('image-view: an unusual view label is info, usual views for the type are fi
 
 test('a dated note is checked like any other date', () => {
   assert.equal(warnings([{ id: 'note-a', type: 'note', name: 'A', date: '1750 XX' }], 'invalid-date').length, 1);
+});
+
+test('partial dates: warn only when the known parts prove the conflict', () => {
+  const dead = (died: string) => ({ ...X, died });
+  assert.deepEqual(warnings([dead('1800'), Y, killing('12.03.1800')], 'after-death'), [], 'died some time in 1800');
+  assert.deepEqual(warnings([dead('05.1800'), Y, killing('1800')], 'after-death'), []);
+  const [w] = warnings([dead('05.1800'), Y, killing('12.06.1800')], 'after-death');
+  assert.equal(w?.message, "X can't kill Y on 12.06.1800: X died in 05.1800 (source: Characters/X).");
+  assert.deepEqual(warnings([dead('12.03'), Y, killing('1920')], 'after-death'), [], 'a day and month without a year proves nothing');
+  assert.deepEqual(warnings([dead('12.03')], 'invalid-date'), []);
+  assert.equal(warnings([{ ...X, born: '20.05.1800', died: '19.05.1800' }], 'date-order').length, 1);
+  assert.equal(warnings([{ ...X, born: '05.1800', died: '1800' }], 'date-order').length, 0);
 });

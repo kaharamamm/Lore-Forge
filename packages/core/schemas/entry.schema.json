@@ -8,8 +8,8 @@
   "$defs": {
     "date": {
       "type": "string",
-      "description": "[~]YEAR[-MM[-DD]] [ERA], or unknown / ?. ~ = approximate.",
-      "pattern": "^(unknown|\\?|~?\\s*-?\\d+(-\\d{1,2}(-\\d{1,2})?)?(\\s+[A-Za-z]\\w*)?)$"
+      "description": "[~]DATE [ERA], or unknown / ?. DATE is YYYY, MM.YYYY, DD.MM.YYYY, DD.MM (day and month, year unknown) or the older YYYY-MM / YYYY-MM-DD. In MM.YYYY the year needs 3+ digits (0050), a minus sign or an era code; otherwise two numbers are DD.MM. ~ = approximate.",
+      "pattern": "^(unknown|\\?|~?\\s*(-?\\d+(-\\d{1,2}(-\\d{1,2})?)?|\\d{1,2}\\.\\d{1,2}\\.-?\\d+|\\d{1,2}\\.-?\\d+\\.?)(\\s+[A-Za-z]\\w*)?)$"
     },
     "ref": { "type": "string", "minLength": 1, "description": "Entry id (preferred) or exact name/alias." },
     "relation": {

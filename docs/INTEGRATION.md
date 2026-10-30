@@ -135,8 +135,11 @@ so they never produce `dangling-reference`.
 
 ### Dates
 
-The syntax is `[~]YEAR[-MM[-DD]] [ERA]`, or `?` / `unknown`. Examples: `1920`, `1920-03-12`, `~1800`,
-`450 OK`, `-12`. Months and eras come from `world.json` → `calendar`. The snapshot includes every parsed date
+The syntax is `[~]DATE [ERA]`, or `?` / `unknown`. DATE is `YYYY`, `MM.YYYY`, `DD.MM.YYYY`, `DD.MM` (day and
+month, year unknown), or the older `YYYY-MM` / `YYYY-MM-DD`, which still load. Examples: `1920`, `03.1920`,
+`12.03.1920`, `1920-03-12`, `12.03`, `~1800`, `450 OK`, `-12`. In `MM.YYYY` the year needs three or more digits
+(`03.0050`), a minus sign or an era code; otherwise two numbers read as `DD.MM`. Files keep the text as typed.
+A `DD.MM` date is valid but never compared and is not in the snapshot's `dates` (its text stays in the entry). Months and eras come from `world.json` → `calendar`. The snapshot includes every parsed date
 as `{text, year, era, approx, precision, lo, hi}`, where `lo` and `hi` are absolute day numbers on one axis
 across all eras. Approximate dates are widened by `calendar.approxYears`. Use `lo` and `hi` to sort or
 compare dates without re-implementing the calendar.
