@@ -1,6 +1,6 @@
 {
   "name": "@lore-forge/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Lore-Forge desktop app (Electron).",
   "author": "Ahmet Kadir Zengin",
@@ -15,7 +15,7 @@
     "dist:linux": "electron-builder --linux AppImage --publish never"
   },
   "dependencies": {
-    "@lore-forge/core": "0.1.0",
+    "@lore-forge/core": "0.2.0",
     "preact": "^10.29.8"
   },
   "devDependencies": {

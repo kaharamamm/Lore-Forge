@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createWorld } from '@lore-forge/core/node';
@@ -40,6 +40,20 @@ test('lore export writes one deterministic snapshot', () => {
   assert.equal(snap.entries.length, 28);
   assert.equal(snap.entries.find((e: { entry: { id: string } }) => e.entry.id === 'char-orsan').dates.died.year, 1800);
   assert.equal(lore('export', example).stdout, readFileSync(out, 'utf8'), 'stdout and file output are identical');
+});
+
+test('lore bible and lore book write a PDF and a Markdown sidecar', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lore-'));
+  const bible = lore('bible', example, '-o', join(dir, 'bible.pdf'));
+  assert.equal(bible.status, 0, bible.stdout + bible.stderr);
+  assert.match(bible.stdout, /bible\.pdf \(\d+ pages\)\nWrote .*bible\.md/);
+  assert.equal(readFileSync(join(dir, 'bible.pdf')).subarray(0, 5).toString(), '%PDF-');
+  assert.match(readFileSync(join(dir, 'bible.md'), 'utf8'), /3D turnaround brief/);
+  const book = lore('book', example, '--out', join(dir, 'book.pdf'));
+  assert.equal(book.status, 0, book.stdout + book.stderr);
+  assert.ok(existsSync(join(dir, 'book.pdf')));
+  assert.match(readFileSync(join(dir, 'book.md'), 'utf8'), /## Chapter 4\. The Fall of Saltmere/);
+  assert.equal(lore('book', example, '-o').status, 2);
 });
 
 test('a clean new world exits 0; bad usage and non-worlds exit 2', async () => {

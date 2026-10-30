@@ -5,7 +5,7 @@ import { SCHEMA_VERSION, type Entry, type WorldManifest, type World } from './ty
 import { WorldIndex } from './world-index.ts';
 
 export const SNAPSHOT_FORMAT = 'lore-forge.world-snapshot';
-export const GENERATOR = 'lore-forge 0.1.0';
+export const GENERATOR = 'lore-forge 0.2.0';
 
 export type SnapshotDate = Omit<ParsedDate, 'lo' | 'hi'> & { text: string; lo: number; hi: number };
 
