@@ -10,7 +10,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
 const v = (n) => (n.startsWith('#') ? n : vars[n] ?? (() => { throw new Error(`no --${n}`); })());
 const surfaces = ['bg', 'panel', 'panel-2'];
 const pairs = [];
-for (const fg of ['text', 'muted', 'accent', 'error', 'warning', 'info', 'intended', 'ok', 't-character', 't-place', 't-faction', 't-item', 't-event', 't-note']) for (const bg of surfaces) pairs.push([fg, bg]);
+for (const fg of ['text', 'muted', 'accent', 'gold', 'error', 'warning', 'info', 'intended', 'ok', 't-character', 't-place', 't-faction', 't-item', 't-event', 't-note']) for (const bg of surfaces) pairs.push([fg, bg]);
 for (const [fg, bg] of [['error', 'error-bg'], ['warning', 'warning-bg'], ['info', 'info-bg'], ['intended', 'intended-bg'], ['accent-ink', 'accent'], ['text', 'info-bg']]) pairs.push([fg, bg]);
 // Timeline bar text (#14161b) on each type colour; preview sheet ink on paper.
 for (const t of ['character', 'place', 'faction', 'item', 'event', 'note']) pairs.push(['#14161b', `t-${t}`]);

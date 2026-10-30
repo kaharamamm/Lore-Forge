@@ -170,6 +170,9 @@ export function App() {
           dom['editorMentions'] = count('.prose-mirror mark.mention');
           dom['statusPills'] = count('.lifecycle [role=radio]');
           expect(count('.lifecycle [role=radio] svg.icon') === dom['statusPills'], 'status pills have icons');
+          await document.fonts.load('700 16px Cinzel', 'Şafak İlsa');
+          dom['cinzel'] = document.fonts.check('700 16px Cinzel', 'Şafak') && getComputedStyle($('#entry-title')!).fontFamily.includes('Cinzel') ? 1 : 0;
+          expect(dom['cinzel'] === 1, 'Cinzel headings load');
           expect(emojiIn($('.lifecycle')).length + emojiIn($('.editor-head')).length === 0, 'no emoji in the editor');
           dom['relationSelects'] = count('[data-field^="relations"] select');
           // Status: exactly one is always selected; clicking the selected one keeps it.

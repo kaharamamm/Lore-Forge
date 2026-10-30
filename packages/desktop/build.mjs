@@ -1,6 +1,8 @@
 // Bundles main, preload and renderer with esbuild. Core is bundled from its TypeScript source.
 import { build, context } from 'esbuild';
-import { cp, mkdir } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 
 const watch = process.argv.includes('--watch');
 const common = { bundle: true, sourcemap: true, conditions: ['source'], logLevel: 'info', target: 'es2023' };
@@ -15,6 +17,24 @@ const configs = [
 await mkdir('dist/renderer', { recursive: true });
 await cp('src/renderer/index.html', 'dist/renderer/index.html');
 await cp('src/renderer/styles.css', 'dist/renderer/styles.css');
+await bundleFonts();
+
+/** Cinzel (SIL OFL 1.1) headings: the woff2 files and their @font-face rules, from @fontsource/cinzel. */
+async function bundleFonts() {
+  const pkg = dirname(createRequire(import.meta.url).resolve('@fontsource/cinzel/package.json'));
+  await mkdir('dist/renderer/fonts', { recursive: true });
+  const ranges = JSON.parse(await readFile(join(pkg, 'unicode.json'), 'utf8'));
+  let css = '';
+  for (const weight of [600, 700]) {
+    for (const subset of ['latin-ext', 'latin']) {
+      const file = `cinzel-${subset}-${weight}-normal.woff2`;
+      css += `@font-face { font-family: 'Cinzel'; font-style: normal; font-display: swap; font-weight: ${weight}; src: url(./fonts/${file}) format('woff2'); unicode-range: ${ranges[subset]}; }\n`;
+      await cp(join(pkg, 'files', file), join('dist/renderer/fonts', file));
+    }
+  }
+  await cp(join(pkg, 'LICENSE'), 'dist/renderer/fonts/Cinzel-OFL.txt');
+  await writeFile('dist/renderer/fonts.css', css);
+}
 if (watch) {
   for (const c of configs) await (await context(c)).watch();
   console.log('Watching. Press Ctrl+R in the app to reload after renderer changes (restart for main changes).');
