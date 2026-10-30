@@ -4,6 +4,7 @@ import { CountBadge } from './severity.tsx';
 import { involves } from './warnings.tsx';
 import { Icon } from './icon.tsx';
 import { animated } from '../motion.ts';
+import { Portrait } from './cover.tsx';
 
 interface Props {
   entries: Entry[];
@@ -52,6 +53,7 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
                 return (
                 <li key={e.id}>
                   <button type="button" class={`entry-link t-${e.type}${ended ? ' is-ended' : ''}`} aria-current={e.id === selectedId ? 'page' : undefined} data-entry-id={e.id} onClick={() => onSelect(e.id)}>
+                    <Portrait entry={e} raceName={e.type === 'character' ? e.race : undefined} size="xs" />
                     <span class="entry-name">{e.name}{ended && lc && <span class="ended-mark" title={lc.endedWord}> <Icon name={lc.endedIcon} /><span class="sr-only">({lc.endedWord})</span></span>}</span>
                     {e.type === 'character' && e.race && <span class="entry-sub">{e.race}</span>}
                     <CountBadge warnings={warnings.filter((w) => involves(w, e.id))} />

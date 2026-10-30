@@ -8,6 +8,7 @@ const api: LoreApi = {
   pickWorld: () => ipcRenderer.invoke('pickWorld'),
   createWorld: (name) => ipcRenderer.invoke('createWorld', name),
   readWorld: (dir) => ipcRenderer.invoke('readWorld', dir),
+  peekWorld: (dir) => ipcRenderer.invoke('peekWorld', dir),
   writeFile: (dir, path, content) => ipcRenderer.invoke('writeFile', dir, path, content),
   deleteFile: (dir, path) => ipcRenderer.invoke('deleteFile', dir, path),
   importImage: (dir, entryId, view) => ipcRenderer.invoke('importImage', dir, entryId, view),

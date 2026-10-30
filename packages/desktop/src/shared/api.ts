@@ -15,6 +15,8 @@ export interface LoreApi {
   /** Ask for a parent folder and create <parent>/<slug of name>. Returns the new world folder. */
   createWorld(name: string): Promise<string | null>;
   readWorld(dir: string): Promise<WorldFile[]>;
+  /** Read a world for its cover card without adding it to the recent list. Null if the folder is gone or not a world. */
+  peekWorld(dir: string): Promise<WorldFile[] | null>;
   writeFile(dir: string, path: string, content: string): Promise<void>;
   deleteFile(dir: string, path: string): Promise<void>;
   /** Pick an image file and copy it into images/<entryId>/. Returns its path inside the world. */

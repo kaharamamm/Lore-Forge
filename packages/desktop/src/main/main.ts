@@ -113,6 +113,7 @@ function registerIpc(): void {
     if (!SMOKE) await remember(dir);
     return files;
   });
+  ipcMain.handle('peekWorld', async (_e, dir: string) => (existsSync(join(dir, 'world.json')) ? readWorldFiles(dir).catch(() => null) : null));
   ipcMain.handle('writeFile', async (_e, dir: string, path: string, content: string) => {
     const full = inside(dir, path);
     await mkdir(join(full, '..'), { recursive: true });

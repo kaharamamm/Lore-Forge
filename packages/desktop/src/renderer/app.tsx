@@ -16,8 +16,10 @@ import { Icon } from './components/icon.tsx';
 import { CommandPalette, type PaletteItem } from './components/palette.tsx';
 import { AboutDialog } from './components/about.tsx';
 import { transition } from './motion.ts';
+import { WorldHome } from './components/home.tsx';
+import { forgetImages, WorldDir } from './components/cover.tsx';
 
-type View = 'editor' | 'timeline' | 'relations';
+type View = 'home' | 'editor' | 'timeline' | 'relations';
 type SaveState = { kind: 'saved' } | { kind: 'saving' } | { kind: 'failed'; message: string };
 
 const ID_PREFIX: Record<EntryType, string> = { character: 'char', place: 'place', faction: 'fac', item: 'item', event: 'evt', note: 'note' };
@@ -129,7 +131,8 @@ export function App() {
   const [world, setWorld] = useState<World | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [view, setView] = useState<View>('editor');
+  const [view, setView] = useState<View>('home');
+  const dirRef = useRef<string | null>(null);
   const [query, setQuery] = useState('');
   const [save, setSave] = useState<SaveState>({ kind: 'saved' });
   const [preview, setPreview] = useState<PdfKind | null>(null);
@@ -150,10 +153,14 @@ export function App() {
   const open = useCallback(async (d: string) => {
     try {
       const w = parseWorld(await window.lore.readWorld(d));
-      setDir((cur) => {
-        if (cur !== d) history.reset();
-        return d;
-      });
+      if (dirRef.current !== d) {
+        // Another world: fresh history, and start on its home page.
+        history.reset();
+        setView('home');
+        dirRef.current = d;
+      }
+      forgetImages();
+      setDir(d);
       setWorld(w);
       setLoadError(null);
       setSelectedId((cur) => (cur && w.entries.some((e) => e.id === cur) ? cur : (w.entries[0]?.id ?? null)));
@@ -177,6 +184,17 @@ export function App() {
       const expect = (ok: boolean, what: string) => { if (!ok) fails.push(what); };
       const mouse = (button: number) => { for (const type of ['mousedown', 'mouseup']) window.dispatchEvent(new MouseEvent(type, { button, bubbles: true })); };
       try {
+        // A world opens on its home page: cover, counts and a card with a portrait for every entry.
+        expect(await until(() => !!$('.home')), 'world opens on its home page');
+        dom['homeTiles'] = count('.home .entry-tile');
+        expect(dom['homeTiles'] === w.entries.length, `home shows every entry (${dom['homeTiles']} of ${w.entries.length})`);
+        expect(count('.home-cover .cover-art') === 1 && count('.home .entry-tile .portrait') === w.entries.length, 'home cover and portraits');
+        dom['sidebarPortraits'] = count('.sidebar .entry-link .portrait');
+        expect(dom['sidebarPortraits'] === w.entries.length, 'a portrait beside every entry in the sidebar');
+        dom['portraitImages'] = (await until(() => count('.portrait img') > 0)) ? count('.portrait img') : 0;
+        expect(dom['portraitImages'] > 0, 'entries with reference images show them as portraits');
+        expect(emojiIn($('.home')).length === 0, 'no emoji on the home page');
+        expect(paneFit().length === 0, `home layout: ${paneFit().join('; ')}`);
         const leyla = w.entries.find((e) => e.id === 'char-leyla') ?? w.entries.find((e) => e.type === 'character');
         if (leyla) {
           setSelectedId(leyla.id);
@@ -276,10 +294,10 @@ export function App() {
         // Motion: a tab click goes through a View Transition of the main pane and still lands on the view.
         dom['viewTransitions'] = typeof document.startViewTransition === 'function' && getComputedStyle($('.main')!).viewTransitionName === 'main-pane' ? 1 : 0;
         expect(dom['viewTransitions'] === 1, 'View Transitions available for the main pane');
-        $<HTMLButtonElement>('.tabs button:nth-child(2)')!.click();
+        $<HTMLButtonElement>('.tabs button:nth-child(3)')!.click();
         await until(() => !!$('.tl-scroll'));
         await tick(300);
-        expect(!!$('.tl-scroll') && $('.tabs button:nth-child(2)')?.getAttribute('aria-pressed') === 'true', 'Timeline tab opens the timeline');
+        expect(!!$('.tl-scroll') && $('.tabs button:nth-child(3)')?.getAttribute('aria-pressed') === 'true', 'Timeline tab opens the timeline');
         dom['timelineMarks'] = count('.tl-mark');
         dom['timelineBands'] = count('.tl-band');
         dom['timelineWarnings'] = count('.tl-warn');
@@ -297,6 +315,14 @@ export function App() {
           await tick();
         }
         setView('editor');
+        await tick();
+        // Close the world: the start screen shows worlds as book covers.
+        $<HTMLButtonElement>('.top-actions button:nth-of-type(2)')!.click();
+        expect(await until(() => count('.shelf .world-card .cover-art') > 0 && !!$('.shelf .world-count')), 'start screen shows world covers');
+        dom['shelf'] = count('.shelf .world-card');
+        expect(emojiIn($('.start')).length === 0, 'no emoji on the start screen');
+        const scroller = $('.start')!;
+        expect(scroller.getBoundingClientRect().height === window.innerHeight && getComputedStyle(scroller).overflowY === 'auto', 'start screen fills the window and scrolls on its own');
       } catch (e) {
         fails.push(String((e as Error).stack ?? e));
       }
@@ -411,6 +437,9 @@ export function App() {
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void flush().then(() => toasts.push({ tone: 'ok', text: 'All changes saved' }));
+      } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        transition(() => setView('home'));
       } else if (mod && ['1', '2', '3'].includes(e.key)) {
         e.preventDefault();
         const next = (['editor', 'timeline', 'relations'] as const)[Number(e.key) - 1]!;
@@ -477,8 +506,10 @@ export function App() {
   const goView = (v: View, mode?: RelationMode) => transition(() => { if (mode) setRelMode(mode); setView(v); });
 
   const selected = world.entries.find((e) => e.id === selectedId);
-  const closeWorld = () => void flush().then(() => { setWorld(null); setDir(null); document.title = 'Lore-Forge'; });
+  const closeWorld = () => void flush().then(() => { setWorld(null); setDir(null); dirRef.current = null; document.title = 'Lore-Forge'; });
+  const goHome = (to: 'timeline' | 'tree' | 'web' | 'codex' | 'book') => (to === 'codex' || to === 'book' ? setPreview(to) : to === 'timeline' ? goView('timeline') : goView('relations', to));
   const commands: PaletteItem[] = [
+    { id: 'go-home', group: 'Go to', label: 'World home', hint: 'Ctrl+H', icon: 'house', run: () => goView('home') },
     { id: 'go-editor', group: 'Go to', label: 'Editor', icon: 'quill-ink', run: () => goView('editor') },
     { id: 'go-timeline', group: 'Go to', label: 'Timeline', icon: 'hourglass', run: () => goView('timeline') },
     { id: 'go-tree', group: 'Go to', label: 'Family tree', hint: 'Relationships', icon: 'family-tree', run: () => goView('relations', 'tree') },
@@ -503,8 +534,9 @@ export function App() {
   const createNamed = (name: string): PaletteItem[] => ENTRY_TYPES.map((t) => ({
     id: `create-${t}`, group: 'Create', label: `New ${TYPE_SINGULAR[t].toLowerCase()} “${name}”`, icon: TYPE_ICON[t], tone: `t-${t}`, run: () => createEntry(t, name),
   }));
-  const tabs: [View, IconName, string][] = [['editor', 'quill-ink', 'Editor'], ['timeline', 'hourglass', 'Timeline'], ['relations', 'spider-web', 'Relationships']];
+  const tabs: [View, IconName, string][] = [['home', 'house', 'Home'], ['editor', 'quill-ink', 'Editor'], ['timeline', 'hourglass', 'Timeline'], ['relations', 'spider-web', 'Relationships']];
   return (
+    <WorldDir.Provider value={dir}>
     <div class="app">
       <header class="topbar">
         <div class="world-title">
@@ -514,7 +546,7 @@ export function App() {
         <button type="button" class="palette-open" onClick={() => setPalette(true)} title="Jump to an entry or run a command"><Icon name="magnifying-glass" /> <span>Search or run…</span> <kbd>Ctrl+K</kbd></button>
         <nav class="tabs" aria-label="Views">
           {tabs.map(([v, icon, label], i) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => goView(v)} title={`Ctrl+${i + 1}`}><Icon name={icon} /> {label}</button>
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => goView(v)} title={i ? `Ctrl+${i}` : 'Ctrl+H'}><Icon name={icon} /> {label}</button>
           ))}
         </nav>
         <div class="publish-actions">
@@ -530,7 +562,7 @@ export function App() {
           <button type="button" class="ghost small icon-only" onClick={() => setAbout(true)} aria-label="About and credits" title="About and credits"><Icon name="laurels" /></button>
         </div>
       </header>
-      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onSelect={(id) => transition(() => { setSelectedId(id); if (view === 'timeline') setView('editor'); })} onCreate={createEntry} creating={creating} onCreating={setCreating} />
+      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onSelect={(id) => transition(() => { setSelectedId(id); if (view === 'timeline' || view === 'home') setView('editor'); })} onCreate={createEntry} creating={creating} onCreating={setCreating} />
       <main class="main" id="main">
         {view === 'editor' &&
           (selected ? (
@@ -541,6 +573,7 @@ export function App() {
               <p>{world.entries.length ? 'Pick an entry on the left to edit it.' : 'This world is empty. Start with a character, a place or an event: use “+ New” on the left.'}</p>
             </div>
           ))}
+        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} />}
         {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} />}
         {view === 'relations' && <RelationsView world={world} entry={selected} mode={relMode} onMode={setRelMode} onOpen={(id) => setSelectedId(id)} />}
       </main>
@@ -550,5 +583,6 @@ export function App() {
       {about && <AboutDialog onClose={() => setAbout(false)} />}
       <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>
+    </WorldDir.Provider>
   );
 }

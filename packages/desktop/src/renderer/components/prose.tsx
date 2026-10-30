@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { bodyLinks, LIFECYCLE, MentionMatcher, statusOf, TYPE_SINGULAR, WorldIndex, type Entry, type Mention, type World } from '@lore-forge/core';
 import { EntryLabel, TypeBadge } from './type.tsx';
+import { Portrait } from './cover.tsx';
 import { Icon } from './icon.tsx';
 
 const IS_MAC = navigator.platform.toLowerCase().includes('mac');
@@ -20,10 +21,13 @@ function EntryCard({ ix, entry }: { ix: WorldIndex; entry: Entry }) {
   const status = LIFECYCLE[entry.type]?.statuses.find((x) => x.value === statusOf(entry));
   const race = entry.type === 'character' && entry.race ? ix.nameOf(entry.race) : undefined;
   return (
-    <div class="card-body">
+    <div class="card-body has-portrait">
+      <Portrait entry={entry} raceName={race} size="md" />
+      <div class="card-text">
       <div class="card-title"><EntryLabel entry={entry} /></div>
       <div class="card-meta"><TypeBadge type={entry.type} />{race && <span class="card-race"> {race}</span>} <span>{dates}</span>{status && <span> · <Icon name={status.icon} /> {status.label}</span>}</div>
       {entry.summary && <p class="card-summary">{entry.summary}</p>}
+      </div>
     </div>
   );
 }
