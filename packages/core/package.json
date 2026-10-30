@@ -1,6 +1,6 @@
 {
   "name": "@lore-forge/core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Lore-Forge world format, parser and consistency engine. Pure TypeScript, no Electron or DOM dependencies.",
   "type": "module",

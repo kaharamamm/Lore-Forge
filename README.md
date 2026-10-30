@@ -8,14 +8,34 @@ checker that notices when your canon contradicts itself:
 A world is a plain folder of text files (`world.json` plus one Markdown file per entry). You can keep it in
 git, diff it, and read it from other tools. Nothing leaves your machine.
 
-Version 0.3.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged).
+Version 0.3.1 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged).
+
+## What's new in v0.3.1
+
+- **A new look.** Dark, quiet panels with gold accents and Cinzel headings. Every type, status and action
+  uses a drawn icon from [game-icons.net](https://game-icons.net) (no emoji, so no empty boxes on systems
+  without an emoji font). **About** in the top bar lists the credits and licences.
+- **Command palette (Ctrl/⌘+K).** Jump to any entry, view or command, or type a name and pick
+  *New character “…”*. **Ctrl+F** focuses the sidebar filter.
+- **Book-cover start screen and a world home page.** Recent worlds and the example show as covers (the first
+  place, event, item or character image in the world, or a generated cover). Opening a world lands on **Home (Ctrl+H)**: overview, counts and image
+  cards for every entry. Entries show their portrait (the first image in the entry, or a generated
+  emblem) in the sidebar, on hover cards, in the family tree and in the relationship web.
+- **Pan and zoom.** The relationship web is a zoomable map with a minimap; the family tree and the timeline
+  zoom too. Everywhere: drag to pan, **Ctrl/⌘+scroll** or pinch to zoom, **Fit** to see everything. A plain
+  scroll wheel still scrolls the page (on the timeline, **Shift+scroll** moves along time).
+- **Back and forward.** Mouse buttons 4/5 or **Alt+←/→** go through the entries and views you visited.
+- **Status always has one value** (default *unknown*), the dead get a tombstone, and characters have a
+  **race/kind** field (human, ghoul, vampire, …). Dates accept partial `DD.MM.YYYY` input.
+- **World Codex** replaces "World Bible" everywhere (`lore bible` still works as an alias).
+- Calm motion: lists and views animate briefly, and all of it turns off with the system's *reduce motion*
+  setting.
 
 ## What's new in v0.3
 
-- **A clearer look.** Every type has an emoji, a word and a color: 🧑 character, 🏰 place, 🛡️ faction,
-  🗡️ item, ⚔️ event, 📜 note. They appear the same way in the sidebar, chips, links, the timeline and the
-  trees. Ended entries carry a mark plus a word (✝️ dead, 🏚️ destroyed, 🏳️ dissolved, 💥 destroyed) and are
-  shown muted. Empty views explain what to do next, and saving or exporting shows a toast.
+- **A clearer look.** Every type has an icon, a word and a color (character, place, faction, item, event,
+  note). They appear the same way in the sidebar, chips, links, the timeline and the trees. Ended entries
+  carry a mark plus a word (dead, destroyed, dissolved) and are shown muted. Empty views explain what to do next, and saving or exporting shows a toast.
 - **Status first.** Characters, places, factions and items start with a status (alive/dead,
   standing/destroyed, active/dissolved, intact/destroyed/lost). An ongoing status hides the death or
   destruction date. A hidden date stays in the file, the editor says so, and `dead-marked-alive` still
@@ -29,11 +49,11 @@ Version 0.3.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged
   which entry type to which. The editor's relation dropdown and target picker only offer what fits, and the
   new `relation-kind` rule warns about nonsense like an item being `parent-of` a character. Custom types are
   still allowed.
-- **Relationships view:** a 🌳 family tree (generations top-down, spouses side by side, the dead marked ✝️
-  and faded) and a 🕸️ relationship web around the selected entry. Every box opens its entry.
+- **Relationships view:** a family tree (generations top-down, spouses side by side, the dead marked and
+  faded) and a relationship web around the selected entry. Every box opens its entry.
 - **Timeline:** era bands with labels, lifespans as bars, events as points, warning markers, hover details,
   zoom (−/Fit/+ or Ctrl+scroll) and type filters. Click a name or bar to open it.
-- **Export preview:** **📖 World Codex** and **📚 Story Book** in the top bar open an in-app preview built
+- **Export preview:** **World Codex** and **Story Book** in the top bar open an in-app preview built
   from the same document the PDF uses. Pick the entry types, art briefs and warnings appendix for the
   Codex, or chapters by era, by year ranges or as one chapter for the Book, then **Save PDF…**.
 
@@ -133,9 +153,9 @@ On Linux, `npm run dist:linux` builds an AppImage into the same `release/` folde
 
 1. **Start:** open a world folder, create a new one (this asks for a parent folder and creates
    `world.json` plus the type folders), or open the example.
-2. **Sidebar:** entries grouped by type (emoji and color), each with an error or warning count badge and an
-   ended mark. Press **Ctrl+K** to
-   search by name, alias, id or tag. Use **+ New** to create an entry in a group.
+2. **Home and sidebar:** the world home shows every entry as a card. The sidebar groups entries by type
+   (icon and color), each with a portrait, an error or warning count badge and an ended mark. Press
+   **Ctrl+F** to filter by name, alias, id or tag, or **Ctrl+K** for the command palette. Use **+ New** to create an entry in a group.
 3. **Editor:** status and dates first, then the other structured fields and the body (names in it link
    themselves). Changes save automatically to the entry's file
    (the save status shows in the top bar, and **Ctrl+S** saves now). Date fields show how the date was
@@ -144,18 +164,20 @@ On Linux, `npm run dist:linux` builds an AppImage into the same `release/` folde
    the conflicting entry. Use **Mark intended** to keep a contradiction on purpose. Intended warnings stay
    visible in their own group.
 5. **Timeline (Ctrl+2):** era bands, lifespans and existence spans by type, events as points and warning
-   markers. Open-ended spans fade out. **Relationships (Ctrl+3):** family tree or relationship web, then the
+   markers. Open-ended spans fade out. Drag or Shift+scroll to move along time, Ctrl+scroll or −/Fit/+ to
+   zoom. **Relationships (Ctrl+3):** family tree or relationship web, then the
    selected entry's outgoing and incoming relations, grouped, plus the events it appears in.
-6. **PDFs:** **📖 World Codex** and **📚 Story Book** in the top bar open a preview with options. **Save PDF…**
+6. **PDFs:** **World Codex** and **Story Book** in the top bar open a preview with options. **Save PDF…**
    saves pending edits, asks where to save, writes the PDF plus its `.md` copy, and offers *Show in folder*. The editor's *Visual description* and
    *Reference images* sections feed the World Codex's art briefs; *Story Book* (chapter, order) appears on
    events and notes.
 
-Keyboard: **Ctrl+1/2/3** switch views, **Ctrl/⌘+Enter** opens the name at the cursor in the text, **Esc**
+Keyboard: **Ctrl+K** opens the command palette, **Ctrl+H** and **Ctrl+1/2/3** switch views, **Alt+←/→**
+(or mouse buttons 4/5) go back and forward, **Ctrl/⌘+Enter** opens the name at the cursor in the text, **Esc**
 closes the preview, **Alt+↑/↓** move to the previous or next entry, **Ctrl+Shift+W**
 focuses the warnings panel, and Tab or Shift+Tab reach every control. The layout reflows down to a single
 column, so it stays usable at 200% zoom. Text contrast is at least 4.5:1, and severity is always shown as an
-icon plus a word, and entry types as an emoji plus a word, never by color alone
+icon plus a word, and entry types as an icon plus a word, never by color alone
 (`npm run contrast -w @lore-forge/desktop` checks the palette).
 
 ## CLI

@@ -1,6 +1,6 @@
 {
   "name": "lore-forge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Local-first desktop app for writing game worlds, lore and characters, with a consistency checker.",
   "license": "UNLICENSED",
