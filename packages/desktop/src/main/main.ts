@@ -1,9 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
-import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { basename, extname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { createWorld, readWorldFiles } from '@lore-forge/core/node';
-import type { ImageView } from '@lore-forge/core';
+import { createWorld, loadWorld, readWorldFiles } from '@lore-forge/core/node';
+import { storyBook, worldBible, type ImageView } from '@lore-forge/core';
+import { defaultFontDir, writePublication } from '@lore-forge/pdf';
+import type { PdfKind } from '../shared/api.ts';
 
 const SMOKE = process.env['LORE_FORGE_SMOKE'] === '1';
 const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
@@ -47,6 +50,31 @@ function initialWorld(): string | null {
   const fromArgs = process.argv.slice(app.isPackaged ? 1 : 2).find((a) => !a.startsWith('-') && existsSync(join(a, 'world.json')));
   const dir = fromEnv || fromArgs;
   return dir ? resolve(dir) : null;
+}
+
+/** DejaVu fonts: shipped as a resource in the packaged app, from node_modules in development. */
+function fontDir(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'fonts') : defaultFontDir();
+}
+
+async function publish(dir: string, kind: PdfKind, file: string) {
+  const world = await loadWorld(dir);
+  return writePublication(kind === 'bible' ? worldBible(world) : storyBook(world), dir, file, fontDir());
+}
+
+/** Smoke test: prove the bundled PDF path works by exporting both documents. */
+async function smokePdfs(dir: string): Promise<string> {
+  const out = process.env['LORE_FORGE_SMOKE_OUT'] ?? (await mkdtemp(join(tmpdir(), 'lore-smoke-')));
+  try {
+    const parts: string[] = [];
+    for (const kind of ['bible', 'book'] as const) {
+      const r = await publish(dir, kind, join(out, `${kind}.pdf`));
+      parts.push(`${kind}.pdf ${r.pages} pages ${(await stat(r.pdf)).size} bytes`);
+    }
+    return parts.join(', ');
+  } finally {
+    if (!process.env['LORE_FORGE_SMOKE_OUT']) await rm(out, { recursive: true, force: true });
+  }
 }
 
 function registerIpc(): void {
@@ -107,10 +135,31 @@ function registerIpc(): void {
       return null;
     }
   });
+  ipcMain.handle('exportPdf', async (_e, dir: string, kind: PdfKind) => {
+    const world = JSON.parse(await readFile(join(dir, 'world.json'), 'utf8')) as { id?: string };
+    const r = await dialog.showSaveDialog(win!, {
+      title: kind === 'bible' ? 'Save World Bible PDF' : 'Save Story Book PDF',
+      defaultPath: join(app.getPath('documents'), `${world.id ?? 'world'}-${kind}.pdf`),
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (r.canceled || !r.filePath) return null;
+    const out = await publish(dir, kind, r.filePath);
+    shell.showItemInFolder(out.pdf);
+    return out;
+  });
   ipcMain.on('smokeReport', (_e, summary: unknown) => {
     if (!SMOKE) return;
-    console.log(`SMOKE OK ${JSON.stringify(summary)}`);
-    app.exit(0);
+    const dir = initialWorld();
+    void (dir ? smokePdfs(dir) : Promise.resolve('no world, PDFs skipped')).then(
+      (pdfs) => {
+        console.log(`SMOKE OK ${JSON.stringify(summary)} PDF: ${pdfs}`);
+        app.exit(0);
+      },
+      (e: unknown) => {
+        console.error(`SMOKE FAIL PDF export: ${(e as Error).stack ?? String(e)}`);
+        app.exit(1);
+      },
+    );
   });
 }
 

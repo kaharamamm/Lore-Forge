@@ -5,7 +5,9 @@ import { cp, mkdir } from 'node:fs/promises';
 const watch = process.argv.includes('--watch');
 const common = { bundle: true, sourcemap: true, conditions: ['source'], logLevel: 'info', target: 'es2023' };
 const configs = [
-  { ...common, entryPoints: ['src/main/main.ts'], outfile: 'dist/main.cjs', platform: 'node', format: 'cjs', external: ['electron'] },
+  // pdfkit stays external: its ESM build locates data files with import.meta.url, which a CJS bundle cannot provide.
+  // @lore-forge/pdf itself only uses import.meta when `require` is missing, which never happens in CJS.
+  { ...common, entryPoints: ['src/main/main.ts'], outfile: 'dist/main.cjs', platform: 'node', format: 'cjs', external: ['electron', 'pdfkit'], logOverride: { 'empty-import-meta': 'silent' } },
   { ...common, entryPoints: ['src/main/preload.ts'], outfile: 'dist/preload.cjs', platform: 'node', format: 'cjs', external: ['electron'] },
   { ...common, entryPoints: ['src/renderer/main.tsx'], outfile: 'dist/renderer/app.js', platform: 'browser', format: 'iife', jsx: 'automatic', jsxImportSource: 'preact' },
 ];

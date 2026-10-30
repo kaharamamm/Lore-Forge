@@ -35,6 +35,7 @@ export function App() {
   const [view, setView] = useState<View>('editor');
   const [query, setQuery] = useState('');
   const [save, setSave] = useState<SaveState>({ kind: 'saved' });
+  const [pdf, setPdf] = useState<string | null>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const pending = useRef(new Map<string, () => Promise<void>>());
 
@@ -182,6 +183,18 @@ export function App() {
 
   if (!world || !dir) return <StartScreen onOpen={(d) => void open(d)} error={loadError} />;
 
+  const exportPdf = async (kind: 'bible' | 'book') => {
+    const label = kind === 'bible' ? 'World Bible' : 'Story Book';
+    setPdf(`… Writing ${label}`);
+    try {
+      await flush();
+      const r = await window.lore.exportPdf(dir, kind);
+      setPdf(r ? `✓ ${label}: ${r.pages} pages` : null);
+    } catch (e) {
+      setPdf(`✖ ${label} failed: ${(e as Error).message}`);
+    }
+  };
+
   const selected = world.entries.find((e) => e.id === selectedId);
   const tabs: [View, string][] = [['editor', 'Editor'], ['timeline', 'Timeline'], ['relations', 'Relationships']];
   return (
@@ -200,6 +213,9 @@ export function App() {
           <span class={`save save-${save.kind}`} role="status">
             {save.kind === 'saved' ? '✓ Saved' : save.kind === 'saving' ? '… Saving' : `✖ Save failed: ${save.message}`}
           </span>
+          {pdf && <span class="save" role="status">{pdf}</span>}
+          <button type="button" class="ghost small" onClick={() => void exportPdf('bible')} title="Every entry with facts, visual description, reference images and art briefs, for artists and AI tools (also writes a .md copy)">World Bible PDF…</button>
+          <button type="button" class="ghost small" onClick={() => void exportPdf('book')} title="Your events and notes in story order, as a book (also writes a .md copy)">Story Book PDF…</button>
           <button type="button" class="ghost small" onClick={() => void flush().then(() => open(dir))} title="Reload all files from disk">Reload</button>
           <button type="button" class="ghost small" onClick={() => void flush().then(() => { setWorld(null); setDir(null); document.title = 'Lore-Forge'; })}>Close world</button>
         </div>

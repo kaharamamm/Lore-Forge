@@ -1,5 +1,8 @@
 import type { ImageView, WorldFile } from '@lore-forge/core';
 
+export type PdfKind = 'bible' | 'book';
+export interface PdfExport { pdf: string; md: string; pages: number }
+
 /** What the preload script exposes to the renderer as window.lore. */
 export interface LoreApi {
   /** World folder to open at startup (from the command line or LORE_FORGE_OPEN), if any. */
@@ -16,6 +19,8 @@ export interface LoreApi {
   importImage(dir: string, entryId: string, view: ImageView): Promise<string | null>;
   /** Image as a data: URL, or null if missing. */
   readImage(dir: string, path: string): Promise<string | null>;
+  /** Ask where to save, then write the World Bible or Story Book PDF and its .md sidecar. Null if cancelled. */
+  exportPdf(dir: string, kind: PdfKind): Promise<PdfExport | null>;
   /** Used by the headless smoke test only. */
   smokeReport(summary: { world: string; entries: number; warnings: number }): void;
 }

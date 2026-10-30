@@ -12,6 +12,7 @@ const api: LoreApi = {
   deleteFile: (dir, path) => ipcRenderer.invoke('deleteFile', dir, path),
   importImage: (dir, entryId, view) => ipcRenderer.invoke('importImage', dir, entryId, view),
   readImage: (dir, path) => ipcRenderer.invoke('readImage', dir, path),
+  exportPdf: (dir, kind) => ipcRenderer.invoke('exportPdf', dir, kind),
   smokeReport: (summary) => ipcRenderer.send('smokeReport', summary),
 };
 

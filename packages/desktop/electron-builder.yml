@@ -8,6 +8,16 @@ files:
 extraResources:
   - from: ../../examples
     to: examples
+  - from: ../../node_modules/dejavu-fonts-ttf/ttf
+    to: fonts
+    filter:
+      - DejaVuSans.ttf
+      - DejaVuSans-Bold.ttf
+      - DejaVuSans-Oblique.ttf
+      - DejaVuSerif.ttf
+      - DejaVuSerif-Bold.ttf
+      - DejaVuSerif-Italic.ttf
+      - DejaVuSansMono.ttf
 win:
   target: nsis
 nsis:
