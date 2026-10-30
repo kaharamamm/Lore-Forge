@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import type { FactRef, Warning } from '@lore-forge/core';
+import { animated } from '../motion.ts';
 import { kindOf, SeverityBadge } from './severity.tsx';
 
 export interface WarningActions {
@@ -79,13 +80,13 @@ export function WarningsPanel({ warnings, selectedId, actions }: { warnings: War
         </div>
       </div>
       {active.length === 0 && <p class="ok-line"><span aria-hidden="true">✓ </span>No open warnings{scope === 'entry' ? ' for this entry' : ''}.</p>}
-      <ul class="warning-list">
+      <ul class="warning-list" ref={animated}>
         {active.map((w) => <WarningItem key={w.id} w={w} actions={actions} />)}
       </ul>
       {intended.length > 0 && (
         <details class="intended-group">
           <summary>Marked intended ({intended.length})</summary>
-          <ul class="warning-list">
+          <ul class="warning-list" ref={animated}>
             {intended.map((w) => <WarningItem key={w.id} w={w} actions={actions} />)}
           </ul>
         </details>

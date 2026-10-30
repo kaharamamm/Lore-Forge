@@ -3,6 +3,7 @@ import { ENTRY_TYPES, isEnded, LIFECYCLE, normalizeName, TYPE_ICON, TYPE_LABELS,
 import { CountBadge } from './severity.tsx';
 import { involves } from './warnings.tsx';
 import { Icon } from './icon.tsx';
+import { animated } from '../motion.ts';
 
 interface Props {
   entries: Entry[];
@@ -44,7 +45,7 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
             {list.length === 0 && (
               <p class="muted empty-hint">{q ? 'No matches.' : `No ${TYPE_LABELS[type].toLowerCase()} yet — “+ New” adds one.`}</p>
             )}
-            <ul>
+            <ul ref={animated}>
               {list.map((e) => {
                 const ended = isEnded(e);
                 const lc = LIFECYCLE[e.type];

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   check, DEFAULT_STATUS, ENTRY_TYPES, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, parseWorld, relationWeb, serializeEntry, serializeIntended, timelineModel, TYPE_ICON, TYPE_SINGULAR, WorldIndex,
   type Entry, type EntryType, type FactRef, type IconName, type Warning, type World,
@@ -15,6 +15,7 @@ import { involves, WarningsPanel, type WarningActions } from './components/warni
 import { Icon } from './components/icon.tsx';
 import { CommandPalette, type PaletteItem } from './components/palette.tsx';
 import { AboutDialog } from './components/about.tsx';
+import { transition } from './motion.ts';
 
 type View = 'editor' | 'timeline' | 'relations';
 type SaveState = { kind: 'saved' } | { kind: 'saving' } | { kind: 'failed'; message: string };
@@ -31,6 +32,8 @@ function newId(type: EntryType, name: string, taken: Set<string>): string {
 
 const SMOKE = new URLSearchParams(location.search).has('smoke');
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+/** Smoke only: wait until a check holds (a View Transition defers its update to the next rendered frame). */
+const until = async (ok: () => boolean, ms = 3000) => { for (let t = 0; t < ms && !ok(); t += 50) await tick(50); return ok(); };
 const count = (sel: string) => document.querySelectorAll(sel).length;
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel);
 
@@ -95,11 +98,17 @@ const samePlace = (a: Place, b: Place) => a.view === b.view && a.id === b.id && 
 /**
  * A back/forward stack of places. Every change of place is pushed (dropping any forward places);
  * going back or forward restores a place without pushing it again.
+ * A restore renders later (it runs inside a View Transition), so until the target place shows up,
+ * the places rendered on the way are not new history: two quick Backs must not cut off Forward.
  */
 function useHistory(here: Place, restore: (p: Place) => void): { go: (step: -1 | 1) => void; reset: () => void } {
-  const h = useRef({ stack: [] as Place[], i: -1 });
-  useEffect(() => {
+  const h = useRef({ stack: [] as Place[], i: -1, target: null as Place | null });
+  useLayoutEffect(() => {
     const s = h.current;
+    if (s.target) {
+      if (samePlace(s.target, here)) s.target = null;
+      return;
+    }
     if (s.stack[s.i] && samePlace(s.stack[s.i]!, here)) return;
     s.stack = [...s.stack.slice(0, s.i + 1), here].slice(-200);
     s.i = s.stack.length - 1;
@@ -109,9 +118,10 @@ function useHistory(here: Place, restore: (p: Place) => void): { go: (step: -1 |
     const place = s.stack[s.i + step];
     if (!place) return;
     s.i += step;
+    s.target = samePlace(place, here) ? null : place;
     restore(place);
   };
-  return { go, reset: () => { h.current = { stack: [], i: -1 }; } };
+  return { go, reset: () => { h.current = { stack: [], i: -1, target: null }; } };
 }
 
 export function App() {
@@ -127,12 +137,12 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [about, setAbout] = useState(false);
   const [creating, setCreating] = useState<EntryType | null>(null);
-  const history = useHistory({ view, id: selectedId, preview, relMode }, (loc) => {
+  const history = useHistory({ view, id: selectedId, preview, relMode }, (loc) => transition(() => {
     setView(loc.view);
     setSelectedId(loc.id);
     setPreview(loc.preview);
     setRelMode(loc.relMode);
-  });
+  }));
   const toasts = useToasts();
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const pending = useRef(new Map<string, () => Promise<void>>());
@@ -203,20 +213,25 @@ export function App() {
           await tick();
           setView('timeline');
           await tick();
+          const current = (id: string) => () => !!$(`[data-entry-id="${CSS.escape(id)}"][aria-current="page"]`) && !!$('.editor');
           mouse(3);
-          await tick(150);
-          expect(!!$(`[data-entry-id="${CSS.escape(other.id)}"][aria-current="page"]`) && !!$('.editor'), 'mouse back returns to the previous entry');
+          expect(await until(current(other.id)), 'mouse back returns to the previous entry');
           window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true }));
-          await tick();
-          expect(!!$(`[data-entry-id="${CSS.escape(leyla.id)}"][aria-current="page"]`), 'Alt+Left returns to the first entry');
+          expect(await until(current(leyla.id)), 'Alt+Left returns to the first entry');
           await tick(150);
           mouse(4);
-          await tick();
-          expect(!!$(`[data-entry-id="${CSS.escape(other.id)}"][aria-current="page"]`), 'mouse forward');
+          expect(await until(current(other.id)), 'mouse forward');
           await tick(150);
           mouse(4);
-          await tick();
-          expect(!!$('.timeline, .tl-scroll'), 'forward to the timeline');
+          expect(await until(() => !!$('.timeline, .tl-scroll')), 'forward to the timeline');
+          // Two quick Backs (before the first one has rendered) land two places back and keep Forward.
+          mouse(3);
+          await tick(130);
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true }));
+          expect(await until(current(leyla.id)), 'two quick Backs');
+          await tick(150);
+          mouse(4);
+          expect(await until(current(other.id)), 'Forward still works after two quick Backs');
           dom['history'] = 1;
           setSelectedId(leyla.id);
           setView('editor');
@@ -242,8 +257,7 @@ export function App() {
         typeInto(pal, target.name);
         await tick();
         key(pal, 'Enter');
-        await tick();
-        expect(!$('.palette') && !!$(`[data-entry-id="${CSS.escape(target.id)}"][aria-current="page"]`), `palette Enter opens ${target.name}`);
+        expect(await until(() => !$('.palette') && !!$(`[data-entry-id="${CSS.escape(target.id)}"][aria-current="page"]`)), `palette Enter opens ${target.name}`);
         key(window, 'k', { ctrlKey: true });
         await tick();
         typeInto($<HTMLInputElement>('.palette input')!, 'Qzxv Wraith');
@@ -259,8 +273,13 @@ export function App() {
         key(window, 'Escape');
         await tick();
         expect(!$('.about') && !$('.palette'), 'Escape closes About');
-        setView('timeline');
-        await tick(150);
+        // Motion: a tab click goes through a View Transition of the main pane and still lands on the view.
+        dom['viewTransitions'] = typeof document.startViewTransition === 'function' && getComputedStyle($('.main')!).viewTransitionName === 'main-pane' ? 1 : 0;
+        expect(dom['viewTransitions'] === 1, 'View Transitions available for the main pane');
+        $<HTMLButtonElement>('.tabs button:nth-child(2)')!.click();
+        await until(() => !!$('.tl-scroll'));
+        await tick(300);
+        expect(!!$('.tl-scroll') && $('.tabs button:nth-child(2)')?.getAttribute('aria-pressed') === 'true', 'Timeline tab opens the timeline');
         dom['timelineMarks'] = count('.tl-mark');
         dom['timelineBands'] = count('.tl-band');
         dom['timelineWarnings'] = count('.tl-warn');
@@ -394,7 +413,8 @@ export function App() {
         void flush().then(() => toasts.push({ tone: 'ok', text: 'All changes saved' }));
       } else if (mod && ['1', '2', '3'].includes(e.key)) {
         e.preventDefault();
-        setView((['editor', 'timeline', 'relations'] as const)[Number(e.key) - 1]!);
+        const next = (['editor', 'timeline', 'relations'] as const)[Number(e.key) - 1]!;
+        transition(() => setView(next));
       } else if (mod && e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
         document.getElementById('warnings-title')?.focus();
@@ -453,15 +473,16 @@ export function App() {
       toasts.push({ tone: 'error', text: `${label} failed: ${(e as Error).message}` });
     }
   };
-  const openEntry = (id: string) => { setSelectedId(id); setView('editor'); };
+  const openEntry = (id: string) => transition(() => { setSelectedId(id); setView('editor'); });
+  const goView = (v: View, mode?: RelationMode) => transition(() => { if (mode) setRelMode(mode); setView(v); });
 
   const selected = world.entries.find((e) => e.id === selectedId);
   const closeWorld = () => void flush().then(() => { setWorld(null); setDir(null); document.title = 'Lore-Forge'; });
   const commands: PaletteItem[] = [
-    { id: 'go-editor', group: 'Go to', label: 'Editor', icon: 'quill-ink', run: () => setView('editor') },
-    { id: 'go-timeline', group: 'Go to', label: 'Timeline', icon: 'hourglass', run: () => setView('timeline') },
-    { id: 'go-tree', group: 'Go to', label: 'Family tree', hint: 'Relationships', icon: 'family-tree', run: () => { setRelMode('tree'); setView('relations'); } },
-    { id: 'go-web', group: 'Go to', label: 'Relationship web', hint: 'Relationships', icon: 'spider-web', run: () => { setRelMode('web'); setView('relations'); } },
+    { id: 'go-editor', group: 'Go to', label: 'Editor', icon: 'quill-ink', run: () => goView('editor') },
+    { id: 'go-timeline', group: 'Go to', label: 'Timeline', icon: 'hourglass', run: () => goView('timeline') },
+    { id: 'go-tree', group: 'Go to', label: 'Family tree', hint: 'Relationships', icon: 'family-tree', run: () => goView('relations', 'tree') },
+    { id: 'go-web', group: 'Go to', label: 'Relationship web', hint: 'Relationships', icon: 'spider-web', run: () => goView('relations', 'web') },
     { id: 'go-back', group: 'Go to', label: 'Back', hint: 'Alt+Left, mouse 4', icon: 'fast-backward-button', run: () => navigate('back') },
     { id: 'go-forward', group: 'Go to', label: 'Forward', hint: 'Alt+Right, mouse 5', icon: 'fast-forward-button', run: () => navigate('forward') },
     { id: 'go-filter', group: 'Go to', label: 'Filter entries', hint: 'Ctrl+F', icon: 'magnifying-glass', run: () => setTimeout(() => document.getElementById('search')?.focus(), 0) },
@@ -493,7 +514,7 @@ export function App() {
         <button type="button" class="palette-open" onClick={() => setPalette(true)} title="Jump to an entry or run a command"><Icon name="magnifying-glass" /> <span>Search or run…</span> <kbd>Ctrl+K</kbd></button>
         <nav class="tabs" aria-label="Views">
           {tabs.map(([v, icon, label], i) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} title={`Ctrl+${i + 1}`}><Icon name={icon} /> {label}</button>
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => goView(v)} title={`Ctrl+${i + 1}`}><Icon name={icon} /> {label}</button>
           ))}
         </nav>
         <div class="publish-actions">
@@ -509,7 +530,7 @@ export function App() {
           <button type="button" class="ghost small icon-only" onClick={() => setAbout(true)} aria-label="About and credits" title="About and credits"><Icon name="laurels" /></button>
         </div>
       </header>
-      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onSelect={(id) => { setSelectedId(id); if (view === 'timeline') setView('editor'); }} onCreate={createEntry} creating={creating} onCreating={setCreating} />
+      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onSelect={(id) => transition(() => { setSelectedId(id); if (view === 'timeline') setView('editor'); })} onCreate={createEntry} creating={creating} onCreating={setCreating} />
       <main class="main" id="main">
         {view === 'editor' &&
           (selected ? (
