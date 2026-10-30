@@ -1,11 +1,12 @@
 import { parseDate, type ParsedDate } from './dates.ts';
 import { checkWorld, report, type CheckReport } from './engine.ts';
 import { builtinRules } from './rules/index.ts';
+import { references } from './rules/references.ts';
 import { SCHEMA_VERSION, type Entry, type WorldManifest, type World } from './types.ts';
 import { WorldIndex } from './world-index.ts';
 
 export const SNAPSHOT_FORMAT = 'lore-forge.world-snapshot';
-export const GENERATOR = 'lore-forge 0.2.0';
+export const GENERATOR = 'lore-forge 0.3.0';
 
 export type SnapshotDate = Omit<ParsedDate, 'lo' | 'hi'> & { text: string; lo: number; hi: number };
 
@@ -15,6 +16,19 @@ export interface SnapshotEntry {
   file: string;
   /** Every readable date field, parsed. `lo`/`hi` are absolute day numbers on the world axis. */
   dates: Record<string, SnapshotDate>;
+  /**
+   * Every reference this entry makes: fields, [[links]], @mentions and plain names in the text (implicit).
+   * `id` is set when the reference resolves to an entry.
+   */
+  references: SnapshotReference[];
+}
+
+export interface SnapshotReference {
+  field: string;
+  ref: string;
+  id?: string;
+  implicit?: boolean;
+  ambiguous?: boolean;
 }
 
 export interface WorldSnapshot {
@@ -35,7 +49,11 @@ export function snapshot(world: World): WorldSnapshot {
       const r = parseDate(text, ix.calendar);
       if (r.kind === 'date') dates[field] = { text, ...r.date };
     }
-    return { entry, file: world.files[entry.id] ?? '', dates };
+    const refs = references(entry, ix).map((r): SnapshotReference => {
+      const id = ix.resolve(r.ref)?.id;
+      return { field: r.field, ref: r.ref, ...(id ? { id } : {}), ...(r.implicit ? { implicit: true } : {}), ...(r.ambiguous ? { ambiguous: true } : {}) };
+    });
+    return { entry, file: world.files[entry.id] ?? '', dates, references: refs };
   });
   return {
     format: SNAPSHOT_FORMAT,

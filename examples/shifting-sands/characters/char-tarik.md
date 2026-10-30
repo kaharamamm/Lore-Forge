@@ -4,7 +4,7 @@ type: character
 name: Tarik
 status: alive
 relations:
-  - type: ""
+  - type: parent-of
     target: char-mira
 ---
 

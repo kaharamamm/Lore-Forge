@@ -2,8 +2,9 @@ import { Document, isScalar, parse as parseYaml, visit } from 'yaml';
 import {
   ENTRY_TYPES, SCHEMA_VERSION, TYPE_FOLDERS,
   type Action, type Entry, type EntryType, type IntendedMark, type LoadIssue, type LocationSpan,
-  type Participant, type Provenance, type RefImage, type Relation, type World, type WorldManifest,
+  type FactionStatus, type ItemStatus, type Participant, type PlaceStatus, type Provenance, type RefImage, type Relation, type World, type WorldManifest,
 } from './types.ts';
+import { LIFECYCLE } from './lifecycle.ts';
 
 export const MANIFEST_FILE = 'world.json';
 export const INTENDED_FILE = 'intended.json';
@@ -85,9 +86,9 @@ function clean<T extends object>(o: T): T {
 
 const KNOWN_KEYS: Record<EntryType, string[]> = {
   character: ['born', 'died', 'status', 'locations'],
-  place: ['founded', 'destroyed', 'partOf'],
-  faction: ['founded', 'dissolved'],
-  item: ['created', 'destroyed'],
+  place: ['status', 'founded', 'destroyed', 'partOf'],
+  faction: ['status', 'founded', 'dissolved'],
+  item: ['status', 'created', 'destroyed'],
   event: ['date', 'end', 'place', 'participants', 'actions'],
   note: ['date'],
 };
@@ -154,11 +155,16 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
     extra: extraKeys.length ? Object.fromEntries(extraKeys.map((k) => [k, o[k]])) : undefined,
   });
 
+  const lifecycle = LIFECYCLE[t];
+  const status = lifecycle ? r.str(o, 'status') : undefined;
+  if (lifecycle && status !== undefined && !lifecycle.statuses.some((x) => x.value === status)) {
+    const values = lifecycle.statuses.map((x) => x.value);
+    r.problems.push(`"status" must be ${values.slice(0, -1).join(', ')} or ${values.at(-1)}.`);
+  }
+
   let entry: Entry;
   switch (t) {
     case 'character': {
-      const status = r.str(o, 'status');
-      if (status !== undefined && !['alive', 'dead', 'unknown'].includes(status)) r.problems.push('"status" must be alive, dead or unknown.');
       const location = (x: Obj, w: string): LocationSpan | undefined => {
         const place = r.need(x, 'place', w);
         return place ? clean({ place, from: r.str(x, 'from'), to: r.str(x, 'to'), note: r.str(x, 'note') }) : undefined;
@@ -171,13 +177,13 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
       break;
     }
     case 'place':
-      entry = clean({ ...base, type: t, founded: r.str(o, 'founded'), destroyed: r.str(o, 'destroyed'), partOf: r.str(o, 'partOf') });
+      entry = clean({ ...base, type: t, status: status as PlaceStatus | undefined, founded: r.str(o, 'founded'), destroyed: r.str(o, 'destroyed'), partOf: r.str(o, 'partOf') });
       break;
     case 'faction':
-      entry = clean({ ...base, type: t, founded: r.str(o, 'founded'), dissolved: r.str(o, 'dissolved') });
+      entry = clean({ ...base, type: t, status: status as FactionStatus | undefined, founded: r.str(o, 'founded'), dissolved: r.str(o, 'dissolved') });
       break;
     case 'item':
-      entry = clean({ ...base, type: t, created: r.str(o, 'created'), destroyed: r.str(o, 'destroyed') });
+      entry = clean({ ...base, type: t, status: status as ItemStatus | undefined, created: r.str(o, 'created'), destroyed: r.str(o, 'destroyed') });
       break;
     case 'event': {
       const participant = (x: Obj, w: string): Participant | undefined => {

@@ -1,11 +1,23 @@
 import type { Finding, Rule } from '../engine.ts';
 import { bodyLinks } from '../links.ts';
 import type { Entry } from '../types.ts';
-import { normalizeName } from '../world-index.ts';
+import { normalizeName, type WorldIndex } from '../world-index.ts';
 
-/** Every reference an entry makes to another entry, with the field it sits in. */
-export function references(e: Entry): { ref: string; field: string }[] {
-  const out: { ref: string; field: string }[] = [];
+export interface Reference {
+  ref: string;
+  field: string;
+  /** A plain name in the text (no [[link]]). Always points at an existing entry. */
+  implicit?: boolean;
+  /** The plain name is shared by several entries; one reference per candidate. */
+  ambiguous?: boolean;
+}
+
+/**
+ * Every reference an entry makes to another entry, with the field it sits in.
+ * With an index, plain names and aliases in the body count too (implicit: true).
+ */
+export function references(e: Entry, ix?: WorldIndex): Reference[] {
+  const out: Reference[] = [];
   e.relations?.forEach((r, i) => out.push({ ref: r.target, field: `relations[${i}]` }));
   if (e.type === 'character') e.locations?.forEach((l, i) => out.push({ ref: l.place, field: `locations[${i}]` }));
   if (e.type === 'place' && e.partOf) out.push({ ref: e.partOf, field: 'partOf' });
@@ -18,6 +30,11 @@ export function references(e: Entry): { ref: string; field: string }[] {
     });
   }
   for (const l of bodyLinks(e.body)) out.push({ ref: l.ref, field: 'body' });
+  if (ix) {
+    for (const m of ix.mentions.find(e.body, { exclude: e.id })) {
+      for (const id of m.ids) out.push({ ref: id, field: 'body', implicit: true, ...(m.ids.length > 1 ? { ambiguous: true } : {}) });
+    }
+  }
   return out;
 }
 

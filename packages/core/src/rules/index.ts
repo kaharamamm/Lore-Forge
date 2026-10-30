@@ -7,12 +7,13 @@ import { afterDeath, beforeBirth, participantNotExisting } from './lifespan.ts';
 import { placeNotExisting, twoPlacesAtOnce } from './places.ts';
 import { danglingReference, duplicateName } from './references.ts';
 import { deadMarkedAlive } from './status.ts';
+import { relationKindRule } from './relation-kind.ts';
 
-export { afterDeath, beforeBirth, participantNotExisting, placeNotExisting, twoPlacesAtOnce, danglingReference, duplicateName, parentCycle, parentBornAfterChild, deadMarkedAlive, invalidDate, dateOrder, fileError, imageView };
+export { afterDeath, beforeBirth, participantNotExisting, placeNotExisting, twoPlacesAtOnce, danglingReference, duplicateName, parentCycle, parentBornAfterChild, deadMarkedAlive, invalidDate, dateOrder, fileError, imageView, relationKindRule };
 
 /** The starter rules, in report order. */
 export const builtinRules: readonly Rule[] = [
   afterDeath, beforeBirth, participantNotExisting, placeNotExisting, twoPlacesAtOnce,
   danglingReference, duplicateName, parentCycle, parentBornAfterChild, deadMarkedAlive,
-  invalidDate, dateOrder, fileError, imageView,
+  invalidDate, dateOrder, fileError, imageView, relationKindRule,
 ];

@@ -1,4 +1,5 @@
 import { atDate, dateOf, formatDate, type ParsedDate } from './dates.ts';
+import { MentionMatcher } from './mentions.ts';
 import { TYPE_LABELS, type Calendar, type Entry, type FactRef, type World } from './types.ts';
 
 export interface LifePoint {
@@ -41,6 +42,17 @@ export class WorldIndex {
 
   get entries(): readonly Entry[] {
     return this.world.entries;
+  }
+
+  private matcher: MentionMatcher | undefined;
+  /** Plain-name mention matcher over all names and aliases, built on first use. */
+  get mentions(): MentionMatcher {
+    return (this.matcher ??= new MentionMatcher(this.world.entries));
+  }
+
+  /** Entry by id only. */
+  byIdOf(id: string): Entry | undefined {
+    return this.byId.get(id);
   }
 
   /** Find an entry by id, or else by name or alias (case-insensitive). */

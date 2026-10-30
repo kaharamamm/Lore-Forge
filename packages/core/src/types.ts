@@ -23,6 +23,24 @@ export const TYPE_LABELS: Record<EntryType, string> = {
   note: 'Notes',
 };
 
+/** One emoji per type, used everywhere the type is shown (always next to a word, never alone). */
+export const TYPE_EMOJI: Record<EntryType, string> = {
+  character: '🧑',
+  place: '🏰',
+  faction: '🛡️',
+  item: '🗡️',
+  event: '⚔️',
+  note: '📜',
+};
+export const TYPE_SINGULAR: Record<EntryType, string> = {
+  character: 'Character',
+  place: 'Place',
+  faction: 'Faction',
+  item: 'Item',
+  event: 'Event',
+  note: 'Note',
+};
+
 /**
  * A date as written in the files: `[~]YEAR[-MM[-DD]] [ERA]` or `unknown`.
  * `~` means approximate. Examples: "1800", "~1800", "1920-03-12", "312 OK", "unknown".
@@ -209,8 +227,13 @@ export interface Character extends EntryBase {
   status?: 'alive' | 'dead' | 'unknown';
   locations?: LocationSpan[];
 }
+export type PlaceStatus = 'standing' | 'destroyed' | 'unknown';
+export type FactionStatus = 'active' | 'dissolved' | 'unknown';
+export type ItemStatus = 'intact' | 'destroyed' | 'lost' | 'unknown';
+
 export interface Place extends EntryBase {
   type: 'place';
+  status?: PlaceStatus;
   founded?: DateText;
   destroyed?: DateText;
   /** Id of the larger place/region this one is inside. */
@@ -218,11 +241,13 @@ export interface Place extends EntryBase {
 }
 export interface Faction extends EntryBase {
   type: 'faction';
+  status?: FactionStatus;
   founded?: DateText;
   dissolved?: DateText;
 }
 export interface Item extends EntryBase {
   type: 'item';
+  status?: ItemStatus;
   created?: DateText;
   destroyed?: DateText;
 }

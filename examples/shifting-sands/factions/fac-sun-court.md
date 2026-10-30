@@ -4,6 +4,7 @@ type: faction
 name: Sun Court
 founded: "300 OK"
 dissolved: "1920"
+status: dissolved
 ---
 
 The court of the salt kings.

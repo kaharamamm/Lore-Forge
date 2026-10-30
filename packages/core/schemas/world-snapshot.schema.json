@@ -44,6 +44,22 @@
               },
               "additionalProperties": false
             }
+          },
+          "references": {
+            "type": "array",
+            "description": "Every reference the entry makes: fields, [[links]], @mentions, and plain names or aliases written in the text (implicit: true). id is set when the reference resolves; ambiguous: true when a plain name is shared by several entries (one item per candidate).",
+            "items": {
+              "type": "object",
+              "required": ["field", "ref"],
+              "properties": {
+                "field": { "type": "string" },
+                "ref": { "type": "string" },
+                "id": { "type": "string" },
+                "implicit": { "const": true },
+                "ambiguous": { "const": true }
+              },
+              "additionalProperties": false
+            }
           }
         },
         "additionalProperties": false

@@ -6,7 +6,10 @@ export * from './engine.ts';
 export * from './snapshot.ts';
 export { WorldIndex, normalizeName } from './world-index.ts';
 export { appearances, type Appearance } from './appearances.ts';
-export { references } from './rules/references.ts';
+export { references, type Reference } from './rules/references.ts';
+export * from './lifecycle.ts';
+export * from './relation-kinds.ts';
+export * from './mentions.ts';
 export * from './rules/index.ts';
 
 import { checkWorld } from './engine.ts';

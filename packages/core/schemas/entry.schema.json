@@ -16,7 +16,7 @@
       "type": "object",
       "required": ["type", "target"],
       "properties": {
-        "type": { "type": "string", "examples": ["parent-of", "child-of", "member-of", "leader-of", "ally-of", "enemy-of", "rules", "owns", "killed", "spouse-of", "sibling-of"] },
+        "type": { "type": "string", "description": "Usually a type from the relation table (RELATION_KINDS in @lore-forge/core); custom types are allowed.", "examples": ["parent-of", "child-of", "spouse-of", "sibling-of", "member-of", "leader-of", "rules", "ally-of", "enemy-of", "owns", "wields", "located-in", "part-of", "took-place-at", "killed"] },
         "target": { "$ref": "#/$defs/ref" },
         "from": { "$ref": "#/$defs/date" },
         "to": { "$ref": "#/$defs/date" },
@@ -35,7 +35,10 @@
     "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } },
     "born": { "$ref": "#/$defs/date" },
     "died": { "$ref": "#/$defs/date" },
-    "status": { "enum": ["alive", "dead", "unknown"] },
+    "status": {
+      "enum": ["alive", "dead", "standing", "destroyed", "active", "dissolved", "intact", "lost", "unknown"],
+      "description": "character: alive/dead/unknown; place: standing/destroyed/unknown; faction: active/dissolved/unknown; item: intact/destroyed/lost/unknown. An ongoing status hides the end date in the editor; the value stays in the file."
+    },
     "locations": {
       "type": "array",
       "items": {

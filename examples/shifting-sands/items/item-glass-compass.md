@@ -4,6 +4,11 @@ type: item
 name: The Glass Compass
 summary: A compass that points to water, not north.
 created: "1750 XX"
+status: intact
+relations:
+  - type: parent-of
+    target: char-leyla
+    note: Nonsense on purpose, the relation-kind rule flags it.
 visual:
   material: Sea-green glass disc in a worn brass ring.
   size: Palm-sized, 8 cm across, 2 cm thick.
@@ -18,4 +23,4 @@ images:
     view: detail
 ---
 
-Points to water, not north.
+Points to water, not north. Kadir Humpback carried it across The Shifting Dunes.
