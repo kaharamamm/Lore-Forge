@@ -29,6 +29,32 @@ export interface Doc {
   blocks: Block[];
 }
 
+export interface InlineRun { text: string; bold: boolean; italic: boolean }
+
+/** Splits **bold**, *italic* and _italic_ spans. */
+export function inlineRuns(line: string): InlineRun[] {
+  return line
+    .split(/(\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*|_[^_\s][^_\n]*_)/)
+    .filter((s) => s !== '')
+    .map((s) =>
+      s.startsWith('**') && s.endsWith('**') && s.length > 4
+        ? { text: s.slice(2, -2), bold: true, italic: false }
+        : (s.startsWith('*') && s.endsWith('*')) || (s.startsWith('_') && s.endsWith('_'))
+          ? { text: s.slice(1, -1), bold: false, italic: true }
+          : { text: s, bold: false, italic: false },
+    );
+}
+
+/** Split blocks into page-like sheets for an on-screen preview: a new sheet at every `newPage` heading. */
+export function docSheets(blocks: readonly Block[]): Block[][] {
+  const out: Block[][] = [[]];
+  for (const b of blocks) {
+    if (b.kind === 'heading' && b.newPage && out[out.length - 1]!.length) out.push([]);
+    out[out.length - 1]!.push(b);
+  }
+  return out.filter((s) => s.length);
+}
+
 export const anchorOf = (entryId: string): string => `entry-${entryId}`;
 
 /** Replace [[id]], [[Name]], [[id|label]] and @id with display names. Unknown targets keep their written text. */

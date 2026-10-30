@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { check, familyTree, relationWeb, storyBook, timelineModel, worldBible, yearTicks, TREE_LAYOUT, SINGLE_CHAPTER } from '@lore-forge/core';
+import { check, docSheets, familyTree, inlineRuns, relationWeb, storyBook, timelineModel, worldBible, yearTicks, TREE_LAYOUT, SINGLE_CHAPTER, type Block } from '@lore-forge/core';
 import { world } from './helpers.ts';
 
 const fam = world([
@@ -106,4 +106,23 @@ test('bible lists where an entry is mentioned by plain name', () => {
   const i = blocks.findIndex((b) => b.kind === 'heading' && b.text === 'Mentioned in');
   assert.ok(i > 0);
   assert.deepEqual(blocks[i + 1], { kind: 'para', text: 'Tarik' });
+});
+
+test('preview sheets split at new-page headings and keep every block once', () => {
+  const blocks: Block[] = [
+    { kind: 'toc' },
+    { kind: 'heading', level: 1, text: 'Characters', newPage: true, toc: true },
+    { kind: 'para', text: 'a' },
+    { kind: 'heading', level: 2, text: 'Leyla', toc: true },
+    { kind: 'heading', level: 1, text: 'Places', newPage: true, toc: true },
+    { kind: 'para', text: 'b' },
+  ];
+  const sheets = docSheets(blocks);
+  assert.deepEqual(sheets.map((s) => s.length), [1, 3, 2]);
+  assert.deepEqual(sheets.flat(), blocks);
+  // A leading new-page heading does not leave an empty sheet.
+  assert.equal(docSheets(blocks.slice(1)).length, 2);
+  assert.deepEqual(docSheets([]), []);
+  // The preview's inline formatting is the PDF's.
+  assert.deepEqual(inlineRuns('a **b**').map((r) => r.bold), [false, true]);
 });

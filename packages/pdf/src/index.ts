@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import PDFDocument from 'pdfkit';
-import { toMarkdown, type Block, type Doc } from '@lore-forge/core';
+import { inlineRuns, toMarkdown, type Block, type Doc } from '@lore-forge/core';
 
 type Pdf = PDFKit.PDFDocument;
 type Heading = Extract<Block, { kind: 'heading' }>;
@@ -53,21 +53,8 @@ const THEMES: Record<Doc['kind'], Theme> = {
 const INK = '#222222';
 const MUTED = '#6b6b6b';
 
-interface Run { text: string; bold: boolean; italic: boolean }
-
-/** Splits **bold**, *italic* and _italic_ spans. */
-export function inlineRuns(line: string): Run[] {
-  return line
-    .split(/(\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*|_[^_\s][^_\n]*_)/)
-    .filter((s) => s !== '')
-    .map((s) =>
-      s.startsWith('**') && s.endsWith('**') && s.length > 4
-        ? { text: s.slice(2, -2), bold: true, italic: false }
-        : (s.startsWith('*') && s.endsWith('*')) || (s.startsWith('_') && s.endsWith('_'))
-          ? { text: s.slice(1, -1), bold: false, italic: true }
-          : { text: s, bold: false, italic: false },
-    );
-}
+/** Moved to core so the in-app preview shares it; re-exported for existing callers. */
+export { inlineRuns };
 
 const keyOf = (h: Heading, i: number): string => h.anchor ?? `h-${i}`;
 
