@@ -39,7 +39,7 @@ my-world/
   intended.json       warnings marked "intended" (optional)
   characters/<id>.md  one file per entry; folder = type
   places/  factions/  items/  events/  notes/
-  images/<entryId>/<view>.<ext>   reference images
+  images/<entryId>/<view>.<ext>   reference images (any entry type)
 ```
 
 An entry file has YAML front matter followed by a Markdown body:
@@ -60,6 +60,10 @@ images:
   - file: images/char-kadir/front.png
     view: front
     provenance: { tool: ..., prompt: ..., date: "2026-10-30", sources: [...], rights: ... }
+visual:
+  appearance: Humanoid camel, sand-brown fur
+  build: Tall (2.1 m with hump)
+  props: The Glass Compass on a cord
 ---
 Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
 ```
@@ -68,16 +72,36 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   participant `id`, action `actor`/`target`, `[[...]]`, `@id`) may use an id, a name or an alias. Ids are
   preferred.
 - Type-specific fields:
-  - character: `born`, `died`, `status`, `locations`, `images`
+  - character: `born`, `died`, `status`, `locations`
   - place: `founded`, `destroyed`, `partOf`
   - faction: `founded`, `dissolved`
   - item: `created`, `destroyed`
   - event: `date`, `end`, `place`, `participants[{id, role}]`, `actions[{actor, verb, target}]`
-  - note: none
+  - note: `date` (optional; places the note in the Story Book)
+- Fields on every type (all optional): `images`, `visual`, `chapter`, `bookOrder`.
 - `relations[].type` is free text. The rules give meaning to `parent-of`, `child-of` and `killed`. Others,
   such as `member-of`, `ally-of`, `enemy-of`, `owns` and `spouse-of`, are grouped in the UI.
-- Image `view` is one of `a-pose`, `front`, `back`, `left`, `right`, `three-quarter` or `concept`. The
-  `provenance` field records where an image came from. AI tools that generate images should fill it in.
+- `images[]` works on every entry type: `{file, view, provenance?}`. `view` is a kebab-case label. The usual
+  views per type (`IMAGE_VIEWS` in core) are:
+
+  | Type | Usual views |
+  |---|---|
+  | character | `a-pose`, `front`, `back`, `left`, `right`, `three-quarter`, `concept` |
+  | place | `establishing`, `map`, `interior`, `exterior`, `mood`, `concept` |
+  | faction | `emblem`, `banner`, `uniform`, `headquarters`, `concept` |
+  | item | `front`, `back`, `side`, `top`, `detail`, `concept` |
+  | event | `scene`, `establishing`, `map`, `mood`, `concept` |
+  | note | `illustration`, `map`, `concept` |
+
+  Other labels load fine and only raise the info rule `image-view`. `provenance` records where an image came
+  from (`tool`, `prompt`, `date`, `sources`, `rights`). AI tools that generate images should fill it in and
+  save the file under `images/<entryId>/`.
+- `visual` is a map of free-text strings (`VISUAL_FIELDS` in core). Known keys: character `appearance`,
+  `build`, `clothing`, `palette`, `features`, `props`; place `architecture`, `climate`, `palette`, `scale`;
+  faction `emblem`, `attire`, `palette`; item `material`, `size`, `details`; event `scene`, `mood`. Unknown
+  keys are kept and printed in the World Bible.
+- `chapter` (string) and `bookOrder` (number, lower first, default 0) on events and notes control the Story
+  Book. `world.json` may hold `"book": {"title", "author", "chapterYears"}`.
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so
   diffs stay small.
 
@@ -123,11 +147,28 @@ const warnings = registry.check(await loadWorld('path/to/world'));
 Rules are pure functions of the world. Rule ids must be unique, and you should namespace your own ids. The
 `rules` map in `world.json` can override any rule's severity or set it to `"off"`.
 
+## World Bible and Story Book
+
+`lore bible <worldDir> -o out.pdf` and `lore book <worldDir> -o out.pdf` write a PDF and a Markdown sidecar
+next to it (`out.md`, image links relative to it). The sidecar holds the same content as the PDF and is the
+easiest input for AI tools; it starts with an HTML comment naming the document type. In the World Bible,
+each character, place, item and event ends with `#### Art brief: <name>` containing an **Image prompt**
+block and, for characters and items, a **3D turnaround brief** block (neutral A-pose or resting
+orientation; front, back, left, right and three-quarter views; plain background; flat lighting; no props
+unless listed; consistent scale), each in a `text` code fence. The prose layout of these files may change
+between versions; for exact data use `lore export`.
+
+Library use: `worldBible(world)` / `storyBook(world)` return a renderer-neutral `Doc`; `toMarkdown(doc)` is in
+`@lore-forge/core` and `renderPdf(doc, {worldDir})` / `writePublication(...)` in `@lore-forge/pdf`.
+`artBrief(entry, index)` returns `{prompt, turnaround?, missing}`.
+
 ## Stability
 
 - `schemaVersion` appears in `world.json`, `intended.json`, the check report and the snapshot. It is `1`
   today.
 - **Additive changes** keep version 1: new optional fields, new rules, new image views, new relation types.
+  Lore-Forge 0.2 (images on every type, `visual`, `chapter`, `bookOrder`, note `date`, manifest `book`, the
+  `image-view` rule) was additive, so worlds stay at version 1.
   Consumers should ignore fields they don't know.
 - **Breaking changes** bump the version: removing or renaming fields, or changing the meaning of a field or
   of the date syntax. Lore-Forge will migrate older worlds when it opens them. Consumers should check

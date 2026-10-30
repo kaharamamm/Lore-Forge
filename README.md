@@ -8,7 +8,30 @@ checker that notices when your canon contradicts itself:
 A world is a plain folder of text files (`world.json` plus one Markdown file per entry). You can keep it in
 git, diff it, and read it from other tools. Nothing leaves your machine.
 
-Version 0.1.0 · world format `schemaVersion: 1`.
+Version 0.2.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged).
+
+## What's new in v0.2
+
+- **Reference images for every entry type**, with the same storage (`images/<entryId>/`) and provenance
+  record. Each type suggests its own views: characters A-pose, front, back, left, right, three-quarter,
+  concept; places establishing shot, map, interior, exterior, mood, concept; items front, back, side, top,
+  detail, concept; events scene, establishing shot, map, mood, concept. Any other view label is allowed and
+  only gets an info note (`image-view`).
+- **Visual description fields** (optional, free text): characters appearance, height & build, clothing,
+  colour palette, distinguishing features, props; places architecture, climate, palette, scale; items
+  material, size, details; events scene description, mood; factions emblem, attire, palette.
+- **World Bible PDF** (`lore bible`, or **World Bible PDF…** in the app): cover, contents, world overview
+  and calendar, every entry by type with facts, relationships, visual description, text and reference
+  images with provenance, an **art brief** per character, place, item and event (image prompt, plus a 3D
+  turnaround brief for characters and items), a timeline, a relationship summary, a glossary of names and
+  aliases, and an appendix of open consistency warnings. A `.md` copy with the same content is written next
+  to the PDF for AI tools.
+- **Story Book PDF** (`lore book`, or **Story Book PDF…**): your events and notes in in-world date order,
+  in chapters by era (or by year ranges with `book.chapterYears` in `world.json`), with links resolved to
+  names and event or place images as illustrations. A page's `chapter` field puts it in a named chapter and
+  `bookOrder` reorders pages inside a chapter. Undated pages go to *Lore & Legends* at the end.
+  **The Story Book assembles what you wrote. It does not write, rewrite or summarise prose;** an event with
+  no text shows its summary, or a "no text yet" line.
 
 ## What's in v0.1
 
@@ -17,15 +40,14 @@ Version 0.1.0 · world format `schemaVersion: 1`.
   born/died, founded/destroyed, an event date, place, participants and actions ("A killed B").
 - **Dates on your own calendar:** custom eras and months. Dates can be exact (`1920-03-12`), year-only
   (`1920`), approximate (`~1800`), in another era (`450 OK`), or unknown (`?`).
-- **Consistency engine:** 13 starter rules (listed below). Warnings show the severity as an icon plus a word,
+- **Consistency engine:** 14 starter rules (listed below). Warnings show the severity as an icon plus a word,
   the offending fact, and the canon fact it conflicts with, including that fact's source. Warnings never block
   saving. You can mark one as *intended* (for example, a resurrection) and add a note. The mark is stored in
   `intended.json` inside the world.
 - **Desktop app:** a sidebar grouped by type with search, a structured entry editor, a live warnings panel
-  that jumps to the offending field, a timeline, a relationship view, and reference images for characters
-  (A-pose, front, back, left, right, three-quarter, concept) with provenance (tool, prompt, date, sources,
-  rights).
-- **CLI:** `lore check` and `lore export`.
+  that jumps to the offending field, a timeline, a relationship view, and reference images with provenance
+  (tool, prompt, date, sources, rights).
+- **CLI:** `lore check`, `lore export`, `lore bible`, `lore book`.
 - **JSON Schemas and an integration guide** so other tools can read worlds. See
   [docs/INTEGRATION.md](docs/INTEGRATION.md).
 - **Example world:** `examples/shifting-sands` triggers every rule on purpose. Its README maps each rule
@@ -95,6 +117,10 @@ On Linux, `npm run dist:linux` builds an AppImage into the same `release/` folde
 5. **Timeline (Ctrl+2):** lifespans and existence spans by type, with events as markers. Open-ended spans fade
    out. **Relationships (Ctrl+3):** the selected entry's outgoing and incoming relations, grouped, plus the
    events it appears in.
+6. **PDFs:** **World Bible PDF…** and **Story Book PDF…** in the top bar save pending edits, ask where to
+   save, write the PDF plus its `.md` copy, and show the file. The editor's *Visual description* and
+   *Reference images* sections feed the World Bible's art briefs; *Story Book* (chapter, order) appears on
+   events and notes.
 
 Keyboard: **Ctrl+1/2/3** switch views, **Alt+↑/↓** move to the previous or next entry, **Ctrl+Shift+W**
 focuses the warnings panel, and Tab or Shift+Tab reach every control. The layout reflows down to a single
@@ -107,7 +133,13 @@ icon plus a word, never by color alone.
 npm run lore -- check <worldDir>            # human-readable; exit 0 = no errors, 1 = errors, 2 = unreadable/usage
 npm run lore -- check <worldDir> --json     # machine-readable check report
 npm run lore -- export <worldDir> --out world.snapshot.json   # versioned JSON snapshot
+npm run lore -- bible <worldDir> -o bible.pdf   # World Bible PDF + bible.md (default name <world-id>-bible.pdf)
+npm run lore -- book <worldDir> -o book.pdf     # Story Book PDF + book.md
 ```
+
+PDFs are made with [pdfkit](https://pdfkit.org) and embedded DejaVu fonts, so Turkish (ş ğ İ ı) and other
+Latin Extended, Greek and Cyrillic text renders. No browser is needed. PNG and JPEG images are embedded;
+WebP or GIF images are listed by file name instead.
 
 After `npm run build`, the compiled CLI is available at `packages/cli/dist/main.js` (bin name `lore`).
 
@@ -128,6 +160,7 @@ After `npm run build`, the compiled CLI is available at `packages/cli/dist/main.
 | `invalid-date` | error | a date can't be parsed or uses an unknown era |
 | `date-order` | error | an end comes before its start (died before born, destroyed before founded, ...) |
 | `file-error` | error | a file can't be read as an entry (the rest of the world still loads) |
+| `image-view` | info | an image's view label is not one of the usual views for its entry type |
 
 Vague dates never cause false alarms: a rule only fires when one date is *definitely* before the other,
 with approximate dates widened by `calendar.approxYears`. In `world.json`, `"rules": { "duplicate-name":
@@ -140,7 +173,9 @@ packages/core      @lore-forge/core: types, date math, parser/serializer, rule e
   src/rules/       one file per rule family; builtinRules in index.ts
   schemas/         *.schema.json (draft 2020-12)
   test/            node:test behaviour tests
-packages/cli       lore check / lore export
+  src/publish/      World Bible / Story Book document model, art briefs, Markdown output
+packages/pdf       @lore-forge/pdf: renders those documents to PDF (pdfkit + DejaVu fonts)
+packages/cli       lore check / export / bible / book
 packages/desktop   Electron main + preload, Preact renderer, electron-builder config
 examples/shifting-sands   example world that triggers every rule
 docs/INTEGRATION.md       how other tools (AI-HQ, Game-Forge) read worlds
@@ -152,10 +187,11 @@ docs/INTEGRATION.md       how other tools (AI-HQ, Game-Forge) read worlds
   build step. `--conditions=source` resolves workspace packages to their `.ts` sources.
 - The desktop app is bundled by esbuild (`packages/desktop/build.mjs`). `npm run watch -w
   @lore-forge/desktop` rebuilds on change.
-- Runtime dependencies: `yaml` (core) and `preact` (desktop).
+- Runtime dependencies: `yaml` (core), `pdfkit` and `dejavu-fonts-ttf` (pdf), `preact` (desktop).
 - Headless smoke test: `LORE_FORGE_SMOKE=1 LORE_FORGE_OPEN=$PWD/examples/shifting-sands xvfb-run -a npx
   electron packages/desktop --no-sandbox` prints `SMOKE OK {...}` and exits 0 once the world has loaded and
-  rendered. It exits 1 on a renderer error or crash.
+  rendered and it has exported both PDFs (set `LORE_FORGE_SMOKE_OUT=<dir>` to keep them). It exits 1 on a
+  renderer error, a crash or a failed PDF export.
 
 ## License
 
