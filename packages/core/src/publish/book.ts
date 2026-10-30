@@ -17,11 +17,28 @@ export interface BookChapter {
   pages: BookPage[];
 }
 
-/** Chapter title for a dated page: its era, or a year range inside the era when book.chapterYears is set. */
-function autoChapter(d: ParsedDate, world: World): string {
+/**
+ * Chapter grouping. `era`: one chapter per era. `years`: year ranges inside each era
+ * (`chapterYears`, else book.chapterYears in world.json, else 100). `single`: every dated page in one chapter.
+ * Default: years when world.json sets book.chapterYears, else era. A page's own `chapter:` always wins.
+ */
+export type ChapterGrouping = 'era' | 'years' | 'single';
+
+export interface BookOptions {
+  grouping?: ChapterGrouping;
+  chapterYears?: number;
+}
+
+export const SINGLE_CHAPTER = 'The Story';
+
+/** Chapter title for a dated page. */
+function autoChapter(d: ParsedDate, world: World, opts: BookOptions): string {
   const era = world.manifest.calendar.eras.find((e) => e.id === d.era);
   const name = era ? `${era.name}` : d.era;
-  const span = world.manifest.book?.chapterYears;
+  const manifestSpan = world.manifest.book?.chapterYears;
+  const grouping = opts.grouping ?? (manifestSpan && manifestSpan >= 1 ? 'years' : 'era');
+  if (grouping === 'single') return SINGLE_CHAPTER;
+  const span = grouping === 'years' ? (opts.chapterYears ?? manifestSpan ?? 100) : undefined;
   if (!span || span < 1) return name;
   const start = Math.floor(d.year / span) * span;
   return `${name}, ${start}–${start + span - 1}`;
@@ -34,13 +51,13 @@ function autoChapter(d: ParsedDate, world: World): string {
  * - Inside a chapter: `bookOrder` (default 0, lower first), then date, then name.
  * - Chapters are ordered by their earliest dated page; chapters with no dated page come after those.
  */
-export function bookChapters(world: World): BookChapter[] {
+export function bookChapters(world: World, opts: BookOptions = {}): BookChapter[] {
   const ix = new WorldIndex(world);
   const chapters = new Map<string, BookPage[]>();
   for (const e of world.entries) {
     if (e.type !== 'event' && e.type !== 'note') continue;
     const date = ix.date(e.date);
-    const title = e.chapter?.trim() || (date ? autoChapter(date, world) : LORE_AND_LEGENDS);
+    const title = e.chapter?.trim() || (date ? autoChapter(date, world, opts) : LORE_AND_LEGENDS);
     const page: BookPage = date ? { entry: e, date } : { entry: e };
     chapters.set(title, [...(chapters.get(title) ?? []), page]);
   }
@@ -63,11 +80,11 @@ function illustrations(e: LoreEvent | Note, ix: WorldIndex): { img: RefImage; of
 }
 
 /** The Story Book: the author's events and lore pages in story order. It assembles; it never rewrites prose. */
-export function storyBook(world: World): Doc {
+export function storyBook(world: World, opts: BookOptions = {}): Doc {
   const ix = new WorldIndex(world);
   const m = world.manifest;
   const title = m.book?.title ?? m.name;
-  const chapters = bookChapters(world);
+  const chapters = bookChapters(world, opts);
   const blocks: Block[] = [{ kind: 'toc' }];
   chapters.forEach((ch, n) => {
     blocks.push({ kind: 'heading', level: 1, text: `Chapter ${n + 1}. ${ch.title}`, toc: true, newPage: true });

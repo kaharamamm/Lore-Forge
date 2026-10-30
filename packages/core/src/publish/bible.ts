@@ -2,7 +2,9 @@ import { monthsOf } from '../dates.ts';
 import { checkWorld } from '../engine.ts';
 import { builtinRules } from '../rules/index.ts';
 import { GENERATOR } from '../snapshot.ts';
-import { ENTRY_TYPES, TYPE_LABELS, VISUAL_FIELDS, viewLabel, type Entry, type RefImage, type Warning, type World } from '../types.ts';
+import { references } from '../rules/references.ts';
+import { relationLabel } from '../relation-kinds.ts';
+import { ENTRY_TYPES, TYPE_LABELS, type EntryType, VISUAL_FIELDS, viewLabel, type Entry, type RefImage, type Warning, type World } from '../types.ts';
 import { normalizeName, WorldIndex } from '../world-index.ts';
 import { artBrief } from './art.ts';
 import { anchorOf, bodyBlocks, dateWithEra, showDate, type Block, type Doc } from './doc.ts';
@@ -10,7 +12,7 @@ import { anchorOf, bodyBlocks, dateWithEra, showDate, type Block, type Doc } fro
 export const BIBLE_FORMAT_VERSION = 1;
 
 const SINGULAR: Record<Entry['type'], string> = { character: 'Character', place: 'Place', faction: 'Faction', item: 'Item', event: 'Event', note: 'Note' };
-const rel = (type: string): string => type.replace(/-/g, ' ');
+const rel = (type: string): string => relationLabel(type);
 const byName = (a: Entry, b: Entry): number => a.name.localeCompare(b.name);
 
 export function imageBlock(img: RefImage, entry: Entry): Block {
@@ -90,7 +92,7 @@ function eventsOf(e: Entry, ix: WorldIndex): string[] {
   return out;
 }
 
-function entrySection(e: Entry, ix: WorldIndex, world: World, all: Triple[]): Block[] {
+function entrySection(e: Entry, ix: WorldIndex, world: World, all: Triple[], mentionedIn: Map<string, string[]>, opts: Required<BibleOptions>): Block[] {
   const blocks: Block[] = [{ kind: 'heading', level: 2, text: e.name, anchor: anchorOf(e.id), toc: true }];
   if (e.summary) blocks.push({ kind: 'para', text: e.summary, style: 'lead' });
   blocks.push({ kind: 'facts', rows: entryFacts(e, ix, world.files[e.id]) });
@@ -99,6 +101,8 @@ function entrySection(e: Entry, ix: WorldIndex, world: World, all: Triple[]): Bl
   const events = eventsOf(e, ix);
   if (mine.length) blocks.push({ kind: 'heading', level: 3, text: 'Relationships' }, { kind: 'list', items: mine });
   if (events.length) blocks.push({ kind: 'heading', level: 3, text: 'Appears in' }, { kind: 'list', items: events });
+  const mentions = mentionedIn.get(e.id) ?? [];
+  if (mentions.length) blocks.push({ kind: 'heading', level: 3, text: 'Mentioned in' }, { kind: 'para', text: mentions.join(', ') });
 
   const fields = VISUAL_FIELDS[e.type];
   const visual = e.visual ?? {};
@@ -114,7 +118,7 @@ function entrySection(e: Entry, ix: WorldIndex, world: World, all: Triple[]): Bl
     for (const img of e.images) blocks.push(imageBlock(img, e));
   }
 
-  const brief = artBrief(e, ix);
+  const brief = opts.artBriefs ? artBrief(e, ix) : undefined;
   if (brief) {
     const inner: Block[] = [{ kind: 'prompt', label: e.type === 'place' ? 'Image prompt (establishing shot)' : 'Image prompt', text: brief.prompt }];
     if (brief.turnaround) inner.push({ kind: 'prompt', label: '3D turnaround brief', text: brief.turnaround });
@@ -128,9 +132,30 @@ function warningLine(w: Warning): string {
   return `${w.severity.toUpperCase()} [${w.ruleId}] ${w.message} (at ${w.offending.source}, ${w.offending.field})${w.intended?.note ? ` Note: ${w.intended.note}` : ''}`;
 }
 
+export interface BibleOptions {
+  /** Entry types to include, in the usual order. Default: all. */
+  types?: readonly EntryType[];
+  /** Add the consistency warnings appendix. Default: true. */
+  warnings?: boolean;
+  /** Add art briefs (image prompts, turnaround briefs). Default: true. */
+  artBriefs?: boolean;
+}
+
+/** Entries whose text names each entry, by [[link]], @mention or plain name. */
+function mentionIndex(ix: WorldIndex): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const e of [...ix.entries].sort(byName)) {
+    const ids = new Set(references(e, ix).filter((r) => r.field === 'body').map((r) => ix.resolve(r.ref)?.id).filter((id): id is string => !!id && id !== e.id));
+    for (const id of ids) out.set(id, [...(out.get(id) ?? []), e.name]);
+  }
+  return out;
+}
+
 /** The World Bible: everything an artist, writer or AI tool needs to understand the world. */
-export function worldBible(world: World): Doc {
+export function worldBible(world: World, options: BibleOptions = {}): Doc {
+  const opts: Required<BibleOptions> = { types: options.types ?? ENTRY_TYPES, warnings: options.warnings ?? true, artBriefs: options.artBriefs ?? true };
   const ix = new WorldIndex(world);
+  const mentionedIn = mentionIndex(ix);
   const m = world.manifest;
   const cal = m.calendar;
   const warnings = checkWorld(world, builtinRules);
@@ -158,10 +183,11 @@ export function worldBible(world: World): Doc {
   );
 
   for (const type of ENTRY_TYPES) {
+    if (!opts.types.includes(type)) continue;
     const list = world.entries.filter((e) => e.type === type).sort(byName);
     if (!list.length) continue;
     blocks.push({ kind: 'heading', level: 1, text: TYPE_LABELS[type], toc: true, newPage: true });
-    for (const e of list) blocks.push(...entrySection(e, ix, world, all));
+    for (const e of list) blocks.push(...entrySection(e, ix, world, all, mentionedIn, opts));
   }
 
   // Timeline: every dated start/end, in world order.
@@ -193,9 +219,11 @@ export function worldBible(world: World): Doc {
 
   const open = warnings.filter((w) => !w.intended);
   const intended = warnings.filter((w) => w.intended);
-  blocks.push({ kind: 'heading', level: 1, text: 'Appendix: consistency warnings', toc: true, newPage: true });
-  blocks.push(open.length ? { kind: 'list', items: open.map(warningLine) } : { kind: 'para', text: 'No open warnings.', style: 'muted' });
-  if (intended.length) blocks.push({ kind: 'heading', level: 3, text: 'Marked intended by the author (treat as canon)' }, { kind: 'list', items: intended.map(warningLine) });
+  if (opts.warnings) {
+    blocks.push({ kind: 'heading', level: 1, text: 'Appendix: consistency warnings', toc: true, newPage: true });
+    blocks.push(open.length ? { kind: 'list', items: open.map(warningLine) } : { kind: 'para', text: 'No open warnings.', style: 'muted' });
+    if (intended.length) blocks.push({ kind: 'heading', level: 3, text: 'Marked intended by the author (treat as canon)' }, { kind: 'list', items: intended.map(warningLine) });
+  }
 
   return {
     kind: 'bible',

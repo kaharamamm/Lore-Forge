@@ -22,6 +22,9 @@ export function check(world: World): Warning[] {
 }
 export * from './publish/doc.ts';
 export { artBrief, type ArtBrief } from './publish/art.ts';
-export { worldBible, BIBLE_FORMAT_VERSION } from './publish/bible.ts';
-export { bookChapters, storyBook, LORE_AND_LEGENDS, type BookChapter, type BookPage } from './publish/book.ts';
+export { worldBible, BIBLE_FORMAT_VERSION, type BibleOptions } from './publish/bible.ts';
+export { bookChapters, storyBook, LORE_AND_LEGENDS, SINGLE_CHAPTER, type BookChapter, type BookPage, type BookOptions, type ChapterGrouping } from './publish/book.ts';
 export { toMarkdown } from './publish/markdown.ts';
+export { familyTree, TREE_LAYOUT, type FamilyTree, type TreeNode, type TreeEdge } from './views/family-tree.ts';
+export { relationWeb, WEB_LAYOUT, type RelationWeb, type WebNode, type WebEdge } from './views/relation-web.ts';
+export { timelineModel, yearLabel, yearTicks, involvesEntry, type TimelineModel, type TimelineLane, type TimelineGroup, type EraBand } from './views/timeline-model.ts';
