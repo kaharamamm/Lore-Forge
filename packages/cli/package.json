@@ -1,0 +1,10 @@
+{
+  "name": "@lore-forge/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless Lore-Forge commands: lore check, lore export.",
+  "type": "module",
+  "bin": { "lore": "./dist/main.js" },
+  "scripts": { "build": "tsc -b" },
+  "dependencies": { "@lore-forge/core": "0.1.0" }
+}
