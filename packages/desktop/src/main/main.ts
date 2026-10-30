@@ -151,6 +151,9 @@ function createWindow(): void {
   void win.loadFile(join(__dirname, 'renderer', 'index.html'));
 }
 
+// Ubuntu 24.04's AppArmor blocks Chromium's sandbox for unpackaged Electron; allow an explicit dev opt-out.
+if (process.env['LORE_FORGE_NO_SANDBOX'] === '1') app.commandLine.appendSwitch('no-sandbox');
+
 app.whenReady().then(() => {
   registerIpc();
   createWindow();
