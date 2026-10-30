@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "camel-world",
+  "name": "Camel World",
+  "calendar": {
+    "eras": [
+      {
+        "id": "Y",
+        "name": "Year",
+        "start": 0
+      }
+    ],
+    "defaultEra": "Y"
+  }
+}

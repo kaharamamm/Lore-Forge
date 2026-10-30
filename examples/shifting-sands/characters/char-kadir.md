@@ -20,7 +20,7 @@ images:
     provenance:
       tool: Grok Bot image generation
       prompt: Humanoid camel caravan master, front view, A-pose, flat lighting, plain background
-      date: "2026-10-30"
+      date: 2026-10-30
       sources:
         - concept sketch by Ahmet
       rights: Owned by Ahmet. Placeholder image for the example world.

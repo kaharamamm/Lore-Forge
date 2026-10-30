@@ -53,17 +53,16 @@ npm 11 asks you to approve install scripts. The approved ones (`esbuild`, `elect
 `electron-winstaller`) are listed in `allowScripts` in `package.json`. If `npx electron --version` reports a
 missing binary, run `npm rebuild electron`.
 
-**Ubuntu 23.10+ / 24.04 sandbox error.** If Electron exits with *"The SUID sandbox helper binary was found,
-but is not configured correctly"*, AppArmor is blocking Chromium's sandbox. For development, use either:
+**Ubuntu 23.10+ / 24.04 sandbox error.** AppArmor blocks Chromium's user-namespace sandbox, and
+`node_modules/electron/dist/chrome-sandbox` is not a root setuid helper, so unpackaged Electron aborts.
+`npm run dev` detects that and passes `--no-sandbox` for the development process. Packaged builds (the
+AppImage or the Windows installer) are unchanged. To keep the sandbox on during development, fix the helper
+once (this is lost after `npm install`):
 
 ```bash
-LORE_FORGE_NO_SANDBOX=1 npm run dev     # quick, dev only (passes --no-sandbox)
-# or fix the helper once:
 sudo chown root:root node_modules/electron/dist/chrome-sandbox
 sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
 ```
-
-Packaged builds (the AppImage or the Windows installer) are not affected the same way.
 
 To open a world directly: `LORE_FORGE_OPEN=/path/to/world npm run dev`.
 
