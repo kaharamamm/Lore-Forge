@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { usePanZoom, zoomIdentity } from '../zoom.ts';
 import { LIFECYCLE, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, timelineModel, yearLabel, yearTicks, type EntryType, type TimelineLane, type Warning, type World } from '@lore-forge/core';
 import { CountBadge } from './severity.tsx';
 import { Icon } from './icon.tsx';
@@ -9,13 +10,18 @@ const ZOOM_MAX = 400;
 
 interface Hover { lane: TimelineLane; x: number; y: number }
 
-/** Era-banded timeline: lifespans as bars, events as points, warnings as markers. Ctrl+wheel or −/+ to zoom. */
+/**
+ * Era-banded timeline: lifespans as bars, events as points, warnings as markers.
+ * d3-zoom on the time axis: drag or Shift+scroll to pan, Ctrl+scroll or −/+ to zoom. Lanes scroll up and down natively.
+ */
 export function TimelineView({ world, warnings, selectedId, onOpen }: { world: World; warnings: Warning[]; selectedId: string | null; onOpen: (id: string) => void }) {
   const model = useMemo(() => timelineModel(world, warnings), [world, warnings]);
   const cal = world.manifest.calendar;
   const scroller = useRef<HTMLDivElement>(null);
   const labelCol = useRef<HTMLDivElement>(null);
-  const [pxPerYear, setPxPerYear] = useState<number | null>(null);
+  /** Pixels per year that fit the whole span; zoom scales from there. */
+  const [basePpy, setBasePpy] = useState<number | null>(null);
+  const [trackW, setTrackW] = useState(0);
   const [hidden, setHidden] = useState<Set<EntryType>>(new Set());
   const [hover, setHover] = useState<Hover | null>(null);
 
@@ -26,7 +32,19 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
     const avail = el.clientWidth - (labelCol.current?.offsetWidth ?? 240) - 48;
     return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, avail / years));
   };
-  useLayoutEffect(() => { if (pxPerYear === null && model) setPxPerYear(fit()); });
+  useLayoutEffect(() => { if (basePpy === null && model) setBasePpy(fit()); });
+  const base = basePpy ?? 10;
+  const pz = usePanZoom(scroller, { min: ZOOM_MIN / base, max: ZOOM_MAX / base, xOnly: true, ignore: '.tl-label, .tl-group-head' });
+  // The visible track width follows the window.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const measure = () => setTrackW(Math.max(0, el.clientWidth - (labelCol.current?.offsetWidth ?? 240)));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scroller.current]);
 
   if (!model) {
     return (
@@ -36,27 +54,21 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
       </section>
     );
   }
-  const ppy = pxPerYear ?? 10;
+  const ppy = base * pz.t.k;
   const ppd = ppy / model.daysPerYear;
-  const width = Math.ceil(years * ppy) + 48;
-  const xOf = (day: number) => 24 + (day - model.min) * ppd;
-  const ticks = yearTicks(model, ppy);
-
-  const zoom = (factor: number, anchorClientX?: number) => {
-    const el = scroller.current;
-    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, ppy * factor));
-    if (!el) return setPxPerYear(next);
-    const label = labelCol.current?.offsetWidth ?? 0;
-    const rect = el.getBoundingClientRect();
-    const ax = anchorClientX !== undefined ? anchorClientX - rect.left - label : (el.clientWidth - label) / 2;
-    const dayAt = (el.scrollLeft + ax - 24) / ppd;
-    setPxPerYear(next);
-    requestAnimationFrame(() => { el.scrollLeft = dayAt * (next / model.daysPerYear) + 24 - ax; });
-  };
+  const label = labelCol.current?.offsetWidth ?? 0;
+  const width = trackW || Math.ceil(years * ppy) + 48;
+  // d3-zoom works in scroller coordinates (label column included); tracks start after the label column.
+  const xOf = (day: number) => pz.t.applyX(label + 24 + (day - model.min) * (base / model.daysPerYear)) - label;
+  const ticks = yearTicks(model, ppy).filter((t) => { const x = xOf(t.day); return x >= -40 && x <= width + 40; });
+  const fitAll = () => pz.set(zoomIdentity);
+  /** Shift+scroll, or a sideways trackpad swipe, pans along time; a plain wheel scrolls the lanes. */
   const onWheel = (ev: WheelEvent) => {
-    if (!ev.ctrlKey && !ev.metaKey) return;
+    if (ev.ctrlKey || ev.metaKey) return;
+    const dx = ev.shiftKey ? ev.deltaY || ev.deltaX : Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : 0;
+    if (!dx) return;
     ev.preventDefault();
-    zoom(ev.deltaY < 0 ? 1.25 : 0.8, ev.clientX);
+    pz.panBy(-dx, 0);
   };
   const toggle = (t: EntryType) => setHidden((h) => { const n = new Set(h); if (n.has(t)) n.delete(t); else n.add(t); return n; });
   const groups = model.groups.filter((g) => !hidden.has(g.type));
@@ -72,13 +84,15 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
     <section class="timeline" aria-labelledby="timeline-title">
       <header class="view-head">
         <h2 id="timeline-title" tabIndex={-1}><Icon name="hourglass" /> Timeline</h2>
-        <p class="muted">{lanes} dated entries, {model.eras.length} eras{flagged ? `, ${flagged} with warnings` : ''}. Hold Ctrl (⌘) and scroll to zoom.</p>
+        <p class="muted">{lanes} dated entries, {model.eras.length} eras{flagged ? `, ${flagged} with warnings` : ''}. Drag or Shift+scroll to move along time, Ctrl (⌘)+scroll to zoom.</p>
       </header>
       <div class="tl-toolbar">
         <div class="segmented" role="group" aria-label="Zoom">
-          <button type="button" onClick={() => zoom(0.66)} aria-label="Zoom out">−</button>
-          <button type="button" onClick={() => setPxPerYear(fit())}>Fit</button>
-          <button type="button" onClick={() => zoom(1.5)} aria-label="Zoom in">+</button>
+          <button type="button" class="tl-zoom-out" onClick={() => pz.zoomBy(1 / 1.5)} aria-label="Zoom out"><Icon name="contract" /></button>
+          <button type="button" class="tl-fit" onClick={() => { setBasePpy(fit()); fitAll(); }}>Fit</button>
+          <button type="button" class="tl-zoom-in" onClick={() => pz.zoomBy(1.5)} aria-label="Zoom in"><Icon name="expand" /></button>
+          <button type="button" onClick={() => pz.panBy(trackW / 3, 0)} aria-label="Earlier"><Icon name="fast-backward-button" /></button>
+          <button type="button" onClick={() => pz.panBy(-trackW / 3, 0)} aria-label="Later"><Icon name="fast-forward-button" /></button>
         </div>
         <span class="muted tl-scale" aria-live="polite">{ppy >= 1 ? `${Math.round(ppy)} px per year` : `1 px ≈ ${Math.round(1 / ppy)} years`}</span>
         <div class="type-filters" role="group" aria-label="Show types">
@@ -91,7 +105,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
       </div>
 
       <div class="tl-scroll" ref={scroller} onWheel={onWheel} onMouseLeave={() => setHover(null)}>
-        <div class="tl-canvas" style={{ width: `calc(var(--tl-label) + ${width}px)` }}>
+        <div class="tl-canvas">
           <div class="tl-bands" style={{ width: `${width}px` }} aria-hidden="true">
             {model.eras.map((era, i) => (
               <div key={era.id} class={`tl-band band-${i % 2}`} style={{ left: `${xOf(era.from)}px`, width: `${Math.max(2, (era.to - era.from) * ppd)}px` }}>

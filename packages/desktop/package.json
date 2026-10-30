@@ -21,14 +21,12 @@
     "@lore-forge/core": "0.3.0",
     "@lore-forge/pdf": "0.3.0",
     "@xyflow/react": "^12.12.0",
-    "d3-hierarchy": "^3.1.2",
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",
     "pdfkit": "^0.20.2",
     "preact": "^10.29.8"
   },
   "devDependencies": {
-    "@types/d3-hierarchy": "^3.1.7",
     "@types/d3-selection": "^3.0.12",
     "@types/d3-zoom": "^3.0.9",
     "electron": "^45.1.0",

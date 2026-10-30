@@ -257,6 +257,13 @@ export function App() {
           setView('relations');
           await tick();
           dom['treeNodes'] = count('.family-tree .node');
+          expect(count('.family-tree .node .portrait') === dom['treeNodes'], 'family tree cards have portraits');
+          const treeT = () => $('.family-tree > g')?.getAttribute('transform') ?? '';
+          const fitT = treeT();
+          $<HTMLButtonElement>('.zoom-frame .zoom-in')?.click();
+          expect(await until(() => treeT() !== fitT), 'family tree zooms in');
+          $<HTMLButtonElement>('.zoom-frame .zoom-fit')?.click();
+          expect(await until(() => treeT() === fitT), 'family tree Fit restores the view');
           document.querySelector<HTMLButtonElement>('.relations .segmented button:nth-child(2)')?.click();
           await tick();
           const webSummary = summary['web'] as { nodes: number; edges: number } | null;
@@ -309,6 +316,26 @@ export function App() {
         await tick(300);
         expect(!!$('.tl-scroll') && $('.tabs button:nth-child(3)')?.getAttribute('aria-pressed') === 'true', 'Timeline tab opens the timeline');
         dom['timelineMarks'] = count('.tl-mark');
+        // Timeline zoom (d3-zoom): Ctrl+wheel zooms, a drag pans along time, Fit brings it back.
+        {
+          const scale = () => $('.tl-scale')?.textContent ?? '';
+          const firstLeft = () => $('.tl-mark')?.style.left ?? '';
+          const tl = $('.tl-scroll')!;
+          const r = tl.getBoundingClientRect();
+          const before = scale();
+          tl.dispatchEvent(new WheelEvent('wheel', { deltaY: -400, ctrlKey: true, clientX: r.left + r.width * 0.7, clientY: r.top + 80, bubbles: true, cancelable: true, view: window }));
+          expect(await until(() => scale() !== before), 'Ctrl+wheel zooms the timeline');
+          const left = firstLeft();
+          const track = $('.tl-lane .tl-track')!.getBoundingClientRect();
+          const at = { clientX: track.left + 40, clientY: track.top + 10, bubbles: true, view: window };
+          $('.tl-lane .tl-track')!.dispatchEvent(new MouseEvent('mousedown', { ...at, button: 0 }));
+          window.dispatchEvent(new MouseEvent('mousemove', { ...at, clientX: at.clientX + 120 }));
+          window.dispatchEvent(new MouseEvent('mouseup', { ...at, clientX: at.clientX + 120 }));
+          expect(await until(() => firstLeft() !== left), 'dragging pans the timeline');
+          $<HTMLButtonElement>('.tl-fit')!.click();
+          expect(await until(() => scale() === before), 'timeline Fit restores the scale');
+          expect(count('.tl-mark') === dom['timelineMarks'], 'every lane still drawn after zooming');
+        }
         dom['timelineBands'] = count('.tl-band');
         dom['timelineWarnings'] = count('.tl-warn');
         expect(emojiIn($('.topbar')).length === 0 && emojiIn($('.sidebar')).length === 0 && emojiIn($('.warnings-panel')).length === 0, `emoji in the app chrome: ${emojiIn(document.body)}`);

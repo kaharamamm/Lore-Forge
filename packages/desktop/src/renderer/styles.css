@@ -248,16 +248,18 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .tl-toolbar .segmented button { min-width: 2.4rem; }
 .tl-scale { font-size: 0.88rem; }
 .type-filters { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.tl-scroll { overflow: auto; max-height: 70vh; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); position: relative; }
+.tl-scroll { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; cursor: grab; max-height: 70vh; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); position: relative; }
 .tl-canvas { position: relative; padding-bottom: 0.75rem; min-width: 100%; }
-.tl-bands { position: absolute; top: 0; bottom: 0; left: var(--tl-label); pointer-events: none; }
+.tl-bands { position: absolute; top: 0; bottom: 0; left: var(--tl-label); pointer-events: none; overflow: hidden; }
+.tl-scroll:active { cursor: grabbing; }
+.tl-label { cursor: auto; }
 .tl-band { position: absolute; top: 0; bottom: 0; border-left: 1px dashed #4a5163; }
 .tl-band.band-0 { background: rgb(138 180 248 / 0.06); }
 .tl-band.band-1 { background: rgb(255 255 255 / 0.025); }
 .tl-band-name { position: sticky; top: 2rem; display: inline-block; margin: 2.1rem 0 0 0.35rem; font-size: 0.8rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .tl-row { display: flex; align-items: center; min-height: 2rem; position: relative; }
 .tl-label { flex: 0 0 var(--tl-label); width: var(--tl-label); position: sticky; left: 0; z-index: 2; background: var(--panel); display: flex; align-items: center; gap: 0.35rem; padding: 0.1rem 0.5rem; min-width: 0; border-right: 1px solid var(--border); align-self: stretch; }
-.tl-track { position: relative; height: 2rem; flex: 0 0 auto; }
+.tl-track { position: relative; height: 2rem; flex: 0 0 auto; overflow: hidden; }
 .tl-axis { position: sticky; top: 0; z-index: 3; background: var(--panel); border-bottom: 1px solid var(--border); }
 .tl-axis .tl-track { height: 1.9rem; }
 .tl-tick { position: absolute; top: 0.35rem; transform: translateX(-50%); font-size: 0.82rem; color: var(--muted); white-space: nowrap; padding-left: 0.2rem; border-left: 1px solid var(--border); transform: none; }
@@ -344,6 +346,14 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .relation-web .mini { fill: var(--tc, var(--muted)); }
 .relation-web .react-flow__controls { box-shadow: var(--shadow); border-radius: 6px; overflow: hidden; }
 .relation-web .react-flow__controls-button:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+/* Pan-and-zoom frames (family tree). */
+.zoom-frame { position: relative; border-radius: 8px; overflow: hidden; background: var(--bg); }
+.zoom-frame > svg { width: 100%; display: block; cursor: grab; touch-action: none; }
+.zoom-frame > svg:active { cursor: grabbing; }
+.zoom-controls { position: absolute; top: 0.5rem; right: 0.5rem; display: flex; gap: 1px; border-radius: 6px; overflow: hidden; box-shadow: var(--shadow); }
+.zoom-controls button { border-radius: 0; padding: 0.25rem 0.55rem; background: var(--panel-2); }
+.node-portrait { overflow: visible; }
+.node-portrait .portrait { pointer-events: none; }
 .web-edge.g-family .edge { stroke: var(--t-character); }
 .web-edge.g-power .edge { stroke: var(--t-faction); stroke-dasharray: 8 3; }
 .web-edge.g-possession .edge { stroke: var(--t-item); stroke-dasharray: 2 3; }

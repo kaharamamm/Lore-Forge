@@ -7,7 +7,7 @@ const CREDITS: [string, string, string, string][] = [
   ['Title font', 'Cinzel, by Natanael Gama and the Cinzel Project Authors', 'SIL Open Font License 1.1', 'https://github.com/NDISCOVER/Cinzel'],
   ['PDF fonts', 'DejaVu Sans, Serif and Mono', 'Bitstream Vera / DejaVu licence (free)', 'https://dejavu-fonts.github.io'],
   ['Relationship web', 'React Flow (@xyflow/react), run through preact/compat', 'MIT', 'https://reactflow.dev'],
-  ['Family tree and zoom', 'd3-hierarchy, d3-zoom, d3-selection', 'ISC', 'https://d3js.org'],
+  ['Pan and zoom (family tree, timeline)', 'd3-zoom and d3-selection', 'ISC', 'https://d3js.org'],
   ['Motion', '@formkit/auto-animate and CSS View Transitions', 'MIT', 'https://auto-animate.formkit.com'],
   ['UI', 'Preact', 'MIT', 'https://preactjs.com'],
   ['PDF', 'PDFKit', 'MIT', 'https://pdfkit.org'],

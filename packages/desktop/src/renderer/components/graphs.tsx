@@ -1,4 +1,7 @@
-import { SvgIcon } from './icon.tsx';
+import { useLayoutEffect, useRef } from 'preact/hooks';
+import { Icon, SvgIcon } from './icon.tsx';
+import { Portrait } from './cover.tsx';
+import { usePanZoom, zoomIdentity, type PanZoom } from '../zoom.ts';
 import { LIFECYCLE, TREE_LAYOUT, TYPE_ICON, TYPE_SINGULAR, type Entry, type FamilyTree } from '@lore-forge/core';
 
 const clip = (s: string, n: number) => ([...s].length > n ? `${[...s].slice(0, n - 1).join('')}…` : s);
@@ -9,7 +12,7 @@ function nodeLabel(e: Entry, ended: boolean, dates?: string): string {
 }
 
 /** One clickable SVG box. x/y is the top-left corner. */
-function Node(props: { e: Entry; x: number; y: number; w: number; h: number; ended: boolean; focus: boolean; sub: string; onOpen: (id: string) => void }) {
+function Node(props: { e: Entry; x: number; y: number; w: number; h: number; ended: boolean; focus: boolean; sub: string; raceName?: string; onOpen: (id: string) => void }) {
   const { e, x, y, w, h, ended, focus } = props;
   const lc = LIFECYCLE[e.type];
   const open = () => props.onOpen(e.id);
@@ -19,10 +22,10 @@ function Node(props: { e: Entry; x: number; y: number; w: number; h: number; end
       <title>{`${TYPE_SINGULAR[e.type]}: ${e.name}${ended && lc ? ` (${lc.endedWord})` : ''}${props.sub ? `\n${props.sub}` : ''}`}</title>
       <rect x={x} y={y} width={w} height={h} rx={10} />
       <rect class="node-stripe" x={x} y={y} width={6} height={h} rx={3} />
-      <SvgIcon class="node-icon" name={TYPE_ICON[e.type]} x={x + 14} y={y + h / 2 - 19} size={16} />
-      <text x={x + 36} y={y + h / 2 - 5} class="node-name">{clip(e.name, 15)}</text>
-      {ended && lc && <SvgIcon class="node-mark" name={lc.endedIcon} x={x + w - 26} y={y + 8} size={16} />}
-      <text x={x + 16} y={y + h / 2 + 15} class="node-sub">{clip(props.sub || TYPE_SINGULAR[e.type], 26)}</text>
+      <foreignObject x={x + 12} y={y + h / 2 - 16} width={32} height={32} class="node-portrait"><Portrait entry={e} raceName={props.raceName} size="sm" /></foreignObject>
+      <text x={x + 52} y={y + h / 2 - 3} class="node-name">{clip(e.name, 13)}</text>
+      {ended && lc && <SvgIcon class="node-mark" name={lc.endedIcon} x={x + w - 24} y={y + 6} size={16} />}
+      <text x={x + 52} y={y + h / 2 + 15} class="node-sub">{clip(props.sub || TYPE_SINGULAR[e.type], 20)}</text>
     </g>
   );
 }
@@ -30,8 +33,19 @@ function Node(props: { e: Entry; x: number; y: number; w: number; h: number; end
 export function FamilyTreeSvg({ tree, onOpen }: { tree: FamilyTree; onOpen: (id: string) => void }) {
   const { nodeW: w, nodeH: h } = TREE_LAYOUT;
   const at = new Map(tree.nodes.map((n) => [n.id, n]));
+  const svg = useRef<SVGSVGElement>(null);
+  const pz = usePanZoom(svg, { min: 0.2, max: 3 });
+  const fit = () => {
+    const el = svg.current;
+    if (!el) return;
+    const k = Math.min(1, (el.clientWidth - 24) / tree.width, (el.clientHeight - 24) / tree.height);
+    pz.set(zoomIdentity.translate((el.clientWidth - tree.width * k) / 2, (el.clientHeight - tree.height * k) / 2).scale(k));
+  };
+  useLayoutEffect(fit, [tree]);
   return (
-    <svg class="graph family-tree" width={tree.width} height={tree.height} viewBox={`0 0 ${tree.width} ${tree.height}`} role="group" aria-label={`Family tree, ${tree.generations} generations, ${tree.nodes.length} people`}>
+    <div class="zoom-frame">
+    <svg ref={svg} class="graph family-tree" style={{ height: `clamp(14rem, ${tree.height + 48}px, 62vh)` }} role="group" aria-label={`Family tree, ${tree.generations} generations, ${tree.nodes.length} people. Drag to pan, Ctrl+scroll to zoom.`}>
+      <g transform={pz.t.toString()}>
       <g class="edges" aria-hidden="true">
         {tree.edges.map((ed, i) => {
           const a = at.get(ed.from)!;
@@ -55,7 +69,21 @@ export function FamilyTreeSvg({ tree, onOpen }: { tree: FamilyTree; onOpen: (id:
           return <path key={i} class={`edge edge-${ed.kind}`} d={`M${x1} ${y} C${x1} ${y - 22}, ${x2} ${y - 22}, ${x2} ${y}`} />;
         })}
       </g>
-      {tree.nodes.map((n) => <Node key={n.id} e={n.entry} x={n.x} y={n.y} w={w} h={h} ended={n.ended} focus={n.focus} sub={n.dates} onOpen={onOpen} />)}
+      {tree.nodes.map((n) => <Node key={n.id} e={n.entry} x={n.x} y={n.y} w={w} h={h} ended={n.ended} focus={n.focus} sub={n.dates} onOpen={onOpen} {...(n.entry.type === 'character' && n.entry.race ? { raceName: n.entry.race } : {})} />)}
+      </g>
     </svg>
+    <ZoomControls pz={pz} onFit={fit} />
+    </div>
+  );
+}
+
+/** −, Fit and + for a pan-and-zoom canvas; the canvas itself also takes Ctrl+scroll and drag. */
+export function ZoomControls({ pz, onFit }: { pz: PanZoom; onFit: () => void }) {
+  return (
+    <div class="zoom-controls" role="group" aria-label="Zoom">
+      <button type="button" class="zoom-out" onClick={() => pz.zoomBy(1 / 1.4)} aria-label="Zoom out"><Icon name="contract" /></button>
+      <button type="button" class="zoom-fit" onClick={onFit}>Fit</button>
+      <button type="button" class="zoom-in" onClick={() => pz.zoomBy(1.4)} aria-label="Zoom in"><Icon name="expand" /></button>
+    </div>
   );
 }

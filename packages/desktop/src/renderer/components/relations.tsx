@@ -62,9 +62,9 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen }: { 
         {mode === 'tree' && tree && (tree.nodes.length ? (
           <>
             <p class="muted graph-note">
-              {entry.type === 'character' && tree.nodes.some((n) => n.focus) ? `${entry.name}'s family` : 'Every family in this world'}, oldest generation on top. Select a box to open it.
+              {entry.type === 'character' && tree.nodes.some((n) => n.focus) ? `${entry.name}'s family` : 'Every family in this world'}, oldest generation on top. Select a card to open it; drag to pan, Ctrl+scroll to zoom.
             </p>
-            <div class="graph-scroll"><FamilyTreeSvg tree={tree} onOpen={onOpen} /></div>
+            <FamilyTreeSvg tree={tree} onOpen={onOpen} />
             <ul class="legend" aria-label="Legend">
               <li><span class="lg lg-parent" aria-hidden="true" /> parent → child</li>
               <li><Icon name="diamond-ring" /> spouses</li>
