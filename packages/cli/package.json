@@ -1,6 +1,6 @@
 {
   "name": "@lore-forge/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Headless Lore-Forge commands: lore check, export, bible, book.",
   "type": "module",
@@ -11,7 +11,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@lore-forge/core": "0.2.0",
-    "@lore-forge/pdf": "0.2.0"
+    "@lore-forge/core": "0.3.0",
+    "@lore-forge/pdf": "0.3.0"
   }
 }

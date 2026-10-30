@@ -1,6 +1,6 @@
 {
   "name": "@lore-forge/desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Lore-Forge desktop app (Electron).",
   "author": "Ahmet Kadir Zengin",
@@ -16,8 +16,8 @@
     "contrast": "node scripts/contrast.mjs"
   },
   "dependencies": {
-    "@lore-forge/core": "0.2.0",
-    "@lore-forge/pdf": "0.2.0",
+    "@lore-forge/core": "0.3.0",
+    "@lore-forge/pdf": "0.3.0",
     "pdfkit": "^0.20.2",
     "preact": "^10.29.8"
   },

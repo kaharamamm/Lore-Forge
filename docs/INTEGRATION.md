@@ -105,6 +105,34 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so
   diffs stay small.
 
+### Status
+
+`status` is optional on characters (`alive`, `dead`, `unknown`), places (`standing`, `destroyed`,
+`unknown`), factions (`active`, `dissolved`, `unknown`) and items (`intact`, `destroyed`, `lost`,
+`unknown`). The app hides the end date (`died`, `destroyed`, `dissolved`) while the status is ongoing, but
+the value stays in the file and the rules still use it. `LIFECYCLE`, `statusOf`, `isEnded` and
+`endFieldVisible` in `@lore-forge/core` give the same answers the app uses.
+
+### Relation types
+
+`RELATION_KINDS` in `@lore-forge/core` is the table of known relation types: `{type, label, inverse, group,
+from, to, sameType?, symmetric?, aliases?}`, where `from` and `to` list entry types. Examples: `parent-of`
+character → character, `member-of` character → faction, `owns` character/faction → item/place,
+`took-place-at` event → place, `about` note → anything, `related-to` anything ↔ anything. Use
+`relationKindsFor(fromType, toType?)` to offer choices, `relationTargets(type, fromType)` to filter targets,
+and `relationFits(kind, fromType, toType)` to validate. The `relation-kind` rule warns when a known type
+doesn't fit. Types that are not in the table are allowed and not checked.
+
+### Plain-name mentions
+
+Names and aliases written in a body count as references, like `[[links]]`. Matching is case-sensitive,
+whole-word (Unicode letters, digits and marks are word characters, so Turkish names work), longest name
+first, and skips text inside `[[...]]`, `@id` and backticks. Names shorter than two characters are
+ignored. `new MentionMatcher(entries).find(text, {exclude})` (or `new WorldIndex(world).mentions`) returns
+`{start, end, text, ids}`; more than one id means the name is shared. In the snapshot, each entry has
+`references: [{field, ref, id?, implicit?, ambiguous?}]`. Implicit (plain-name) references always resolve,
+so they never produce `dangling-reference`.
+
 ### Dates
 
 The syntax is `[~]YEAR[-MM[-DD]] [ERA]`, or `?` / `unknown`. Examples: `1920`, `1920-03-12`, `~1800`,
@@ -158,6 +186,12 @@ orientation; front, back, left, right and three-quarter views; plain background;
 unless listed; consistent scale), each in a `text` code fence. The prose layout of these files may change
 between versions; for exact data use `lore export`.
 
+Options: `worldBible(world, {types?, warnings? = true, artBriefs? = true})` limits the entry types and
+drops the warnings appendix or the art briefs. `storyBook(world, {grouping?: 'era' | 'years' | 'single',
+chapterYears?})` picks the chapters: one per era, year ranges inside each era (default 100 years, or
+`book.chapterYears`), or a single chapter. A page's own `chapter` always wins. The app's preview and its
+PDF are built from the same `Doc` with the same options. The CLI uses the defaults.
+
 Library use: `worldBible(world)` / `storyBook(world)` return a renderer-neutral `Doc`; `toMarkdown(doc)` is in
 `@lore-forge/core` and `renderPdf(doc, {worldDir})` / `writePublication(...)` in `@lore-forge/pdf`.
 `artBrief(entry, index)` returns `{prompt, turnaround?, missing}`.
@@ -168,7 +202,8 @@ Library use: `worldBible(world)` / `storyBook(world)` return a renderer-neutral 
   today.
 - **Additive changes** keep version 1: new optional fields, new rules, new image views, new relation types.
   Lore-Forge 0.2 (images on every type, `visual`, `chapter`, `bookOrder`, note `date`, manifest `book`, the
-  `image-view` rule) was additive, so worlds stay at version 1.
+  `image-view` rule) was additive, and so was 0.3 (status on places, factions and items, the
+  `relation-kind` rule, snapshot `references`), so worlds stay at version 1.
   Consumers should ignore fields they don't know.
 - **Breaking changes** bump the version: removing or renaming fields, or changing the meaning of a field or
   of the date syntax. Lore-Forge will migrate older worlds when it opens them. Consumers should check

@@ -8,9 +8,35 @@ checker that notices when your canon contradicts itself:
 A world is a plain folder of text files (`world.json` plus one Markdown file per entry). You can keep it in
 git, diff it, and read it from other tools. Nothing leaves your machine.
 
-Version 0.2.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged).
+Version 0.3.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged).
 
-## What's new in v0.2
+## What's new in v0.3
+
+- **A clearer look.** Every type has an emoji, a word and a color: 🧑 character, 🏰 place, 🛡️ faction,
+  🗡️ item, ⚔️ event, 📜 note. They appear the same way in the sidebar, chips, links, the timeline and the
+  trees. Ended entries carry a mark plus a word (✝️ dead, 🏚️ destroyed, 🏳️ dissolved, 💥 destroyed) and are
+  shown muted. Empty views explain what to do next, and saving or exporting shows a toast.
+- **Status first.** Characters, places, factions and items start with a status (alive/dead,
+  standing/destroyed, active/dissolved, intact/destroyed/lost). An ongoing status hides the death or
+  destruction date. A hidden date stays in the file, the editor says so, and `dead-marked-alive` still
+  catches it (now also for standing places, active factions and intact items).
+- **Names link themselves.** Names and aliases typed in the text are highlighted in their type color
+  (case-sensitive, whole words, longest name first, Turkish letters count as word letters). Hover one for a
+  card with its type, dates and status. **Ctrl/⌘+click** or **Ctrl/⌘+Enter** opens it, and a picker appears
+  when a name is shared. The chips under the text do the same from the keyboard. The checker and exports
+  count these as references (they never cause `dangling-reference`).
+- **Relationship types that make sense.** A table in core (`RELATION_KINDS`) says which types go from
+  which entry type to which. The editor's relation dropdown and target picker only offer what fits, and the
+  new `relation-kind` rule warns about nonsense like an item being `parent-of` a character. Custom types are
+  still allowed.
+- **Relationships view:** a 🌳 family tree (generations top-down, spouses side by side, the dead marked ✝️
+  and faded) and a 🕸️ relationship web around the selected entry. Every box opens its entry.
+- **Timeline:** era bands with labels, lifespans as bars, events as points, warning markers, hover details,
+  zoom (−/Fit/+ or Ctrl+scroll) and type filters. Click a name or bar to open it.
+- **Export preview:** **📖 World Bible** and **📚 Story Book** in the top bar open an in-app preview built
+  from the same document the PDF uses. Pick the entry types, art briefs and warnings appendix for the
+  Bible, or chapters by era, by year ranges or as one chapter for the Book, then **Save PDF…**.
+
 
 - **Reference images for every entry type**, with the same storage (`images/<entryId>/`) and provenance
   record. Each type suggests its own views: characters A-pose, front, back, left, right, three-quarter,
@@ -105,26 +131,30 @@ On Linux, `npm run dist:linux` builds an AppImage into the same `release/` folde
 
 1. **Start:** open a world folder, create a new one (this asks for a parent folder and creates
    `world.json` plus the type folders), or open the example.
-2. **Sidebar:** entries grouped by type, each with an error or warning count badge. Press **Ctrl+K** to
+2. **Sidebar:** entries grouped by type (emoji and color), each with an error or warning count badge and an
+   ended mark. Press **Ctrl+K** to
    search by name, alias, id or tag. Use **+ New** to create an entry in a group.
-3. **Editor:** edit the structured fields and the body. Changes save automatically to the entry's file
+3. **Editor:** status and dates first, then the other structured fields and the body (names in it link
+   themselves). Changes save automatically to the entry's file
    (the save status shows in the top bar, and **Ctrl+S** saves now). Date fields show how the date was
    understood, and reference fields show what they resolve to.
 4. **Warnings panel:** updates live. Use **Go to** to jump to the offending field, or the canon link to open
    the conflicting entry. Use **Mark intended** to keep a contradiction on purpose. Intended warnings stay
    visible in their own group.
-5. **Timeline (Ctrl+2):** lifespans and existence spans by type, with events as markers. Open-ended spans fade
-   out. **Relationships (Ctrl+3):** the selected entry's outgoing and incoming relations, grouped, plus the
-   events it appears in.
-6. **PDFs:** **World Bible PDF…** and **Story Book PDF…** in the top bar save pending edits, ask where to
-   save, write the PDF plus its `.md` copy, and show the file. The editor's *Visual description* and
+5. **Timeline (Ctrl+2):** era bands, lifespans and existence spans by type, events as points and warning
+   markers. Open-ended spans fade out. **Relationships (Ctrl+3):** family tree or relationship web, then the
+   selected entry's outgoing and incoming relations, grouped, plus the events it appears in.
+6. **PDFs:** **📖 World Bible** and **📚 Story Book** in the top bar open a preview with options. **Save PDF…**
+   saves pending edits, asks where to save, writes the PDF plus its `.md` copy, and offers *Show in folder*. The editor's *Visual description* and
    *Reference images* sections feed the World Bible's art briefs; *Story Book* (chapter, order) appears on
    events and notes.
 
-Keyboard: **Ctrl+1/2/3** switch views, **Alt+↑/↓** move to the previous or next entry, **Ctrl+Shift+W**
+Keyboard: **Ctrl+1/2/3** switch views, **Ctrl/⌘+Enter** opens the name at the cursor in the text, **Esc**
+closes the preview, **Alt+↑/↓** move to the previous or next entry, **Ctrl+Shift+W**
 focuses the warnings panel, and Tab or Shift+Tab reach every control. The layout reflows down to a single
 column, so it stays usable at 200% zoom. Text contrast is at least 4.5:1, and severity is always shown as an
-icon plus a word, never by color alone.
+icon plus a word, and entry types as an emoji plus a word, never by color alone
+(`npm run contrast -w @lore-forge/desktop` checks the palette).
 
 ## CLI
 
@@ -155,10 +185,11 @@ After `npm run build`, the compiled CLI is available at `packages/cli/dist/main.
 | `duplicate-name` | warning | two entries share a name or alias (case-insensitive) |
 | `parent-cycle` | error | parent relations form a loop (A parent of B parent of A, including self) |
 | `parent-born-after-child` | error | a parent was born after their child |
-| `dead-marked-alive` | error | status is `alive`, but a death date or a killing says otherwise |
+| `dead-marked-alive` | error | status is `alive` (or `standing`, `active`, `intact`), but an end date or a killing says otherwise |
 | `invalid-date` | error | a date can't be parsed or uses an unknown era |
 | `date-order` | error | an end comes before its start (died before born, destroyed before founded, ...) |
 | `file-error` | error | a file can't be read as an entry (the rest of the world still loads) |
+| `relation-kind` | warning | a relation type doesn't fit the two entry types (an item `parent-of` a character); custom types are skipped |
 | `image-view` | info | an image's view label is not one of the usual views for its entry type |
 
 Vague dates never cause false alarms: a rule only fires when one date is *definitely* before the other,
