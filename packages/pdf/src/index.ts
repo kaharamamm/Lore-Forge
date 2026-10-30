@@ -327,9 +327,51 @@ function finish(pdf: Pdf): Promise<Buffer> {
   });
 }
 
+type HasGlyph = (codePoint: number) => boolean;
+
+/** The embedded DejaVu font's glyph check, via pdfkit's own fontkit font. */
+function glyphCheck(fontDir: string): HasGlyph {
+  const probe = new PDFDocument({ autoFirstPage: false });
+  probe.font(join(fontDir, FONT_FILES.sans));
+  const font = (probe as unknown as { _font: { font: { hasGlyphForCodePoint(c: number): boolean } } })._font.font;
+  return (c) => font.hasGlyphForCodePoint(c);
+}
+
+/**
+ * Text the PDF fonts can draw: characters DejaVu has no glyph for (colour emoji, rare symbols) are dropped,
+ * together with emoji joiners and variation selectors, so a PDF never shows empty boxes. The word next to an
+ * emoji always stays, because the app never uses an emoji alone.
+ */
+export function printable(text: string, has: HasGlyph): string {
+  let out = '';
+  for (const ch of text) {
+    const c = ch.codePointAt(0)!;
+    if (c === 0x200d || (c >= 0xfe00 && c <= 0xfe0f) || c === 0x20e3 || (c >= 0x1f3fb && c <= 0x1f3ff)) continue;
+    if (c < 0x80 || ch === '\n' || has(c)) out += ch;
+  }
+  return out === text ? text : out.replace(/[ \t]{2,}/g, ' ').replace(/^ | $/gm, '');
+}
+
+function printableDoc(doc: Doc, has: HasGlyph): Doc {
+  const t = (s: string) => printable(s, has);
+  const block = (b: Block): Block => {
+    switch (b.kind) {
+      case 'heading': case 'para': return { ...b, text: t(b.text) };
+      case 'facts': return { ...b, rows: b.rows.map(([k, v]) => [t(k), t(v)]) };
+      case 'list': return { ...b, items: b.items.map(t) };
+      case 'image': return { ...b, caption: t(b.caption), details: b.details.map(t) };
+      case 'prompt': return { ...b, label: t(b.label), text: t(b.text) };
+      case 'box': return { ...b, title: t(b.title), blocks: b.blocks.map(block) };
+      case 'toc': return b;
+    }
+  };
+  return { ...doc, title: t(doc.title), cover: { title: t(doc.cover.title), subtitle: t(doc.cover.subtitle), lines: doc.cover.lines.map(t) }, blocks: doc.blocks.map(block) };
+}
+
 /** Renders a World Codex or Story Book Doc to PDF bytes. */
-export async function renderPdf(doc: Doc, options: PdfOptions): Promise<PdfResult> {
+export async function renderPdf(source: Doc, options: PdfOptions): Promise<PdfResult> {
   const opts = { ...options, fontDir: options.fontDir ?? defaultFontDir() };
+  const doc = printableDoc(source, glyphCheck(opts.fontDir));
   const first = new Layout(doc, opts, undefined);
   first.run();
   await finish(first.pdf);

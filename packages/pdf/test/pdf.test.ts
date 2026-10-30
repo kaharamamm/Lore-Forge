@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { storyBook, worldCodex } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
-import { inlineRuns, renderPdf, sidecarPath, writePublication } from '@lore-forge/pdf';
+import { defaultFontDir, inlineRuns, printable, renderPdf, sidecarPath, writePublication } from '@lore-forge/pdf';
 
 const example = join(import.meta.dirname, '..', '..', '..', 'examples', 'shifting-sands');
 const hasPdftotext = (() => {
@@ -73,4 +73,30 @@ test('an image that cannot be embedded becomes a note, not a crash', async () =>
   doc.blocks.push({ kind: 'image', file: 'images/nope.webp', caption: 'x', details: [] }, { kind: 'image', file: 'images/missing.png', caption: 'y', details: [] });
   const { pdf } = await renderPdf(doc, { worldDir: example });
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+});
+
+test('no empty boxes: emoji the PDF font cannot draw are dropped, the words stay', async () => {
+  const has = (c: number) => c < 0x2000 || c === 0x2694; // DejaVu-like: Latin and the crossed swords
+  assert.equal(printable('🧑 Character', has), 'Character');
+  assert.equal(printable('Zehra 🪦 dead', has), 'Zehra dead');
+  assert.equal(printable('👨‍👩‍👧 Family ⚔️', has), 'Family ⚔');
+  assert.equal(printable('Şafak İlsa ışık', has), 'Şafak İlsa ışık');
+  const world = await loadWorld(example);
+  const doc = worldCodex(world);
+  doc.blocks.push({ kind: 'heading', level: 2, text: '🧑 Character 🪦 Tombstone 🐪 Camel' }, { kind: 'para', text: 'Notes 📜 here ✨' });
+  const { pdf } = await renderPdf(doc, { worldDir: example });
+  if (hasPdftotext) {
+    const dir = await mkdtemp(join(import.meta.dirname, 'tmp-'));
+    try {
+      const file = join(dir, 'e.pdf');
+      await (await import('node:fs/promises')).writeFile(file, pdf);
+      const text = execFileSync('pdftotext', [file, '-'], { encoding: 'utf8' });
+      assert.match(text, /Character Tombstone Camel/);
+      assert.match(text, /Notes here/);
+      assert.doesNotMatch(text, /[\u{1F300}-\u{1FAFF}\uFFFD]/u);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+  assert.ok(defaultFontDir());
 });
