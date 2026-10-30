@@ -1,9 +1,13 @@
-import { bodyLinks, TYPE_LABELS, VISUAL_FIELDS, WorldIndex, type Action, type Character, type Entry, type LocationSpan, type LoreEvent, type Participant, type Relation, type Warning, type World } from '@lore-forge/core';
-import { DateField, ListEditor, ListText, RefField, SelectField, TextField } from './fields.tsx';
+import {
+  endFieldVisible, endValue, LIFECYCLE, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_EMOJI, TYPE_SINGULAR, VISUAL_FIELDS, WorldIndex,
+  type Action, type Character, type Entry, type EntryType, type LocationSpan, type LoreEvent, type Participant, type Relation, type RelationGroup, type Warning, type World,
+} from '@lore-forge/core';
+import { useState } from 'preact/hooks';
+import { DateField, Field, ListEditor, ListText, RefField, TextField } from './fields.tsx';
 import { ImageSlots } from './images.tsx';
+import { ProseField } from './prose.tsx';
+import { TypeBadge } from './type.tsx';
 import { WarningItem, type WarningActions } from './warnings.tsx';
-
-const RELATION_TYPES = ['parent-of', 'child-of', 'sibling-of', 'spouse-of', 'member-of', 'leader-of', 'rules', 'serves', 'ally-of', 'enemy-of', 'owns', 'killed'];
 
 interface Props {
   dir: string;
@@ -13,29 +17,28 @@ interface Props {
   actions: WarningActions;
   onChange: (e: Entry) => void;
   onDelete: () => void;
+  onOpen: (id: string) => void;
 }
 
-export function EntryEditor({ dir, world, entry, warnings, actions, onChange, onDelete }: Props) {
+export function EntryEditor({ dir, world, entry, warnings, actions, onChange, onDelete, onOpen }: Props) {
   const cal = world.manifest.calendar;
   // Each type section gets a setter typed for its own entry shape.
   const set = <E extends Entry>(e: E) => (patch: Partial<E>) => onChange({ ...e, ...patch });
   const base = set(entry);
-  const ix = new WorldIndex(world);
-  const links = bodyLinks(entry.body);
   return (
-    <article class="editor" aria-labelledby="entry-title">
+    <article class={`editor t-${entry.type}`} aria-labelledby="entry-title">
       <header class="editor-head">
         <div>
-          <p class="eyebrow">{TYPE_LABELS[entry.type].replace(/s$/, '')}</p>
-          <h2 id="entry-title" tabIndex={-1}>{entry.name || '(no name)'}</h2>
+          <p class="eyebrow"><TypeBadge type={entry.type} /></p>
+          <h2 id="entry-title" tabIndex={-1}><span class="title-emoji" aria-hidden="true">{TYPE_EMOJI[entry.type]} </span>{entry.name || '(no name)'}</h2>
           <p class="muted">id <code>{entry.id}</code> · {world.files[entry.id]}</p>
         </div>
-        <button type="button" class="ghost danger" onClick={onDelete}>Delete entry</button>
+        <button type="button" class="ghost danger" onClick={onDelete}><span aria-hidden="true">🗑️ </span>Delete entry</button>
       </header>
 
       <section class="live-warnings" aria-live="polite" aria-label="Live warnings for this entry">
         {warnings.length === 0 ? (
-          <p class="ok-line"><span aria-hidden="true">✓ </span>No warnings for this entry.</p>
+          <p class="ok-line"><span aria-hidden="true">✨ </span>No warnings for this entry. Canon holds.</p>
         ) : (
           <ul class="warning-list">
             {warnings.map((w) => <WarningItem key={w.id} w={w} actions={actions} compact={w.offending.entryId === entry.id} />)}
@@ -50,24 +53,11 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
         <ListText label="Tags (comma-separated)" field="tags" value={entry.tags} onChange={(tags) => base({ tags })} resetKey={entry.id} />
       </div>
 
+      {LIFECYCLE[entry.type] && <LifecycleFields world={world} entry={entry} onChange={onChange} />}
       {entry.type === 'character' && <CharacterFields world={world} e={entry} set={set(entry)} />}
       {entry.type === 'place' && (
         <div class="grid-3">
-          <DateField label="Founded" field="founded" value={entry.founded} calendar={cal} onChange={(founded) => set(entry)({ founded })} />
-          <DateField label="Destroyed" field="destroyed" value={entry.destroyed} calendar={cal} onChange={(destroyed) => set(entry)({ destroyed })} />
           <RefField label="Part of (region)" field="partOf" value={entry.partOf} world={world} types={['place']} onChange={(partOf) => set(entry)({ partOf })} />
-        </div>
-      )}
-      {entry.type === 'faction' && (
-        <div class="grid-3">
-          <DateField label="Founded" field="founded" value={entry.founded} calendar={cal} onChange={(founded) => set(entry)({ founded })} />
-          <DateField label="Dissolved" field="dissolved" value={entry.dissolved} calendar={cal} onChange={(dissolved) => set(entry)({ dissolved })} />
-        </div>
-      )}
-      {entry.type === 'item' && (
-        <div class="grid-3">
-          <DateField label="Made" field="created" value={entry.created} calendar={cal} onChange={(created) => set(entry)({ created })} />
-          <DateField label="Destroyed" field="destroyed" value={entry.destroyed} calendar={cal} onChange={(destroyed) => set(entry)({ destroyed })} />
         </div>
       )}
       {entry.type === 'event' && <EventFields world={world} e={entry} set={set(entry)} />}
@@ -108,38 +98,19 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
         field="relations"
         items={entry.relations}
         addLabel="Add relationship"
-        empty={() => ({ type: 'ally-of', target: '' })}
+        empty={() => ({ type: relationKindsFor(entry.type)[0]?.type ?? 'related-to', target: '' })}
         onChange={(relations) => base({ relations })}
         render={(r, put, f) => (
           <>
-            <Pick label="Relation" field={`${f}.type`} value={r.type} options={RELATION_TYPES} onChange={(type) => put({ ...r, type: type ?? '' })} />
-            <RefField label="Target" field={`${f}.target`} value={r.target} world={world} onChange={(target) => put({ ...r, target: target ?? '' })} />
+            <RelationTypeField world={world} entry={entry} r={r} field={`${f}.type`} onChange={(type) => put({ ...r, type })} />
+            <RefField label="Target" field={`${f}.target`} value={r.target} world={world} types={relationTargets(r.type, entry.type)} exclude={entry.id} onChange={(target) => put({ ...r, target: target ?? '' })} />
             <DateField label="From" field={`${f}.from`} value={r.from} calendar={cal} onChange={(from) => put(clean({ ...r, from }))} />
             <DateField label="To" field={`${f}.to`} value={r.to} calendar={cal} onChange={(to) => put(clean({ ...r, to }))} />
           </>
         )}
       />
 
-      <div class="field body-field" data-field="body">
-        <label for="entry-body">Text</label>
-        <textarea id="entry-body" class="body-text" value={entry.body} rows={14} aria-describedby="body-hint" onInput={(e) => base({ body: e.currentTarget.value })} />
-        <div class="hint" id="body-hint">
-          Markdown. Link entries with <code>[[id]]</code>, <code>[[Name]]</code>, <code>[[id|label]]</code> or <code>@id</code>.
-          {links.length > 0 && (
-            <ul class="link-chips" aria-label="Links in this text">
-              {links.map((l, i) => {
-                const t = ix.resolve(l.ref);
-                return (
-                  <li key={i} class={t ? 'chip' : 'chip chip-missing'}>
-                    <span aria-hidden="true">{t ? '✓ ' : '✖ '}</span>
-                    {t ? t.name : `${l.ref} (missing)`}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
+      <ProseField world={world} entry={entry} onInput={(body) => base({ body })} onOpen={onOpen} />
     </article>
   );
 }
@@ -160,15 +131,94 @@ function Pick(props: { label: string; field: string; value: string; options: str
   );
 }
 
+const START_FIELD: Partial<Record<EntryType, [string, string]>> = { character: ['born', 'Born'], place: ['founded', 'Founded'], faction: ['founded', 'Founded'], item: ['created', 'Made'] };
+
+/**
+ * Status first. An ongoing status (alive, standing, active, intact, lost) hides the end date;
+ * an ended one shows it. A hidden end date stays in the file and still counts for the checker.
+ */
+function LifecycleFields({ world, entry, onChange }: { world: World; entry: Entry; onChange: (e: Entry) => void }) {
+  const lc = LIFECYCLE[entry.type]!;
+  const cal = world.manifest.calendar;
+  const rec = entry as unknown as Record<string, string | undefined>;
+  const put = (patch: Record<string, string | undefined>) => onChange(clean({ ...entry, ...patch }) as Entry);
+  const status = rec['status'];
+  const [startField, startLabel] = START_FIELD[entry.type]!;
+  const showEnd = endFieldVisible(entry);
+  const hidden = !showEnd ? endValue(entry) : undefined;
+  const ongoing = status && lc.ongoing.includes(status) ? lc.statuses.find((x) => x.value === status) : undefined;
+  return (
+    <fieldset class="lifecycle">
+      <legend>Status and dates</legend>
+      <div class="grid-3">
+        <Field label="Status" field="status">
+          {(id) => (
+            <div class="status-pills" role="radiogroup" id={id} aria-label="Status">
+              {lc.statuses.map((o) => (
+                <button key={o.value} type="button" role="radio" aria-checked={status === o.value} class={`pill status-${o.value}`}
+                  onClick={() => put({ status: status === o.value ? undefined : o.value })}>
+                  <span aria-hidden="true">{o.emoji} </span>{o.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </Field>
+        <DateField label={startLabel} field={startField} value={rec[startField]} calendar={cal} onChange={(v) => put({ [startField]: v })} />
+        {showEnd && <DateField label={lc.endLabel} field={lc.endField} value={rec[lc.endField]} calendar={cal} onChange={(v) => put({ [lc.endField]: v })} />}
+      </div>
+      {hidden && hidden.trim() !== '' && (
+        <p class="hint hidden-note" data-field={lc.endField}>
+          <span aria-hidden="true">💾 </span>{lc.endLabel} “{hidden}” is still in the file but hidden while the status is {ongoing?.label ?? status}. Pick {lc.statuses.find((x) => lc.ended.includes(x.value))!.label} to edit it, or clear it there.
+        </p>
+      )}
+      {!showEnd && !hidden && !ongoing && <p class="hint">Pick {lc.statuses.find((x) => lc.ended.includes(x.value))!.label} to add a {lc.endLabel.toLowerCase()} date.</p>}
+    </fieldset>
+  );
+}
+
+const GROUP_ORDER = Object.keys(RELATION_GROUPS) as RelationGroup[];
+
+/** Relation type limited to what fits this entry (and the chosen target), grouped; custom types still possible. */
+function RelationTypeField({ world, entry, r, field, onChange }: { world: World; entry: Entry; r: Relation; field: string; onChange: (type: string) => void }) {
+  const target = new WorldIndex(world).resolve(r.target);
+  const kinds = relationKindsFor(entry.type, target?.type);
+  const current = relationKind(r.type);
+  const known = current && kinds.includes(current);
+  const [custom, setCustom] = useState(!current && r.type !== '');
+  const misfit = current && target && !relationFits(current, entry.type, target.type);
+  const hint = misfit
+    ? `“${r.type}” doesn't fit ${TYPE_SINGULAR[entry.type].toLowerCase()} → ${TYPE_SINGULAR[target.type].toLowerCase()}. Pick another.`
+    : target ? `Types that fit ${TYPE_SINGULAR[entry.type].toLowerCase()} → ${TYPE_SINGULAR[target.type].toLowerCase()}` : `Types that fit a ${TYPE_SINGULAR[entry.type].toLowerCase()}`;
+  return (
+    <Field label="Relation" field={field} hint={hint} invalid={!!misfit}>
+      {(id, hintId) => custom ? (
+        <div class="row nowrap">
+          <input id={id} type="text" value={r.type} aria-describedby={hintId} placeholder="custom-type" onInput={(e) => onChange(e.currentTarget.value.trim().toLowerCase().replace(/\s+/g, '-'))} />
+          <button type="button" class="ghost small" onClick={() => { setCustom(false); onChange(kinds[0]?.type ?? 'related-to'); }}>List</button>
+        </div>
+      ) : (
+        <select id={id} value={r.type} aria-describedby={hintId} aria-invalid={!!misfit}
+          onChange={(e) => { const v = e.currentTarget.value; if (v === '__custom') setCustom(true); else onChange(v); }}>
+          {!known && r.type && <option value={r.type}>{misfit ? '⚠ ' : ''}{r.type.replace(/-/g, ' ')}{misfit ? ' (does not fit)' : ''}</option>}
+          {GROUP_ORDER.map((g) => {
+            const ks = kinds.filter((k) => k.group === g);
+            return ks.length ? (
+              <optgroup key={g} label={`${RELATION_GROUPS[g].emoji} ${RELATION_GROUPS[g].label}`}>
+                {ks.map((k) => <option key={k.type} value={k.type}>{k.label}</option>)}
+              </optgroup>
+            ) : null;
+          })}
+          <option value="__custom">✏️ Custom type…</option>
+        </select>
+      )}
+    </Field>
+  );
+}
+
 function CharacterFields({ world, e, set }: { world: World; e: Character; set: (p: Partial<Character>) => void }) {
   const cal = world.manifest.calendar;
   return (
     <>
-      <div class="grid-3">
-        <DateField label="Born" field="born" value={e.born} calendar={cal} onChange={(born) => set({ born })} />
-        <DateField label="Died" field="died" value={e.died} calendar={cal} onChange={(died) => set({ died })} />
-        <SelectField label="Status" field="status" value={e.status} options={[['alive', 'Alive'], ['dead', 'Dead'], ['unknown', 'Unknown']] as const} onChange={(status) => set({ status })} />
-      </div>
       <ListEditor<LocationSpan>
         title="Locations over time"
         field="locations"

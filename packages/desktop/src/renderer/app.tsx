@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
-  check, entryPath, INTENDED_FILE, parseWorld, serializeEntry, serializeIntended,
+  check, entryPath, familyTree, INTENDED_FILE, parseWorld, relationWeb, serializeEntry, serializeIntended, timelineModel, WorldIndex,
   type Entry, type EntryType, type FactRef, type Warning, type World,
 } from '@lore-forge/core';
+import type { PdfKind, PublishOptions } from '../shared/api.ts';
 import { EntryEditor } from './components/editor.tsx';
 import { RelationsView } from './components/relations.tsx';
 import { Sidebar } from './components/sidebar.tsx';
 import { StartScreen } from './components/start.tsx';
 import { TimelineView } from './components/timeline.tsx';
+import { PreviewDialog, previewDoc, sheetsOf } from './components/preview.tsx';
+import { ToastStack, useToasts } from './components/toasts.tsx';
 import { involves, WarningsPanel, type WarningActions } from './components/warnings.tsx';
 
 type View = 'editor' | 'timeline' | 'relations';
@@ -23,6 +26,36 @@ function newId(type: EntryType, name: string, taken: Set<string>): string {
   return id;
 }
 
+const SMOKE = new URLSearchParams(location.search).has('smoke');
+const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+const count = (sel: string) => document.querySelectorAll(sel).length;
+
+/** What the headless smoke test checks: the same builders the views and the preview use. */
+function smokeSummary(w: World): Record<string, unknown> {
+  const warnings = check(w);
+  const docs = Object.fromEntries((['bible', 'book'] as const).map((k) => {
+    const d = previewDoc(w, k, {});
+    return [k, { blocks: d.blocks.length, sheets: sheetsOf(d.blocks).length, images: d.blocks.filter((b) => b.kind === 'image').length }];
+  }));
+  const trimmed = previewDoc(w, 'bible', { types: ['character'], warnings: false });
+  const single = previewDoc(w, 'book', { grouping: 'single' });
+  const firstChar = w.entries.find((e) => e.type === 'character');
+  const tree = familyTree(w, firstChar?.id);
+  const webs = w.entries.filter((e) => e.type === 'character').map((e) => relationWeb(w, e.id)!).sort((a, b) => b.nodes.length - a.nodes.length);
+  const tl = timelineModel(w, warnings);
+  const ix = new WorldIndex(w);
+  return {
+    world: w.manifest.name,
+    entries: w.entries.length,
+    warnings: warnings.length,
+    preview: { ...docs, bibleCharactersOnly: trimmed.blocks.length, bookSingleChapter: single.blocks.filter((b) => b.kind === 'heading' && b.level === 1 && b.toc).length },
+    tree: { people: tree.nodes.length, generations: tree.generations, edges: tree.edges.length, dead: tree.nodes.filter((n) => n.ended).length },
+    web: webs[0] ? { focus: webs[0].nodes.find((n) => n.focus)!.entry.name, nodes: webs[0].nodes.length, edges: webs[0].edges.length } : null,
+    timeline: tl ? { eras: tl.eras.length, lanes: tl.groups.reduce((n, g) => n + g.lanes.length, 0), flagged: tl.groups.reduce((n, g) => n + g.lanes.filter((l) => l.warnings.length).length, 0) } : null,
+    mentions: w.entries.reduce((n, e) => n + ix.mentions.find(e.body, { exclude: e.id }).length, 0),
+  };
+}
+
 function blankEntry(type: EntryType, id: string, name: string): Entry {
   return { id, type, name, body: '' } as Entry;
 }
@@ -35,7 +68,8 @@ export function App() {
   const [view, setView] = useState<View>('editor');
   const [query, setQuery] = useState('');
   const [save, setSave] = useState<SaveState>({ kind: 'saved' });
-  const [pdf, setPdf] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PdfKind | null>(null);
+  const toasts = useToasts();
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const pending = useRef(new Map<string, () => Promise<void>>());
 
@@ -58,7 +92,46 @@ export function App() {
     void window.lore.initialWorld().then(async (d) => {
       if (!d) return;
       const w = await open(d);
-      if (w) window.lore.smokeReport({ world: w.manifest.name, entries: w.entries.length, warnings: check(w).length });
+      if (!w || !SMOKE) return;
+      // Smoke only: drive each view once and count what actually rendered.
+      const summary = smokeSummary(w);
+      const dom: Record<string, number> = {};
+      try {
+        const leyla = w.entries.find((e) => e.id === 'char-leyla') ?? w.entries.find((e) => e.type === 'character');
+        if (leyla) {
+          setSelectedId(leyla.id);
+          setView('editor');
+          await tick();
+          dom['editorMentions'] = count('.prose-mirror mark.mention');
+          dom['statusPills'] = count('.lifecycle [role=radio]');
+          dom['relationSelects'] = count('[data-field^="relations"] select');
+          setView('relations');
+          await tick();
+          dom['treeNodes'] = count('.family-tree .node');
+          document.querySelector<HTMLButtonElement>('.relations .segmented button:nth-child(2)')?.click();
+          await tick();
+          dom['webNodes'] = count('.relation-web .node');
+          dom['webEdges'] = count('.relation-web .web-edge');
+        }
+        setView('timeline');
+        await tick(150);
+        dom['timelineMarks'] = count('.tl-mark');
+        dom['timelineBands'] = count('.tl-band');
+        dom['timelineWarnings'] = count('.tl-warn');
+        for (const k of ['bible', 'book'] as const) {
+          setPreview(k);
+          await tick(150);
+          dom[`${k}Sheets`] = count('.preview .sheet');
+          dom[`${k}Headings`] = count('.preview .doc-h');
+          setPreview(null);
+          await tick();
+        }
+        setView('editor');
+      } catch (e) {
+        dom['error'] = 1;
+        console.error(e);
+      }
+      window.lore.smokeReport({ ...summary, dom });
     });
   }, [open]);
 
@@ -152,7 +225,7 @@ export function App() {
         document.getElementById('search')?.focus();
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        void flush();
+        void flush().then(() => toasts.push({ tone: 'ok', text: '💾 All changes saved' }));
       } else if (mod && ['1', '2', '3'].includes(e.key)) {
         e.preventDefault();
         setView((['editor', 'timeline', 'relations'] as const)[Number(e.key) - 1]!);
@@ -183,20 +256,22 @@ export function App() {
 
   if (!world || !dir) return <StartScreen onOpen={(d) => void open(d)} error={loadError} />;
 
-  const exportPdf = async (kind: 'bible' | 'book') => {
-    const label = kind === 'bible' ? 'World Bible' : 'Story Book';
-    setPdf(`… Writing ${label}`);
+  const savePdf = async (kind: PdfKind, options: PublishOptions) => {
+    const label = kind === 'bible' ? '📖 World Bible' : '📚 Story Book';
     try {
       await flush();
-      const r = await window.lore.exportPdf(dir, kind);
-      setPdf(r ? `✓ ${label}: ${r.pages} pages` : null);
+      const r = await window.lore.exportPdf(dir, kind, options);
+      if (!r) return;
+      setPreview(null);
+      toasts.push({ tone: 'ok', text: `${label} saved: ${r.pages} pages (plus a .md copy)`, action: { label: 'Show in folder', run: () => void window.lore.showInFolder(r.pdf) } });
     } catch (e) {
-      setPdf(`✖ ${label} failed: ${(e as Error).message}`);
+      toasts.push({ tone: 'error', text: `${label} failed: ${(e as Error).message}` });
     }
   };
+  const openEntry = (id: string) => { setSelectedId(id); setView('editor'); };
 
   const selected = world.entries.find((e) => e.id === selectedId);
-  const tabs: [View, string][] = [['editor', 'Editor'], ['timeline', 'Timeline'], ['relations', 'Relationships']];
+  const tabs: [View, string, string][] = [['editor', '✏️', 'Editor'], ['timeline', '🕰️', 'Timeline'], ['relations', '🕸️', 'Relationships']];
   return (
     <div class="app">
       <header class="topbar">
@@ -205,17 +280,18 @@ export function App() {
           <span class="muted path" title={dir}>{dir}</span>
         </div>
         <nav class="tabs" aria-label="Views">
-          {tabs.map(([v, label], i) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} title={`Ctrl+${i + 1}`}>{label}</button>
+          {tabs.map(([v, emoji, label], i) => (
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} title={`Ctrl+${i + 1}`}><span aria-hidden="true">{emoji} </span>{label}</button>
           ))}
         </nav>
+        <div class="publish-actions">
+          <button type="button" class="publish" onClick={() => setPreview('bible')} title="Preview every entry with facts, visual description, reference images and art briefs; then save as PDF">📖 World Bible</button>
+          <button type="button" class="publish" onClick={() => setPreview('book')} title="Preview your events and notes in story order as a book; then save as PDF">📚 Story Book</button>
+        </div>
         <div class="top-actions">
           <span class={`save save-${save.kind}`} role="status">
             {save.kind === 'saved' ? '✓ Saved' : save.kind === 'saving' ? '… Saving' : `✖ Save failed: ${save.message}`}
           </span>
-          {pdf && <span class="save" role="status">{pdf}</span>}
-          <button type="button" class="ghost small" onClick={() => void exportPdf('bible')} title="Every entry with facts, visual description, reference images and art briefs, for artists and AI tools (also writes a .md copy)">World Bible PDF…</button>
-          <button type="button" class="ghost small" onClick={() => void exportPdf('book')} title="Your events and notes in story order, as a book (also writes a .md copy)">Story Book PDF…</button>
           <button type="button" class="ghost small" onClick={() => void flush().then(() => open(dir))} title="Reload all files from disk">Reload</button>
           <button type="button" class="ghost small" onClick={() => void flush().then(() => { setWorld(null); setDir(null); document.title = 'Lore-Forge'; })}>Close world</button>
         </div>
@@ -224,14 +300,19 @@ export function App() {
       <main class="main" id="main">
         {view === 'editor' &&
           (selected ? (
-            <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={updateEntry} onDelete={() => void deleteEntry(selected)} />
+            <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={updateEntry} onDelete={() => void deleteEntry(selected)} onOpen={openEntry} />
           ) : (
-            <p class="muted empty">Select an entry, or create one with “+ New”.</p>
+            <div class="empty-state">
+              <span class="empty-emoji" aria-hidden="true">{world.entries.length ? '👈' : '🌍'}</span>
+              <p>{world.entries.length ? 'Pick an entry on the left to edit it.' : 'This world is empty. Start with a character, a place or an event: use “+ New” on the left.'}</p>
+            </div>
           ))}
-        {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={(id) => { setSelectedId(id); setView('editor'); }} />}
+        {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} />}
         {view === 'relations' && <RelationsView world={world} entry={selected} onOpen={(id) => setSelectedId(id)} />}
       </main>
       <WarningsPanel warnings={warnings} selectedId={selectedId} actions={actions} />
+      {preview && <PreviewDialog dir={dir} world={world} kind={preview} onClose={() => setPreview(null)} onSave={savePdf} />}
+      <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>
   );
 }

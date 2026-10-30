@@ -1,54 +1,92 @@
-import { TYPE_LABELS, WorldIndex, type Entry, type World } from '@lore-forge/core';
+import { useMemo, useState } from 'preact/hooks';
+import { familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, WorldIndex, type Entry, type RelationGroup, type World } from '@lore-forge/core';
+import { FamilyTreeSvg, RelationWebSvg } from './graphs.tsx';
+import { EntryLabel, EntryLink } from './type.tsx';
 
 interface Link {
   /** e.g. "parent of", "killed by". */
   label: string;
+  group: RelationGroup;
   other: Entry | undefined;
   otherRef: string;
   when?: string;
 }
 
-const GROUPS: [string, string[]][] = [
-  ['Family', ['parent of', 'child of', 'sibling of', 'spouse of']],
-  ['Allies and enemies', ['ally of', 'enemy of']],
-  ['Power and belonging', ['member of', 'has member', 'leader of', 'led by', 'rules', 'ruled by', 'serves', 'served by']],
-  ['Possessions', ['owns', 'owned by']],
-  ['Killings', ['killed', 'killed by']],
-];
-const INVERSE: Record<string, string> = {
-  'parent-of': 'child of', 'child-of': 'parent of', 'sibling-of': 'sibling of', 'spouse-of': 'spouse of', 'ally-of': 'ally of', 'enemy-of': 'enemy of',
-  'member-of': 'has member', 'leader-of': 'led by', rules: 'ruled by', serves: 'served by', owns: 'owned by', killed: 'killed by',
-};
+type Mode = 'web' | 'tree';
 
 export function RelationsView({ world, entry, onOpen }: { world: World; entry: Entry | undefined; onOpen: (id: string) => void }) {
-  if (!entry) return <section class="relations"><h2>Relationships</h2><p class="muted">Select an entry in the sidebar to see its relationships.</p></section>;
+  const [mode, setMode] = useState<Mode>(entry?.type === 'character' ? 'tree' : 'web');
+  const tree = useMemo(() => (mode === 'tree' ? familyTree(world, entry?.id) : undefined), [world, entry?.id, mode]);
+  const web = useMemo(() => (mode === 'web' && entry ? relationWeb(world, entry.id) : undefined), [world, entry?.id, mode]);
+  if (!entry) {
+    return (
+      <section class="relations">
+        <h2>🕸️ Relationships</h2>
+        <div class="empty-state"><span class="empty-emoji" aria-hidden="true">🧭</span><p>Pick an entry in the sidebar to see who and what it is tied to.</p></div>
+      </section>
+    );
+  }
   const ix = new WorldIndex(world);
   const links: Link[] = [];
   const span = (from?: string, to?: string) => (from || to ? `${from ?? '?'} – ${to ?? '?'}` : undefined);
-  for (const r of entry.relations ?? []) links.push({ label: r.type.replace(/-/g, ' '), other: ix.resolve(r.target), otherRef: r.target, when: span(r.from, r.to) });
+  const groupOf = (type: string): RelationGroup => relationKind(type)?.group ?? 'other';
+  for (const r of entry.relations ?? []) links.push({ label: relationLabel(r.type), group: groupOf(r.type), other: ix.resolve(r.target), otherRef: r.target, when: span(r.from, r.to) });
   for (const e of world.entries) {
     if (e.id === entry.id) continue;
     for (const r of e.relations ?? []) {
-      if (ix.resolve(r.target)?.id === entry.id) links.push({ label: INVERSE[r.type] ?? `${r.type.replace(/-/g, ' ')} (from them)`, other: e, otherRef: e.id, when: span(r.from, r.to) });
+      if (ix.resolve(r.target)?.id === entry.id) links.push({ label: inverseLabel(r.type), group: groupOf(r.type), other: e, otherRef: e.id, when: span(r.from, r.to) });
     }
   }
-  const events = world.entries.filter((e) => e.type === 'event' && [...(e.participants ?? []).map((p) => p.id), ...(e.actions ?? []).flatMap((a) => [a.actor, a.target ?? ''])].some((ref) => ix.resolve(ref)?.id === entry.id));
-  const known = new Set(GROUPS.flatMap(([, ls]) => ls));
-  const groups: [string, Link[]][] = [...GROUPS.map(([g, ls]): [string, Link[]] => [g, links.filter((l) => ls.includes(l.label))]), ['Other', links.filter((l) => !known.has(l.label))]];
+  const events = world.entries.filter((e) => e.type === 'event' && [...(e.participants ?? []).map((p) => p.id), ...(e.actions ?? []).flatMap((a) => [a.actor, a.target ?? '']), e.place ?? ''].some((ref) => ix.resolve(ref)?.id === entry.id));
+  const groups = (Object.keys(RELATION_GROUPS) as RelationGroup[]).map((g) => [g, links.filter((l) => l.group === g)] as const).filter(([, ls]) => ls.length > 0);
+  const modes: [Mode, string, string][] = [['tree', '🌳', 'Family tree'], ['web', '🕸️', 'Relationship web']];
   return (
     <section class="relations" aria-labelledby="relations-title">
-      <h2 id="relations-title" tabIndex={-1}>Relationships of {entry.name}</h2>
-      <p class="muted">Both directions: what {entry.name} says, and what other entries say about {entry.name}.</p>
+      <header class="view-head">
+        <h2 id="relations-title" tabIndex={-1}>Relationships of <EntryLabel entry={entry} /></h2>
+        <div class="segmented" role="group" aria-label="Show">
+          {modes.map(([m, emoji, label]) => (
+            <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}><span aria-hidden="true">{emoji} </span>{label}</button>
+          ))}
+        </div>
+      </header>
+
+      <div class="graph-card">
+        {mode === 'tree' && tree && (tree.nodes.length ? (
+          <>
+            <p class="muted graph-note">
+              {entry.type === 'character' && tree.nodes.some((n) => n.focus) ? `${entry.name}'s family` : 'Every family in this world'}, oldest generation on top. Select a box to open it.
+            </p>
+            <div class="graph-scroll"><FamilyTreeSvg tree={tree} onOpen={onOpen} /></div>
+            <ul class="legend" aria-label="Legend">
+              <li><span class="lg lg-parent" aria-hidden="true" /> parent → child</li>
+              <li><span aria-hidden="true">💍</span> spouses</li>
+              <li><span class="lg lg-sibling" aria-hidden="true" /> siblings</li>
+              <li><span aria-hidden="true">✝️</span> dead (shown faded)</li>
+            </ul>
+          </>
+        ) : (
+          <div class="empty-state"><span class="empty-emoji" aria-hidden="true">🌱</span><p>{entry.type === 'character' ? `${entry.name} has no family yet.` : 'No families yet.'} Add <strong>parent of</strong>, <strong>child of</strong>, <strong>spouse of</strong> or <strong>sibling of</strong> relationships in the editor to grow a tree.</p></div>
+        ))}
+        {mode === 'web' && web && (web.nodes.length > 1 ? (
+          <>
+            <p class="muted graph-note">{entry.name} in the middle; arrows read “from → to”. Select a box to open it.</p>
+            <div class="graph-scroll"><RelationWebSvg web={web} onOpen={onOpen} /></div>
+          </>
+        ) : (
+          <div class="empty-state"><span class="empty-emoji" aria-hidden="true">🕸️</span><p>Nothing is tied to {entry.name} yet. Add allies, enemies, members, rulers or owners in the editor.</p></div>
+        ))}
+      </div>
+
       <div class="rel-grid">
-        {groups.filter(([, ls]) => ls.length > 0).map(([g, ls]) => (
-          <section class="rel-card" key={g}>
-            <h3>{g}</h3>
+        {groups.map(([g, ls]) => (
+          <section class={`rel-card g-${g}`} key={g}>
+            <h3><span aria-hidden="true">{RELATION_GROUPS[g].emoji} </span>{RELATION_GROUPS[g].label}</h3>
             <ul>
               {ls.map((l, i) => (
                 <li key={i}>
                   <span class="rel-label">{l.label}</span>{' '}
-                  {l.other ? <button type="button" class="link" onClick={() => onOpen(l.other!.id)}>{l.other.name}</button> : <span class="missing"><span aria-hidden="true">✖ </span>{l.otherRef} (missing)</span>}
-                  {l.other && <span class="muted"> · {TYPE_LABELS[l.other.type].replace(/s$/, '')}</span>}
+                  {l.other ? <EntryLink entry={l.other} onOpen={onOpen} /> : <span class="missing"><span aria-hidden="true">✖ </span>{l.otherRef} (missing)</span>}
                   {l.when && <span class="muted"> · {l.when}</span>}
                 </li>
               ))}
@@ -56,12 +94,12 @@ export function RelationsView({ world, entry, onOpen }: { world: World; entry: E
           </section>
         ))}
         <section class="rel-card">
-          <h3>Events</h3>
-          {events.length === 0 ? <p class="muted">Not in any event.</p> : (
+          <h3><span aria-hidden="true">⚔️ </span>Events</h3>
+          {events.length === 0 ? <p class="muted">Not in any event yet.</p> : (
             <ul>
               {events.map((e) => (
                 <li key={e.id}>
-                  <button type="button" class="link" onClick={() => onOpen(e.id)}>{e.name}</button>
+                  <EntryLink entry={e} onOpen={onOpen} />
                   {e.type === 'event' && e.date && <span class="muted"> · {e.date}</span>}
                 </li>
               ))}
@@ -69,7 +107,6 @@ export function RelationsView({ world, entry, onOpen }: { world: World; entry: E
           )}
         </section>
       </div>
-      {links.length === 0 && <p class="muted">No relationships yet. Add some in the editor.</p>}
     </section>
   );
 }

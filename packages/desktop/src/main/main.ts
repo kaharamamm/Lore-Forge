@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { createWorld, loadWorld, readWorldFiles } from '@lore-forge/core/node';
 import { storyBook, worldBible, type ImageView } from '@lore-forge/core';
 import { defaultFontDir, writePublication } from '@lore-forge/pdf';
-import type { PdfKind } from '../shared/api.ts';
+import type { PdfKind, PublishOptions } from '../shared/api.ts';
 
 const SMOKE = process.env['LORE_FORGE_SMOKE'] === '1';
 const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
@@ -57,9 +57,10 @@ function fontDir(): string {
   return app.isPackaged ? join(process.resourcesPath, 'fonts') : defaultFontDir();
 }
 
-async function publish(dir: string, kind: PdfKind, file: string) {
+/** Same document builders and options as the renderer preview, so the PDF matches what was reviewed. */
+async function publish(dir: string, kind: PdfKind, file: string, options: PublishOptions = {}) {
   const world = await loadWorld(dir);
-  return writePublication(kind === 'bible' ? worldBible(world) : storyBook(world), dir, file, fontDir());
+  return writePublication(kind === 'bible' ? worldBible(world, options) : storyBook(world, options), dir, file, fontDir());
 }
 
 /** Smoke test: prove the bundled PDF path works by exporting both documents. */
@@ -67,9 +68,15 @@ async function smokePdfs(dir: string): Promise<string> {
   const out = process.env['LORE_FORGE_SMOKE_OUT'] ?? (await mkdtemp(join(tmpdir(), 'lore-smoke-')));
   try {
     const parts: string[] = [];
-    for (const kind of ['bible', 'book'] as const) {
-      const r = await publish(dir, kind, join(out, `${kind}.pdf`));
-      parts.push(`${kind}.pdf ${r.pages} pages ${(await stat(r.pdf)).size} bytes`);
+    const runs: [PdfKind, string, PublishOptions][] = [
+      ['bible', 'bible', {}],
+      ['book', 'book', {}],
+      ['bible', 'bible-characters-no-warnings', { types: ['character'], warnings: false }],
+      ['book', 'book-single-chapter', { grouping: 'single' }],
+    ];
+    for (const [kind, name, options] of runs) {
+      const r = await publish(dir, kind, join(out, `${name}.pdf`), options);
+      parts.push(`${name}.pdf ${r.pages} pages ${(await stat(r.pdf)).size} bytes`);
     }
     return parts.join(', ');
   } finally {
@@ -135,7 +142,8 @@ function registerIpc(): void {
       return null;
     }
   });
-  ipcMain.handle('exportPdf', async (_e, dir: string, kind: PdfKind) => {
+  ipcMain.handle('showInFolder', (_e, path: string) => shell.showItemInFolder(path));
+  ipcMain.handle('exportPdf', async (_e, dir: string, kind: PdfKind, options: PublishOptions) => {
     const world = JSON.parse(await readFile(join(dir, 'world.json'), 'utf8')) as { id?: string };
     const r = await dialog.showSaveDialog(win!, {
       title: kind === 'bible' ? 'Save World Bible PDF' : 'Save Story Book PDF',
@@ -143,9 +151,7 @@ function registerIpc(): void {
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     });
     if (r.canceled || !r.filePath) return null;
-    const out = await publish(dir, kind, r.filePath);
-    shell.showItemInFolder(out.pdf);
-    return out;
+    return publish(dir, kind, r.filePath, options);
   });
   ipcMain.on('smokeReport', (_e, summary: unknown) => {
     if (!SMOKE) return;
@@ -197,7 +203,7 @@ function createWindow(): void {
       app.exit(1);
     }, 30_000);
   }
-  void win.loadFile(join(__dirname, 'renderer', 'index.html'));
+  void win.loadFile(join(__dirname, 'renderer', 'index.html'), SMOKE ? { query: { smoke: '1' } } : undefined);
 }
 
 // Ubuntu 24.04's AppArmor blocks Chromium's sandbox for unpackaged Electron; allow an explicit dev opt-out.

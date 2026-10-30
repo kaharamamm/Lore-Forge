@@ -1,7 +1,6 @@
 import { useEffect, useId, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { describeDate, parseDate, type Calendar, type World } from '@lore-forge/core';
-import { WorldIndex } from '@lore-forge/core';
+import { describeDate, parseDate, TYPE_EMOJI, TYPE_SINGULAR, WorldIndex, type Calendar, type World } from '@lore-forge/core';
 
 /** Empty input -> undefined, so empty fields disappear from the file. */
 export const opt = (s: string): string | undefined => (s.trim() === '' ? undefined : s);
@@ -74,14 +73,20 @@ export function DateField(props: { label: string; field: string; value: string |
   );
 }
 
-/** Reference to another entry: an id (or name), with suggestions. */
-export function RefField(props: { label: string; field: string; value: string | undefined; world: World; onChange: (v: string | undefined) => void; types?: string[] }) {
+/** Reference to another entry: an id (or name), with suggestions limited to `types` (all types when empty). */
+export function RefField(props: { label: string; field: string; value: string | undefined; world: World; onChange: (v: string | undefined) => void; types?: readonly string[]; exclude?: string }) {
   const ix = new WorldIndex(props.world);
   const target = props.value ? ix.resolve(props.value) : undefined;
   const listId = useId();
-  const invalid = !!props.value && !target;
-  const hint = !props.value ? 'Type an id or name' : target ? `${target.name} (${target.type})` : 'No entry has this id or name';
-  const options = props.world.entries.filter((e) => !props.types || props.types.includes(e.type));
+  const allowed = props.types && props.types.length ? props.types : undefined;
+  const wrongType = !!target && !!allowed && !allowed.includes(target.type);
+  const invalid = (!!props.value && !target) || wrongType;
+  const want = allowed ? allowed.map((t) => `${TYPE_EMOJI[t as keyof typeof TYPE_EMOJI]} ${TYPE_SINGULAR[t as keyof typeof TYPE_SINGULAR].toLowerCase()}`).join(', ') : undefined;
+  const hint = !props.value
+    ? `Type an id or name${want ? ` (${want})` : ''}`
+    : !target ? 'No entry has this id or name'
+    : `${TYPE_EMOJI[target.type]} ${target.name} · ${TYPE_SINGULAR[target.type]}${wrongType ? ` (expected ${want})` : ''}`;
+  const options = props.world.entries.filter((e) => e.id !== props.exclude && (!allowed || allowed.includes(e.type))).sort((a, b) => a.name.localeCompare(b.name));
   return (
     <Field label={props.label} field={props.field} hint={hint} invalid={invalid}>
       {(id, hintId) => (
@@ -89,7 +94,7 @@ export function RefField(props: { label: string; field: string; value: string | 
           <input id={id} type="text" list={listId} value={props.value ?? ''} aria-invalid={invalid} aria-describedby={hintId} onInput={(e) => props.onChange(opt(e.currentTarget.value))} />
           <datalist id={listId}>
             {options.map((e) => (
-              <option key={e.id} value={e.id}>{e.name}</option>
+              <option key={e.id} value={e.id}>{`${TYPE_EMOJI[e.type]} ${e.name}`}</option>
             ))}
           </datalist>
         </>
@@ -132,7 +137,7 @@ export function ListEditor<T>(props: {
   return (
     <fieldset class="list-editor">
       <legend>{props.title}</legend>
-      {items.length === 0 && <p class="muted">None yet.</p>}
+      {items.length === 0 && <p class="muted empty-hint"><span aria-hidden="true">🌱 </span>None yet. Add the first one below.</p>}
       {items.map((item, i) => (
         <div class="list-row" key={i} data-field={`${props.field}[${i}]`}>
           <div class="list-row-fields">{props.render(item, (x) => setAt(i, x), `${props.field}[${i}]`)}</div>
@@ -141,7 +146,7 @@ export function ListEditor<T>(props: {
           </button>
         </div>
       ))}
-      <button type="button" class="ghost" onClick={() => props.onChange([...items, props.empty()])}>
+      <button type="button" class="ghost add-row" onClick={() => props.onChange([...items, props.empty()])}>
         + {props.addLabel}
       </button>
     </fieldset>

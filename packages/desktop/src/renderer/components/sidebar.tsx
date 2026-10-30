@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { ENTRY_TYPES, normalizeName, TYPE_LABELS, type Entry, type EntryType, type Warning } from '@lore-forge/core';
+import { ENTRY_TYPES, isEnded, LIFECYCLE, normalizeName, TYPE_EMOJI, TYPE_LABELS, TYPE_SINGULAR, type Entry, type EntryType, type Warning } from '@lore-forge/core';
 import { CountBadge } from './severity.tsx';
 import { involves } from './warnings.tsx';
 
@@ -27,10 +27,10 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
       {ENTRY_TYPES.map((type) => {
         const list = entries.filter((e) => e.type === type && matches(e)).sort((a, b) => a.name.localeCompare(b.name));
         return (
-          <section class="type-group" key={type} aria-labelledby={`group-${type}`}>
+          <section class={`type-group t-${type}`} key={type} aria-labelledby={`group-${type}`}>
             <div class="type-head">
-              <h2 id={`group-${type}`}>{TYPE_LABELS[type]} <span class="muted">({list.length})</span></h2>
-              <button type="button" class="ghost small" aria-label={`New ${TYPE_LABELS[type].replace(/s$/, '').toLowerCase()}`} onClick={() => { setCreating(type); setName(''); }}>+ New</button>
+              <h2 id={`group-${type}`}><span aria-hidden="true">{TYPE_EMOJI[type]} </span>{TYPE_LABELS[type]} <span class="muted">({list.length})</span></h2>
+              <button type="button" class="ghost small" aria-label={`New ${TYPE_SINGULAR[type].toLowerCase()}`} onClick={() => { setCreating(type); setName(''); }}>+ New</button>
             </div>
             {creating === type && (
               <form class="new-entry" onSubmit={(e) => { e.preventDefault(); if (name.trim()) { onCreate(type, name.trim()); setCreating(null); } }}>
@@ -38,15 +38,22 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
                 <input id={`new-${type}`} type="text" placeholder="Name, then Enter" value={name} autoFocus onInput={(e) => setName(e.currentTarget.value)} onKeyDown={(e) => e.key === 'Escape' && setCreating(null)} />
               </form>
             )}
+            {list.length === 0 && (
+              <p class="muted empty-hint">{q ? 'No matches.' : `No ${TYPE_LABELS[type].toLowerCase()} yet — “+ New” adds one.`}</p>
+            )}
             <ul>
-              {list.map((e) => (
+              {list.map((e) => {
+                const ended = isEnded(e);
+                const lc = LIFECYCLE[e.type];
+                return (
                 <li key={e.id}>
-                  <button type="button" class="entry-link" aria-current={e.id === selectedId ? 'page' : undefined} data-entry-id={e.id} onClick={() => onSelect(e.id)}>
-                    <span class="entry-name">{e.name}</span>
+                  <button type="button" class={`entry-link t-${e.type}${ended ? ' is-ended' : ''}`} aria-current={e.id === selectedId ? 'page' : undefined} data-entry-id={e.id} onClick={() => onSelect(e.id)}>
+                    <span class="entry-name">{e.name}{ended && lc && <span class="ended-mark" title={lc.endedWord}> <span aria-hidden="true">{lc.endedMark}</span><span class="sr-only">({lc.endedWord})</span></span>}</span>
                     <CountBadge warnings={warnings.filter((w) => involves(w, e.id))} />
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </section>
         );

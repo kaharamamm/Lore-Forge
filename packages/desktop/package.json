@@ -12,7 +12,8 @@
     "start": "node run.mjs",
     "dev": "node build.mjs && node run.mjs",
     "dist:win": "electron-builder --win nsis --publish never",
-    "dist:linux": "electron-builder --linux AppImage --publish never"
+    "dist:linux": "electron-builder --linux AppImage --publish never",
+    "contrast": "node scripts/contrast.mjs"
   },
   "dependencies": {
     "@lore-forge/core": "0.2.0",
