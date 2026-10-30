@@ -22,7 +22,9 @@ export function check(world: World): Warning[] {
 }
 export * from './publish/doc.ts';
 export { artBrief, type ArtBrief } from './publish/art.ts';
-export { worldBible, BIBLE_FORMAT_VERSION, type BibleOptions } from './publish/bible.ts';
+export { worldCodex, CODEX_FORMAT_VERSION, type CodexOptions } from './publish/codex.ts';
+/** Old names from before the World Bible became the World Codex (0.3.1); kept so existing callers keep working. */
+export { worldCodex as worldBible, CODEX_FORMAT_VERSION as BIBLE_FORMAT_VERSION, type CodexOptions as BibleOptions } from './publish/codex.ts';
 export { bookChapters, storyBook, LORE_AND_LEGENDS, SINGLE_CHAPTER, type BookChapter, type BookPage, type BookOptions, type ChapterGrouping } from './publish/book.ts';
 export { toMarkdown } from './publish/markdown.ts';
 export { familyTree, TREE_LAYOUT, type FamilyTree, type TreeNode, type TreeEdge } from './views/family-tree.ts';

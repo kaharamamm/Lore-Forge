@@ -2,7 +2,7 @@
   "name": "@lore-forge/pdf",
   "version": "0.3.0",
   "private": true,
-  "description": "Renders Lore-Forge publish documents (World Bible, Story Book) to PDF with pdfkit and embedded DejaVu fonts.",
+  "description": "Renders Lore-Forge publish documents (World Codex, Story Book) to PDF with pdfkit and embedded DejaVu fonts.",
   "type": "module",
   "exports": {
     ".": {

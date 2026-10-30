@@ -79,7 +79,7 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
       {VISUAL_FIELDS[entry.type].length > 0 && (
         <fieldset class="list-editor" data-field="visual">
           <legend>Visual description</legend>
-          <p class="muted">Free text for artists and image or 3D tools. Used for the art briefs in the World Bible.</p>
+          <p class="muted">Free text for artists and image or 3D tools. Used for the art briefs in the World Codex.</p>
           <div class="grid-2">
             {VISUAL_FIELDS[entry.type].map((f) => (
               <TextField key={f.key} label={f.label} field={`visual.${f.key}`} value={entry.visual?.[f.key]} placeholder={f.hint} multiline

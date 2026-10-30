@@ -1,5 +1,5 @@
 /**
- * A small, renderer-neutral document model shared by the World Bible and the Story Book.
+ * A small, renderer-neutral document model shared by the World Codex and the Story Book.
  * The same Doc becomes Markdown (toMarkdown, here in core) and PDF (@lore-forge/pdf).
  * Inline text may use **bold** and *italic*; single newlines are kept as line breaks.
  */
@@ -21,7 +21,7 @@ export type Block =
   | { kind: 'toc' };
 
 export interface Doc {
-  kind: 'bible' | 'book';
+  kind: 'codex' | 'book';
   /** Used in PDF metadata, running footers and the Markdown title. */
   title: string;
   /** Cover page: big title, subtitle, then small lines. */

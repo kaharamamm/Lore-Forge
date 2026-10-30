@@ -33,11 +33,11 @@ const count = (sel: string) => document.querySelectorAll(sel).length;
 /** What the headless smoke test checks: the same builders the views and the preview use. */
 function smokeSummary(w: World): Record<string, unknown> {
   const warnings = check(w);
-  const docs = Object.fromEntries((['bible', 'book'] as const).map((k) => {
+  const docs = Object.fromEntries((['codex', 'book'] as const).map((k) => {
     const d = previewDoc(w, k, {});
     return [k, { blocks: d.blocks.length, sheets: sheetsOf(d.blocks).length, images: d.blocks.filter((b) => b.kind === 'image').length }];
   }));
-  const trimmed = previewDoc(w, 'bible', { types: ['character'], warnings: false });
+  const trimmed = previewDoc(w, 'codex', { types: ['character'], warnings: false });
   const single = previewDoc(w, 'book', { grouping: 'single' });
   const firstChar = w.entries.find((e) => e.type === 'character');
   const tree = familyTree(w, firstChar?.id);
@@ -48,7 +48,7 @@ function smokeSummary(w: World): Record<string, unknown> {
     world: w.manifest.name,
     entries: w.entries.length,
     warnings: warnings.length,
-    preview: { ...docs, bibleCharactersOnly: trimmed.blocks.length, bookSingleChapter: single.blocks.filter((b) => b.kind === 'heading' && b.level === 1 && b.toc).length },
+    preview: { ...docs, codexCharactersOnly: trimmed.blocks.length, bookSingleChapter: single.blocks.filter((b) => b.kind === 'heading' && b.level === 1 && b.toc).length },
     tree: { people: tree.nodes.length, generations: tree.generations, edges: tree.edges.length, dead: tree.nodes.filter((n) => n.ended).length },
     web: webs[0] ? { focus: webs[0].nodes.find((n) => n.focus)!.entry.name, nodes: webs[0].nodes.length, edges: webs[0].edges.length } : null,
     timeline: tl ? { eras: tl.eras.length, lanes: tl.groups.reduce((n, g) => n + g.lanes.length, 0), flagged: tl.groups.reduce((n, g) => n + g.lanes.filter((l) => l.warnings.length).length, 0) } : null,
@@ -118,7 +118,7 @@ export function App() {
         dom['timelineMarks'] = count('.tl-mark');
         dom['timelineBands'] = count('.tl-band');
         dom['timelineWarnings'] = count('.tl-warn');
-        for (const k of ['bible', 'book'] as const) {
+        for (const k of ['codex', 'book'] as const) {
           setPreview(k);
           await tick(150);
           dom[`${k}Sheets`] = count('.preview .sheet');
@@ -257,7 +257,7 @@ export function App() {
   if (!world || !dir) return <StartScreen onOpen={(d) => void open(d)} error={loadError} />;
 
   const savePdf = async (kind: PdfKind, options: PublishOptions) => {
-    const label = kind === 'bible' ? '📖 World Bible' : '📚 Story Book';
+    const label = kind === 'codex' ? '📖 World Codex' : '📚 Story Book';
     try {
       await flush();
       const r = await window.lore.exportPdf(dir, kind, options);
@@ -285,7 +285,7 @@ export function App() {
           ))}
         </nav>
         <div class="publish-actions">
-          <button type="button" class="publish" onClick={() => setPreview('bible')} title="Preview every entry with facts, visual description, reference images and art briefs; then save as PDF">📖 World Bible</button>
+          <button type="button" class="publish" onClick={() => setPreview('codex')} title="Preview every entry with facts, visual description, reference images and art briefs; then save as PDF">📖 World Codex</button>
           <button type="button" class="publish" onClick={() => setPreview('book')} title="Preview your events and notes in story order as a book; then save as PDF">📚 Story Book</button>
         </div>
         <div class="top-actions">

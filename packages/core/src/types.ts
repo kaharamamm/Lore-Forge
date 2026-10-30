@@ -223,6 +223,8 @@ interface EntryBase {
 
 export interface Character extends EntryBase {
   type: 'character';
+  /** Race or kind, free text: human, camel-folk, ghoul, vampire... Links to an entry when one has this id or name. */
+  race?: string;
   born?: DateText;
   died?: DateText;
   status?: 'alive' | 'dead' | 'unknown';

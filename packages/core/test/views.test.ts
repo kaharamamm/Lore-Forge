@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { check, docSheets, familyTree, inlineRuns, relationWeb, storyBook, timelineModel, worldBible, yearTicks, TREE_LAYOUT, SINGLE_CHAPTER, type Block } from '@lore-forge/core';
+import { check, docSheets, familyTree, inlineRuns, relationWeb, storyBook, timelineModel, worldCodex, yearTicks, TREE_LAYOUT, SINGLE_CHAPTER, type Block } from '@lore-forge/core';
 import { world } from './helpers.ts';
 
 const fam = world([
@@ -77,11 +77,11 @@ test('timeline model: lanes by type, points for events, open ends, eras, warning
   assert.equal(timelineModel(world([{ id: 'n', type: 'note', name: 'N' }]), []), undefined);
 });
 
-test('bible options: types and warnings appendix; book grouping options', () => {
-  const full = worldBible(fam);
+test('codex options: types and warnings appendix; book grouping options', () => {
+  const full = worldCodex(fam);
   const heads = (d: typeof full) => d.blocks.filter((b) => b.kind === 'heading' && b.level === 1).map((b) => (b as { text: string }).text);
   assert.ok(heads(full).includes('Appendix: consistency warnings'));
-  const slim = worldBible(fam, { types: ['character'], warnings: false, artBriefs: false });
+  const slim = worldCodex(fam, { types: ['character'], warnings: false, artBriefs: false });
   assert.ok(!heads(slim).includes('Appendix: consistency warnings'));
   assert.ok(heads(slim).includes('Characters') && !heads(slim).includes('Places'));
   assert.ok(!slim.blocks.some((b) => b.kind === 'box'));
@@ -97,12 +97,12 @@ test('bible options: types and warnings appendix; book grouping options', () => 
   assert.deepEqual(chapters(storyBook(w, { grouping: 'single' })), [`Chapter 1. ${SINGLE_CHAPTER}`, 'Chapter 2. Lore & Legends']);
 });
 
-test('bible lists where an entry is mentioned by plain name', () => {
+test('codex lists where an entry is mentioned by plain name', () => {
   const w = world([
     { id: 't', type: 'character', name: 'Tarik', body: 'Tarik, a salt miner. Zehra is mad.' },
     { id: 'z', type: 'character', name: 'Zehra' },
   ]);
-  const blocks = worldBible(w).blocks;
+  const blocks = worldCodex(w).blocks;
   const i = blocks.findIndex((b) => b.kind === 'heading' && b.text === 'Mentioned in');
   assert.ok(i > 0);
   assert.deepEqual(blocks[i + 1], { kind: 'para', text: 'Tarik' });

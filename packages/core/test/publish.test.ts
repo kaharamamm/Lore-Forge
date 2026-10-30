@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { artBrief, bookChapters, LORE_AND_LEGENDS, resolveLinks, storyBook, toMarkdown, worldBible, WorldIndex } from '@lore-forge/core';
+import { artBrief, bookChapters, LORE_AND_LEGENDS, resolveLinks, storyBook, toMarkdown, worldCodex, WorldIndex } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 import { world } from './helpers.ts';
 
@@ -61,8 +61,8 @@ test('story book: chapters by era or year range, chapter override, bookOrder, un
   assert.deepEqual(byEra.map((c) => [c.title, c.pages.length]), [['After the Sundering', 2]]);
 });
 
-test('world bible of the example world: sections, art briefs, glossary and open warnings', async () => {
-  const doc = worldBible(await loadWorld(example));
+test('world codex of the example world: sections, art briefs, glossary and open warnings', async () => {
+  const doc = worldCodex(await loadWorld(example));
   const tocText = doc.blocks.filter((b) => b.kind === 'heading' && b.toc && b.level === 1).map((b) => b.kind === 'heading' && b.text);
   assert.deepEqual(tocText, ['About this document', 'World overview', 'Characters', 'Places', 'Factions', 'Items', 'Events', 'Notes', 'Timeline', 'Relationship summary', 'Glossary of names', 'Appendix: consistency warnings']);
   const md = toMarkdown(doc);

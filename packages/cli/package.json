@@ -2,7 +2,7 @@
   "name": "@lore-forge/cli",
   "version": "0.3.0",
   "private": true,
-  "description": "Headless Lore-Forge commands: lore check, export, bible, book.",
+  "description": "Headless Lore-Forge commands: lore check, export, codex, book.",
   "type": "module",
   "bin": {
     "lore": "./dist/main.js"

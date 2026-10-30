@@ -23,7 +23,7 @@ A small desert world used to show and test Lore-Forge. It breaks canon on purpos
 The world also shows the v0.2 features: visual descriptions on Kadir, Orsan, Saltmere, the Glass Compass
 and the Fall of Saltmere; reference images on a place, an item and an event; and dated lore pages (one
 with Turkish verse) for the Story Book. All images are generated placeholders. Try
-`npm run lore -- bible examples/shifting-sands -o bible.pdf` and `npm run lore -- book examples/shifting-sands -o book.pdf`.
+`npm run lore -- codex examples/shifting-sands -o codex.pdf` and `npm run lore -- book examples/shifting-sands -o book.pdf`.
 
 v0.3: places, factions and items have a status (the Sun Court is dissolved, the Bronze Gate destroyed), and
 names in the text link themselves. "The Red Wind" in Leyla's text is shared by a faction and Kadir's alias,

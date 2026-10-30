@@ -99,7 +99,7 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
 - `visual` is a map of free-text strings (`VISUAL_FIELDS` in core). Known keys: character `appearance`,
   `build`, `clothing`, `palette`, `features`, `props`; place `architecture`, `climate`, `palette`, `scale`;
   faction `emblem`, `attire`, `palette`; item `material`, `size`, `details`; event `scene`, `mood`. Unknown
-  keys are kept and printed in the World Bible.
+  keys are kept and printed in the World Codex.
 - `chapter` (string) and `bookOrder` (number, lower first, default 0) on events and notes control the Story
   Book. `world.json` may hold `"book": {"title", "author", "chapterYears"}`.
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so
@@ -111,7 +111,15 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
 `unknown`), factions (`active`, `dissolved`, `unknown`) and items (`intact`, `destroyed`, `lost`,
 `unknown`). The app hides the end date (`died`, `destroyed`, `dissolved`) while the status is ongoing, but
 the value stays in the file and the rules still use it. `LIFECYCLE`, `statusOf`, `isEnded` and
-`endFieldVisible` in `@lore-forge/core` give the same answers the app uses.
+`endFieldVisible` in `@lore-forge/core` give the same answers the app uses. A missing status reads as
+`unknown` (`statusOf` returns it); the app always has exactly one status selected and new entries start at
+`unknown`. Files without a status are not rewritten just for that.
+
+### Race
+
+Characters may have `race: <free text>` (human, camel-folk, ghoul, vampire...). When an entry has that id or
+name, the app and the Codex show it as a link. `raceSuggestions(entries)` lists races used in the world, then
+`DEFAULT_RACES`.
 
 ### Relation types
 
@@ -178,24 +186,28 @@ const warnings = registry.check(await loadWorld('path/to/world'));
 Rules are pure functions of the world. Rule ids must be unique, and you should namespace your own ids. The
 `rules` map in `world.json` can override any rule's severity or set it to `"off"`.
 
-## World Bible and Story Book
+## World Codex and Story Book
 
-`lore bible <worldDir> -o out.pdf` and `lore book <worldDir> -o out.pdf` write a PDF and a Markdown sidecar
+The World Codex was called the World Bible before 0.3.1. `lore bible` still works as an alias of `lore codex`,
+and `worldBible`, `BibleOptions` and `BIBLE_FORMAT_VERSION` are still exported as aliases. The Doc `kind` is
+now `codex` (was `bible`), and default output names are `<world-id>-codex.pdf` / `.md`.
+
+`lore codex <worldDir> -o out.pdf` and `lore book <worldDir> -o out.pdf` write a PDF and a Markdown sidecar
 next to it (`out.md`, image links relative to it). The sidecar holds the same content as the PDF and is the
-easiest input for AI tools; it starts with an HTML comment naming the document type. In the World Bible,
+easiest input for AI tools; it starts with an HTML comment naming the document type. In the World Codex,
 each character, place, item and event ends with `#### Art brief: <name>` containing an **Image prompt**
 block and, for characters and items, a **3D turnaround brief** block (neutral A-pose or resting
 orientation; front, back, left, right and three-quarter views; plain background; flat lighting; no props
 unless listed; consistent scale), each in a `text` code fence. The prose layout of these files may change
 between versions; for exact data use `lore export`.
 
-Options: `worldBible(world, {types?, warnings? = true, artBriefs? = true})` limits the entry types and
+Options: `worldCodex(world, {types?, warnings? = true, artBriefs? = true})` limits the entry types and
 drops the warnings appendix or the art briefs. `storyBook(world, {grouping?: 'era' | 'years' | 'single',
 chapterYears?})` picks the chapters: one per era, year ranges inside each era (default 100 years, or
 `book.chapterYears`), or a single chapter. A page's own `chapter` always wins. The app's preview and its
 PDF are built from the same `Doc` with the same options. The CLI uses the defaults.
 
-Library use: `worldBible(world)` / `storyBook(world)` return a renderer-neutral `Doc`; `toMarkdown(doc)` is in
+Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral `Doc`; `toMarkdown(doc)` is in
 `@lore-forge/core` and `renderPdf(doc, {worldDir})` / `writePublication(...)` in `@lore-forge/pdf`.
 `artBrief(entry, index)` returns `{prompt, turnaround?, missing}`.
 
@@ -206,7 +218,8 @@ Library use: `worldBible(world)` / `storyBook(world)` return a renderer-neutral 
 - **Additive changes** keep version 1: new optional fields, new rules, new image views, new relation types.
   Lore-Forge 0.2 (images on every type, `visual`, `chapter`, `bookOrder`, note `date`, manifest `book`, the
   `image-view` rule) was additive, and so was 0.3 (status on places, factions and items, the
-  `relation-kind` rule, snapshot `references`), so worlds stay at version 1.
+  `relation-kind` rule, snapshot `references`) and 0.3.1 (dotted and day-month dates, character `race`), so
+  worlds stay at version 1. Older files load unchanged and are never migrated.
   Consumers should ignore fields they don't know.
 - **Breaking changes** bump the version: removing or renaming fields, or changing the meaning of a field or
   of the date syntax. Lore-Forge will migrate older worlds when it opens them. Consumers should check

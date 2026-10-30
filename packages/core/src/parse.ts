@@ -85,7 +85,7 @@ function clean<T extends object>(o: T): T {
 }
 
 const KNOWN_KEYS: Record<EntryType, string[]> = {
-  character: ['born', 'died', 'status', 'locations'],
+  character: ['race', 'born', 'died', 'status', 'locations'],
   place: ['status', 'founded', 'destroyed', 'partOf'],
   faction: ['status', 'founded', 'dissolved'],
   item: ['status', 'created', 'destroyed'],
@@ -170,7 +170,7 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
         return place ? clean({ place, from: r.str(x, 'from'), to: r.str(x, 'to'), note: r.str(x, 'note') }) : undefined;
       };
       entry = clean({
-        ...base, type: t, born: r.str(o, 'born'), died: r.str(o, 'died'),
+        ...base, type: t, race: r.str(o, 'race'), born: r.str(o, 'born'), died: r.str(o, 'died'),
         status: status as 'alive' | 'dead' | 'unknown' | undefined,
         locations: r.list(o, 'locations', location),
       });
@@ -209,7 +209,7 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
 }
 
 /** Front-matter key order used when writing files, so diffs stay small. */
-const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'visual', 'images', 'chapter', 'bookOrder'];
+const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'race', 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'visual', 'images', 'chapter', 'bookOrder'];
 
 export function serializeEntry(entry: Entry): string {
   const { body, extra, ...fields } = entry;

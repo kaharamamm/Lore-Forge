@@ -3,14 +3,14 @@ import { realpathSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { check, report, snapshot, storyBook, worldBible, WorldFormatError, type Warning } from '@lore-forge/core';
+import { check, report, snapshot, storyBook, worldCodex, WorldFormatError, type Warning } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 import { writePublication } from '@lore-forge/pdf';
 
 const USAGE = `Usage:
   lore check <worldDir> [--json]     Print consistency warnings. Exit 1 if there are errors.
   lore export <worldDir> [--out <file>]  Write one versioned JSON snapshot (stdout by default).
-  lore bible <worldDir> [-o <file.pdf>]  World Bible PDF for artists and AI tools, plus a .md copy.
+  lore codex <worldDir> [-o <file.pdf>]  World Codex PDF for artists and AI tools, plus a .md copy (alias: bible).
   lore book <worldDir> [-o <file.pdf>]   Story Book PDF: events and notes in story order, plus a .md copy.
 
 Exit codes: 0 = no errors, 1 = errors found, 2 = bad usage or unreadable world.`;
@@ -25,8 +25,9 @@ function formatWarning(w: Warning): string {
 }
 
 export async function run(argv: string[], out: (s: string) => void = (s) => process.stdout.write(s)): Promise<number> {
-  const [cmd, dir, ...rest] = argv;
-  if (!cmd || !['check', 'export', 'bible', 'book'].includes(cmd) || !dir) {
+  const [given, dir, ...rest] = argv;
+  const cmd = given === 'bible' ? 'codex' : given;
+  if (!cmd || !['check', 'export', 'codex', 'book'].includes(cmd) || !dir) {
     out(USAGE + '\n');
     return 2;
   }
@@ -51,14 +52,14 @@ export async function run(argv: string[], out: (s: string) => void = (s) => proc
     } else out(json);
     return 0;
   }
-  if (cmd === 'bible' || cmd === 'book') {
+  if (cmd === 'codex' || cmd === 'book') {
     const i = Math.max(rest.indexOf('-o'), rest.indexOf('--out'));
     const file = i >= 0 ? rest[i + 1] : `${world.manifest.id}-${cmd}.pdf`;
     if (!file) {
       out(USAGE + '\n');
       return 2;
     }
-    const doc = cmd === 'bible' ? worldBible(world) : storyBook(world);
+    const doc = cmd === 'codex' ? worldCodex(world) : storyBook(world);
     const r = await writePublication(doc, resolve(dir), file);
     out(`Wrote ${r.pdf} (${r.pages} pages)\nWrote ${r.md}\n`);
     return 0;

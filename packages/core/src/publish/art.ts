@@ -34,9 +34,9 @@ export function artBrief(entry: Entry, ix: WorldIndex): ArtBrief | undefined {
       const build = v['build']?.trim();
       const props = v['props']?.trim();
       return {
-        prompt: join(`Full-body character concept art of ${entry.name}.${about}`, ...described, world, 'Clear silhouette, readable costume details.'),
+        prompt: join(`Full-body character concept art of ${entry.name}${entry.race?.trim() ? `, a ${entry.race.trim()}` : ''}.${about}`, ...described, world, 'Clear silhouette, readable costume details.'),
         turnaround: join(
-          `3D turnaround reference sheet of ${entry.name}.`,
+          `3D turnaround reference sheet of ${entry.name}${entry.race?.trim() ? ` (${entry.race.trim()})` : ''}.`,
           'Neutral A-pose, arms slightly away from the body, relaxed hands, neutral expression.',
           `Five views side by side: front, back, left, right and three-quarter, same scale and the same height in every view${build ? ` (${build.replace(/\.$/, '')})` : ''}.`,
           'Plain light-grey background, flat even lighting, no cast shadows, no motion blur, no text.',

@@ -33,9 +33,9 @@ Version 0.3.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged
   and faded) and a 🕸️ relationship web around the selected entry. Every box opens its entry.
 - **Timeline:** era bands with labels, lifespans as bars, events as points, warning markers, hover details,
   zoom (−/Fit/+ or Ctrl+scroll) and type filters. Click a name or bar to open it.
-- **Export preview:** **📖 World Bible** and **📚 Story Book** in the top bar open an in-app preview built
+- **Export preview:** **📖 World Codex** and **📚 Story Book** in the top bar open an in-app preview built
   from the same document the PDF uses. Pick the entry types, art briefs and warnings appendix for the
-  Bible, or chapters by era, by year ranges or as one chapter for the Book, then **Save PDF…**.
+  Codex, or chapters by era, by year ranges or as one chapter for the Book, then **Save PDF…**.
 
 
 - **Reference images for every entry type**, with the same storage (`images/<entryId>/`) and provenance
@@ -46,7 +46,7 @@ Version 0.3.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged
 - **Visual description fields** (optional, free text): characters appearance, height & build, clothing,
   colour palette, distinguishing features, props; places architecture, climate, palette, scale; items
   material, size, details; events scene description, mood; factions emblem, attire, palette.
-- **World Bible PDF** (`lore bible`, or **World Bible PDF…** in the app): cover, contents, world overview
+- **World Codex PDF** (`lore codex`, or **World Codex PDF…** in the app): cover, contents, world overview
   and calendar, every entry by type with facts, relationships, visual description, text and reference
   images with provenance, an **art brief** per character, place, item and event (image prompt, plus a 3D
   turnaround brief for characters and items), a timeline, a relationship summary, a glossary of names and
@@ -75,7 +75,7 @@ Version 0.3.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged
 - **Desktop app:** a sidebar grouped by type with search, a structured entry editor, a live warnings panel
   that jumps to the offending field, a timeline, a relationship view, and reference images with provenance
   (tool, prompt, date, sources, rights).
-- **CLI:** `lore check`, `lore export`, `lore bible`, `lore book`.
+- **CLI:** `lore check`, `lore export`, `lore codex`, `lore book`.
 - **JSON Schemas and an integration guide** so other tools can read worlds. See
   [docs/INTEGRATION.md](docs/INTEGRATION.md).
 - **Example world:** `examples/shifting-sands` triggers every rule on purpose. Its README maps each rule
@@ -146,9 +146,9 @@ On Linux, `npm run dist:linux` builds an AppImage into the same `release/` folde
 5. **Timeline (Ctrl+2):** era bands, lifespans and existence spans by type, events as points and warning
    markers. Open-ended spans fade out. **Relationships (Ctrl+3):** family tree or relationship web, then the
    selected entry's outgoing and incoming relations, grouped, plus the events it appears in.
-6. **PDFs:** **📖 World Bible** and **📚 Story Book** in the top bar open a preview with options. **Save PDF…**
+6. **PDFs:** **📖 World Codex** and **📚 Story Book** in the top bar open a preview with options. **Save PDF…**
    saves pending edits, asks where to save, writes the PDF plus its `.md` copy, and offers *Show in folder*. The editor's *Visual description* and
-   *Reference images* sections feed the World Bible's art briefs; *Story Book* (chapter, order) appears on
+   *Reference images* sections feed the World Codex's art briefs; *Story Book* (chapter, order) appears on
    events and notes.
 
 Keyboard: **Ctrl+1/2/3** switch views, **Ctrl/⌘+Enter** opens the name at the cursor in the text, **Esc**
@@ -164,7 +164,7 @@ icon plus a word, and entry types as an emoji plus a word, never by color alone
 npm run lore -- check <worldDir>            # human-readable; exit 0 = no errors, 1 = errors, 2 = unreadable/usage
 npm run lore -- check <worldDir> --json     # machine-readable check report
 npm run lore -- export <worldDir> --out world.snapshot.json   # versioned JSON snapshot
-npm run lore -- bible <worldDir> -o bible.pdf   # World Bible PDF + bible.md (default name <world-id>-bible.pdf)
+npm run lore -- codex <worldDir> -o codex.pdf   # World Codex PDF + codex.md (default name <world-id>-codex.pdf)
 npm run lore -- book <worldDir> -o book.pdf     # Story Book PDF + book.md
 ```
 
@@ -205,9 +205,9 @@ packages/core      @lore-forge/core: types, date math, parser/serializer, rule e
   src/rules/       one file per rule family; builtinRules in index.ts
   schemas/         *.schema.json (draft 2020-12)
   test/            node:test behaviour tests
-  src/publish/      World Bible / Story Book document model, art briefs, Markdown output
+  src/publish/      World Codex / Story Book document model, art briefs, Markdown output
 packages/pdf       @lore-forge/pdf: renders those documents to PDF (pdfkit + DejaVu fonts)
-packages/cli       lore check / export / bible / book
+packages/cli       lore check / export / codex (alias bible) / book
 packages/desktop   Electron main + preload, Preact renderer, electron-builder config
 examples/shifting-sands   example world that triggers every rule
 docs/INTEGRATION.md       how other tools (AI-HQ, Game-Forge) read worlds

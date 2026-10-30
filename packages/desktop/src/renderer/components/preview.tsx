@@ -1,14 +1,14 @@
 import { Fragment } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { docSheets, inlineRuns, storyBook, TYPE_EMOJI, TYPE_LABELS, worldBible, type Block, type ChapterGrouping, type Doc, type EntryType, type World } from '@lore-forge/core';
+import { docSheets, inlineRuns, storyBook, TYPE_EMOJI, TYPE_LABELS, worldCodex, type Block, type ChapterGrouping, type Doc, type EntryType, type World } from '@lore-forge/core';
 import type { PdfKind, PublishOptions } from '../../shared/api.ts';
 
 const ALL_TYPES: EntryType[] = ['character', 'place', 'faction', 'item', 'event', 'note'];
-const TITLE: Record<PdfKind, string> = { bible: '📖 World Bible', book: '📚 Story Book' };
+const TITLE: Record<PdfKind, string> = { codex: '📖 World Codex', book: '📚 Story Book' };
 
 /** Build the Doc exactly as the PDF export does (same core function, same options). */
 export function previewDoc(world: World, kind: PdfKind, options: PublishOptions): Doc {
-  return kind === 'bible' ? worldBible(world, options) : storyBook(world, options);
+  return kind === 'codex' ? worldCodex(world, options) : storyBook(world, options);
 }
 
 export const sheetsOf = docSheets;
@@ -103,7 +103,7 @@ interface Props {
   onSave: (kind: PdfKind, options: PublishOptions) => Promise<void>;
 }
 
-/** In-app preview of the World Bible / Story Book, from the same Doc the PDF uses; "Save PDF" only after looking. */
+/** In-app preview of the World Codex / Story Book, from the same Doc the PDF uses; "Save PDF" only after looking. */
 export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
   const [types, setTypes] = useState<EntryType[]>(ALL_TYPES);
   const [warnings, setWarnings] = useState(true);
@@ -114,7 +114,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
   const [busy, setBusy] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
 
-  const options: PublishOptions = kind === 'bible'
+  const options: PublishOptions = kind === 'codex'
     ? { types: ALL_TYPES.filter((t) => types.includes(t)), warnings, artBriefs }
     : { grouping, ...(grouping === 'years' ? { chapterYears } : {}) };
   const key = JSON.stringify(options);
@@ -150,7 +150,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
           <h2 id="preview-title" tabIndex={-1}>{TITLE[kind]} <span class="muted">preview</span></h2>
           <p class="muted">{sheets.length + 1} sheets here; the PDF paginates further. This is the same content the PDF gets.</p>
           <div class="preview-actions">
-            <button type="button" class="primary" disabled={busy || (kind === 'bible' && types.length === 0)} onClick={() => void save()}>
+            <button type="button" class="primary" disabled={busy || (kind === 'codex' && types.length === 0)} onClick={() => void save()}>
               <span aria-hidden="true">💾 </span>{busy ? 'Saving…' : 'Save PDF…'}
             </button>
             <button type="button" class="ghost" onClick={onClose}>Close <kbd>Esc</kbd></button>
@@ -158,7 +158,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
         </header>
         <div class="preview-body">
           <aside class="preview-options" aria-label="Options">
-            {kind === 'bible' ? (
+            {kind === 'codex' ? (
               <>
                 <fieldset>
                   <legend>Entry types</legend>

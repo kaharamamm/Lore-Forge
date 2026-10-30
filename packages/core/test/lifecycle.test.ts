@@ -41,3 +41,24 @@ test('dead-marked-alive covers standing places, active factions and intact items
   assert.deepEqual(ws.map((w) => w.offending.entryId).sort(), ['c', 'f', 'p']);
   assert.match(ws.find((w) => w.offending.entryId === 'p')!.message, /Watchtower is marked standing, but was destroyed in 1650/);
 });
+
+test('status is never empty: a file without one reads as unknown; dead shows a tombstone', async () => {
+  const { statusOf, statusLabel, LIFECYCLE } = await import('@lore-forge/core');
+  const c = { id: 'c', type: 'character', name: 'C', body: '' } as const;
+  assert.equal(statusOf(c), 'unknown');
+  assert.equal(statusLabel(c), 'Unknown');
+  assert.equal(statusOf({ ...c, type: 'event' } as never), undefined);
+  assert.equal(LIFECYCLE.character!.endedMark, '🪦');
+});
+
+test('race: parsed, saved, suggested from the world first', async () => {
+  const { parseEntry, serializeEntry, raceSuggestions } = await import('@lore-forge/core');
+  const text = '---\nid: char-a\ntype: character\nname: A\nrace: ghoul\n---\n';
+  const r = parseEntry(text) as { entry?: { race?: string; extra?: unknown } };
+  assert.equal(r.entry?.race, 'ghoul');
+  assert.equal(r.entry?.extra, undefined);
+  assert.match(serializeEntry(r.entry as never), /^race: ghoul$/m);
+  const s = raceSuggestions([r.entry as never]);
+  assert.equal(s[0], 'ghoul');
+  assert.ok(s.includes('vampire') && s.includes('human'));
+});

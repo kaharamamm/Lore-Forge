@@ -2,7 +2,7 @@ import type { ParsedDate } from '../dates.ts';
 import { GENERATOR } from '../snapshot.ts';
 import type { Entry, LoreEvent, Note, RefImage, World } from '../types.ts';
 import { WorldIndex } from '../world-index.ts';
-import { imageBlock } from './bible.ts';
+import { imageBlock } from './codex.ts';
 import { anchorOf, bodyBlocks, dateWithEra, type Block, type Doc } from './doc.ts';
 
 export const LORE_AND_LEGENDS = 'Lore & Legends';

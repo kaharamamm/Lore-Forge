@@ -26,8 +26,8 @@ export interface Lifecycle {
 export const LIFECYCLE: Partial<Record<EntryType, Lifecycle>> = {
   character: {
     endField: 'died', endLabel: 'Died',
-    statuses: [{ value: 'alive', label: 'Alive', emoji: '💚' }, { value: 'dead', label: 'Dead', emoji: '✝️' }, { value: 'unknown', label: 'Unknown', emoji: '❔' }],
-    ongoing: ['alive'], ended: ['dead'], endedWord: 'dead', endedMark: '✝️',
+    statuses: [{ value: 'alive', label: 'Alive', emoji: '💚' }, { value: 'dead', label: 'Dead', emoji: '🪦' }, { value: 'unknown', label: 'Unknown', emoji: '❔' }],
+    ongoing: ['alive'], ended: ['dead'], endedWord: 'dead', endedMark: '🪦',
   },
   place: {
     endField: 'destroyed', endLabel: 'Destroyed',
@@ -49,9 +49,25 @@ export const LIFECYCLE: Partial<Record<EntryType, Lifecycle>> = {
 const rec = (e: Entry) => e as unknown as Record<string, string | undefined>;
 const filled = (v: string | undefined): boolean => v !== undefined && v.trim() !== '';
 
-/** The entry's status value, if its type has one. */
+/** Every status set has exactly one value selected; a file without one reads as this. */
+export const DEFAULT_STATUS = 'unknown';
+
+/** The entry's status value (DEFAULT_STATUS when the file has none), if its type has statuses. */
 export function statusOf(e: Entry): string | undefined {
-  return LIFECYCLE[e.type] ? rec(e)['status'] : undefined;
+  return LIFECYCLE[e.type] ? (rec(e)['status'] ?? DEFAULT_STATUS) : undefined;
+}
+
+/** "Alive", "Unknown", ... for display; undefined for types without a status. */
+export function statusLabel(e: Entry): string | undefined {
+  const s = statusOf(e);
+  return LIFECYCLE[e.type]?.statuses.find((x) => x.value === s)?.label ?? s;
+}
+
+/** Races to suggest: the ones already used in the world first, then common defaults. */
+export const DEFAULT_RACES = ['human', 'elf', 'dwarf', 'orc', 'camel-folk', 'ghoul', 'zombie', 'vampire', 'spirit', 'djinn'];
+export function raceSuggestions(entries: readonly Entry[]): string[] {
+  const used = entries.flatMap((e) => (e.type === 'character' && e.race?.trim() ? [e.race.trim()] : []));
+  return [...new Set([...used.sort((a, b) => a.localeCompare(b)), ...DEFAULT_RACES])];
 }
 
 /** The end date text (died/destroyed/dissolved), even when the editor hides it. */

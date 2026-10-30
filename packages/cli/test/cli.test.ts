@@ -42,13 +42,16 @@ test('lore export writes one deterministic snapshot', () => {
   assert.equal(lore('export', example).stdout, readFileSync(out, 'utf8'), 'stdout and file output are identical');
 });
 
-test('lore bible and lore book write a PDF and a Markdown sidecar', () => {
+test('lore codex and lore book write a PDF and a Markdown sidecar', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lore-'));
-  const bible = lore('bible', example, '-o', join(dir, 'bible.pdf'));
-  assert.equal(bible.status, 0, bible.stdout + bible.stderr);
-  assert.match(bible.stdout, /bible\.pdf \(\d+ pages\)\nWrote .*bible\.md/);
-  assert.equal(readFileSync(join(dir, 'bible.pdf')).subarray(0, 5).toString(), '%PDF-');
-  assert.match(readFileSync(join(dir, 'bible.md'), 'utf8'), /3D turnaround brief/);
+  const codex = lore('codex', example, '-o', join(dir, 'codex.pdf'));
+  assert.equal(codex.status, 0, codex.stdout + codex.stderr);
+  assert.match(codex.stdout, /codex\.pdf \(\d+ pages\)\nWrote .*codex\.md/);
+  const alias = lore('bible', example, '-o', join(dir, 'old-name.pdf'));
+  assert.equal(alias.status, 0, 'lore bible still works');
+  assert.match(readFileSync(join(dir, 'old-name.md'), 'utf8'), /World Codex/);
+  assert.equal(readFileSync(join(dir, 'codex.pdf')).subarray(0, 5).toString(), '%PDF-');
+  assert.match(readFileSync(join(dir, 'codex.md'), 'utf8'), /3D turnaround brief/);
   const book = lore('book', example, '--out', join(dir, 'book.pdf'));
   assert.equal(book.status, 0, book.stdout + book.stderr);
   assert.ok(existsSync(join(dir, 'book.pdf')));

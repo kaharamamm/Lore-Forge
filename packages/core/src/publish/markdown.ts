@@ -10,7 +10,7 @@ export function toMarkdown(doc: Doc, imageHref: (file: string) => string = (f) =
   const out: string[] = [];
   const headings = doc.blocks.filter((b): b is Extract<Block, { kind: 'heading' }> => b.kind === 'heading' && !!b.toc);
   const anchor = (b: Extract<Block, { kind: 'heading' }>) => b.anchor ?? slug(b.text);
-  out.push(`<!-- ${doc.kind === 'bible' ? 'Lore-Forge World Bible' : 'Lore-Forge Story Book'}; same content as the PDF. -->`, '');
+  out.push(`<!-- ${doc.kind === 'codex' ? 'Lore-Forge World Codex' : 'Lore-Forge Story Book'}; same content as the PDF. -->`, '');
   out.push(`# ${doc.cover.title}`, '', `**${doc.cover.subtitle}**`, '');
   for (const l of doc.cover.lines) out.push(l, '');
 

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, extname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createWorld, loadWorld, readWorldFiles } from '@lore-forge/core/node';
-import { storyBook, worldBible, type ImageView } from '@lore-forge/core';
+import { storyBook, worldCodex, type ImageView } from '@lore-forge/core';
 import { defaultFontDir, writePublication } from '@lore-forge/pdf';
 import type { PdfKind, PublishOptions } from '../shared/api.ts';
 
@@ -60,7 +60,7 @@ function fontDir(): string {
 /** Same document builders and options as the renderer preview, so the PDF matches what was reviewed. */
 async function publish(dir: string, kind: PdfKind, file: string, options: PublishOptions = {}) {
   const world = await loadWorld(dir);
-  return writePublication(kind === 'bible' ? worldBible(world, options) : storyBook(world, options), dir, file, fontDir());
+  return writePublication(kind === 'codex' ? worldCodex(world, options) : storyBook(world, options), dir, file, fontDir());
 }
 
 /** Smoke test: prove the bundled PDF path works by exporting both documents. */
@@ -69,9 +69,9 @@ async function smokePdfs(dir: string): Promise<string> {
   try {
     const parts: string[] = [];
     const runs: [PdfKind, string, PublishOptions][] = [
-      ['bible', 'bible', {}],
+      ['codex', 'codex', {}],
       ['book', 'book', {}],
-      ['bible', 'bible-characters-no-warnings', { types: ['character'], warnings: false }],
+      ['codex', 'codex-characters-no-warnings', { types: ['character'], warnings: false }],
       ['book', 'book-single-chapter', { grouping: 'single' }],
     ];
     for (const [kind, name, options] of runs) {
@@ -146,7 +146,7 @@ function registerIpc(): void {
   ipcMain.handle('exportPdf', async (_e, dir: string, kind: PdfKind, options: PublishOptions) => {
     const world = JSON.parse(await readFile(join(dir, 'world.json'), 'utf8')) as { id?: string };
     const r = await dialog.showSaveDialog(win!, {
-      title: kind === 'bible' ? 'Save World Bible PDF' : 'Save Story Book PDF',
+      title: kind === 'codex' ? 'Save World Codex PDF' : 'Save Story Book PDF',
       defaultPath: join(app.getPath('documents'), `${world.id ?? 'world'}-${kind}.pdf`),
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     });

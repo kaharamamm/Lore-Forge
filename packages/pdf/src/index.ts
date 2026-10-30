@@ -47,7 +47,7 @@ interface Theme {
 }
 
 const THEMES: Record<Doc['kind'], Theme> = {
-  bible: { family: 'sans', size: 9.5, gap: 1.5, margin: 56, accent: '#1f4e79', heading: { 1: 20, 2: 14, 3: 10.5 }, justify: false },
+  codex: { family: 'sans', size: 9.5, gap: 1.5, margin: 56, accent: '#1f4e79', heading: { 1: 20, 2: 14, 3: 10.5 }, justify: false },
   book: { family: 'serif', size: 11, gap: 3.5, margin: 72, accent: '#5a3d1e', heading: { 1: 22, 2: 15, 3: 12 }, justify: true },
 };
 const INK = '#222222';
@@ -170,7 +170,7 @@ class Layout {
   }
 
   private facts(rows: [string, string][]): void {
-    const labelW = this.doc.kind === 'bible' ? 118 : 100;
+    const labelW = this.doc.kind === 'codex' ? 118 : 100;
     const valueW = this.width - labelW - 8;
     for (const [k, v] of rows) {
       this.font('r').fontSize(this.t.size);
@@ -327,7 +327,7 @@ function finish(pdf: Pdf): Promise<Buffer> {
   });
 }
 
-/** Renders a World Bible or Story Book Doc to PDF bytes. */
+/** Renders a World Codex or Story Book Doc to PDF bytes. */
 export async function renderPdf(doc: Doc, options: PdfOptions): Promise<PdfResult> {
   const opts = { ...options, fontDir: options.fontDir ?? defaultFontDir() };
   const first = new Layout(doc, opts, undefined);

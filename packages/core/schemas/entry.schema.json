@@ -33,11 +33,12 @@
     "tags": { "type": "array", "items": { "type": "string" } },
     "summary": { "type": "string" },
     "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } },
+    "race": { "type": "string", "description": "Character only: race or kind, free text (human, camel-folk, ghoul, vampire...). Links to an entry when one has this id or name." },
     "born": { "$ref": "#/$defs/date" },
     "died": { "$ref": "#/$defs/date" },
     "status": {
       "enum": ["alive", "dead", "standing", "destroyed", "active", "dissolved", "intact", "lost", "unknown"],
-      "description": "character: alive/dead/unknown; place: standing/destroyed/unknown; faction: active/dissolved/unknown; item: intact/destroyed/lost/unknown. An ongoing status hides the end date in the editor; the value stays in the file."
+      "description": "character: alive/dead/unknown; place: standing/destroyed/unknown; faction: active/dissolved/unknown; item: intact/destroyed/lost/unknown. A missing status means unknown. An ongoing status hides the end date in the editor; the value stays in the file."
     },
     "locations": {
       "type": "array",
