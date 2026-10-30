@@ -17,3 +17,8 @@ import type { Warning, World } from './types.ts';
 export function check(world: World): Warning[] {
   return checkWorld(world, builtinRules);
 }
+export * from './publish/doc.ts';
+export { artBrief, type ArtBrief } from './publish/art.ts';
+export { worldBible, BIBLE_FORMAT_VERSION } from './publish/bible.ts';
+export { bookChapters, storyBook, LORE_AND_LEGENDS, type BookChapter, type BookPage } from './publish/book.ts';
+export { toMarkdown } from './publish/markdown.ts';

@@ -30,4 +30,4 @@ chapter: The Fall of Saltmere
 
 The white towers fell in a single night. The queen died on her throne.
 
-[[char-orsan|The old vizier]] opened the salt gate himself. The [[fac-dune-guard]] poured through, and by dawn [[Queen Ilsa]] was dead and @place-saltmere was burning.
+[[char-orsan|The old vizier]] opened the salt gate himself. [[fac-dune-guard]] poured through, and by dawn [[Queen Ilsa]] was dead and @place-saltmere was burning.
