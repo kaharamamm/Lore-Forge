@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
-  check, entryPath, familyTree, INTENDED_FILE, parseWorld, relationWeb, serializeEntry, serializeIntended, timelineModel, WorldIndex,
+  check, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, parseWorld, relationWeb, serializeEntry, serializeIntended, timelineModel, WorldIndex,
   type Entry, type EntryType, type FactRef, type Warning, type World,
 } from '@lore-forge/core';
 import type { PdfKind, PublishOptions } from '../shared/api.ts';
 import { EntryEditor } from './components/editor.tsx';
-import { RelationsView } from './components/relations.tsx';
+import { RelationsView, type RelationMode } from './components/relations.tsx';
 import { Sidebar } from './components/sidebar.tsx';
 import { StartScreen } from './components/start.tsx';
 import { TimelineView } from './components/timeline.tsx';
@@ -29,6 +29,22 @@ function newId(type: EntryType, name: string, taken: Set<string>): string {
 const SMOKE = new URLSearchParams(location.search).has('smoke');
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 const count = (sel: string) => document.querySelectorAll(sel).length;
+const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel);
+
+/** Smoke only: every pane spans from below the top bar to the bottom of the window, and the page itself never scrolls. */
+function paneFit(): string[] {
+  const bad: string[] = [];
+  const h = window.innerHeight;
+  const doc = document.scrollingElement!;
+  if (doc.scrollHeight > h + 1) bad.push(`page scrolls (${doc.scrollHeight} > ${h})`);
+  const top = $('.topbar')!.getBoundingClientRect().bottom;
+  for (const sel of ['.sidebar', '.main', '.warnings-panel']) {
+    const r = $(sel)?.getBoundingClientRect();
+    if (!r) bad.push(`${sel} missing`);
+    else if (Math.abs(r.bottom - h) > 1 || Math.abs(r.top - top) > 1) bad.push(`${sel} spans ${Math.round(r.top)}-${Math.round(r.bottom)}, window ${Math.round(top)}-${h}`);
+  }
+  return bad;
+}
 
 /** What the headless smoke test checks: the same builders the views and the preview use. */
 function smokeSummary(w: World): Record<string, unknown> {
@@ -57,7 +73,39 @@ function smokeSummary(w: World): Record<string, unknown> {
 }
 
 function blankEntry(type: EntryType, id: string, name: string): Entry {
-  return { id, type, name, body: '' } as Entry;
+  return { id, type, name, ...(LIFECYCLE[type] ? { status: DEFAULT_STATUS } : {}), body: '' } as Entry;
+}
+
+/** Where the user is: the place mouse back/forward and Alt+Left/Right return to. */
+interface Place {
+  view: View;
+  id: string | null;
+  preview: PdfKind | null;
+  relMode: RelationMode | null;
+}
+
+const samePlace = (a: Place, b: Place) => a.view === b.view && a.id === b.id && a.preview === b.preview && a.relMode === b.relMode;
+
+/**
+ * A back/forward stack of places. Every change of place is pushed (dropping any forward places);
+ * going back or forward restores a place without pushing it again.
+ */
+function useHistory(here: Place, restore: (p: Place) => void): { go: (step: -1 | 1) => void; reset: () => void } {
+  const h = useRef({ stack: [] as Place[], i: -1 });
+  useEffect(() => {
+    const s = h.current;
+    if (s.stack[s.i] && samePlace(s.stack[s.i]!, here)) return;
+    s.stack = [...s.stack.slice(0, s.i + 1), here].slice(-200);
+    s.i = s.stack.length - 1;
+  }, [here.view, here.id, here.preview, here.relMode]);
+  const go = (step: -1 | 1) => {
+    const s = h.current;
+    const place = s.stack[s.i + step];
+    if (!place) return;
+    s.i += step;
+    restore(place);
+  };
+  return { go, reset: () => { h.current = { stack: [], i: -1 }; } };
 }
 
 export function App() {
@@ -69,6 +117,13 @@ export function App() {
   const [query, setQuery] = useState('');
   const [save, setSave] = useState<SaveState>({ kind: 'saved' });
   const [preview, setPreview] = useState<PdfKind | null>(null);
+  const [relMode, setRelMode] = useState<RelationMode | null>(null);
+  const history = useHistory({ view, id: selectedId, preview, relMode }, (loc) => {
+    setView(loc.view);
+    setSelectedId(loc.id);
+    setPreview(loc.preview);
+    setRelMode(loc.relMode);
+  });
   const toasts = useToasts();
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const pending = useRef(new Map<string, () => Promise<void>>());
@@ -76,7 +131,10 @@ export function App() {
   const open = useCallback(async (d: string) => {
     try {
       const w = parseWorld(await window.lore.readWorld(d));
-      setDir(d);
+      setDir((cur) => {
+        if (cur !== d) history.reset();
+        return d;
+      });
       setWorld(w);
       setLoadError(null);
       setSelectedId((cur) => (cur && w.entries.some((e) => e.id === cur) ? cur : (w.entries[0]?.id ?? null)));
@@ -96,6 +154,9 @@ export function App() {
       // Smoke only: drive each view once and count what actually rendered.
       const summary = smokeSummary(w);
       const dom: Record<string, number> = {};
+      const fails: string[] = [];
+      const expect = (ok: boolean, what: string) => { if (!ok) fails.push(what); };
+      const mouse = (button: number) => { for (const type of ['mousedown', 'mouseup']) window.dispatchEvent(new MouseEvent(type, { button, bubbles: true })); };
       try {
         const leyla = w.entries.find((e) => e.id === 'char-leyla') ?? w.entries.find((e) => e.type === 'character');
         if (leyla) {
@@ -105,6 +166,47 @@ export function App() {
           dom['editorMentions'] = count('.prose-mirror mark.mention');
           dom['statusPills'] = count('.lifecycle [role=radio]');
           dom['relationSelects'] = count('[data-field^="relations"] select');
+          // Status: exactly one is always selected; clicking the selected one keeps it.
+          expect(count('.lifecycle [aria-checked="true"]') === 1, 'one status selected');
+          $('.lifecycle [aria-checked="true"]')?.click();
+          await tick();
+          expect(count('.lifecycle [aria-checked="true"]') === 1, 'status cannot be cleared');
+          dom['raceField'] = count('[data-field="race"] input');
+          expect(dom['raceField'] === 1, 'race field');
+          // Panes fill the window at a few sizes.
+          for (const [width, height] of [[1360, 860], [820, 520], [1100, 700]] as const) {
+            await window.lore.smokeResize(width, height);
+            for (let i = 0; i < 40 && (window.innerWidth !== width || window.innerHeight !== height); i++) await tick(50);
+            await tick(100);
+            const bad = paneFit();
+            if (window.innerWidth !== width || window.innerHeight !== height) bad.push(`window is ${window.innerWidth}x${window.innerHeight}`);
+            expect(bad.length === 0, `layout at ${width}x${height}: ${bad.join('; ')}`);
+            dom[`fit${width}x${height}`] = bad.length === 0 ? 1 : 0;
+          }
+          // Back/forward: entry A -> entry B -> timeline, then mouse 4 / Alt+Left back and mouse 5 forward.
+          const other = w.entries.find((e) => e.type === 'place') ?? w.entries.find((e) => e.id !== leyla.id)!;
+          setSelectedId(other.id);
+          await tick();
+          setView('timeline');
+          await tick();
+          mouse(3);
+          await tick(150);
+          expect(!!$(`[data-entry-id="${CSS.escape(other.id)}"][aria-current="page"]`) && !!$('.editor'), 'mouse back returns to the previous entry');
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true }));
+          await tick();
+          expect(!!$(`[data-entry-id="${CSS.escape(leyla.id)}"][aria-current="page"]`), 'Alt+Left returns to the first entry');
+          await tick(150);
+          mouse(4);
+          await tick();
+          expect(!!$(`[data-entry-id="${CSS.escape(other.id)}"][aria-current="page"]`), 'mouse forward');
+          await tick(150);
+          mouse(4);
+          await tick();
+          expect(!!$('.timeline, .tl-scroll'), 'forward to the timeline');
+          dom['history'] = 1;
+          setSelectedId(leyla.id);
+          setView('editor');
+          await tick();
           setView('relations');
           await tick();
           dom['treeNodes'] = count('.family-tree .node');
@@ -123,14 +225,16 @@ export function App() {
           await tick(150);
           dom[`${k}Sheets`] = count('.preview .sheet');
           dom[`${k}Headings`] = count('.preview .doc-h');
+          expect(($('#preview-title')?.textContent ?? '').includes(k === 'codex' ? 'World Codex' : 'Story Book'), `${k} preview title`);
           setPreview(null);
           await tick();
         }
         setView('editor');
       } catch (e) {
-        dom['error'] = 1;
-        console.error(e);
+        fails.push(String((e as Error).stack ?? e));
       }
+      // A console error fails the smoke run in the main process.
+      if (fails.length) console.error(`smoke checks failed: ${fails.join(' | ')}`);
       window.lore.smokeReport({ ...summary, dom });
     });
   }, [open]);
@@ -216,6 +320,17 @@ export function App() {
     onUnmark: (w: Warning) => world && setIntended(world.intended.filter((m) => m.warningId !== w.id)),
   };
 
+  /** One step back or forward. Windows can report a mouse button both as a DOM event and an app command; count it once. */
+  const lastNav = useRef({ at: 0, d: '' });
+  const navigate = (d: 'back' | 'forward'): void => {
+    const now = performance.now();
+    if (lastNav.current.d === d && now - lastNav.current.at < 120) return;
+    lastNav.current = { at: now, d };
+    history.go(d === 'back' ? -1 : 1);
+  };
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
   // Keyboard shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -232,6 +347,9 @@ export function App() {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
         document.getElementById('warnings-title')?.focus();
+      } else if (e.altKey && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        navigate(e.key === 'ArrowLeft' ? 'back' : 'forward');
       } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         const ids = [...document.querySelectorAll<HTMLElement>('[data-entry-id]')].map((b) => b.dataset['entryId']!);
         const i = selectedId ? ids.indexOf(selectedId) : -1;
@@ -246,6 +364,22 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+
+  // Mouse back/forward buttons (button 3 and 4 in the DOM).
+  useEffect(() => {
+    const onMouse = (e: MouseEvent): void => {
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      if (e.type === 'mouseup') navigate(e.button === 3 ? 'back' : 'forward');
+    };
+    window.addEventListener('mousedown', onMouse);
+    window.addEventListener('mouseup', onMouse);
+    return () => {
+      window.removeEventListener('mousedown', onMouse);
+      window.removeEventListener('mouseup', onMouse);
+    };
+  });
+  useEffect(() => window.lore.onNavigate((d) => navigateRef.current(d)), []);
 
   // Write anything pending before the window closes.
   useEffect(() => {
@@ -308,7 +442,7 @@ export function App() {
             </div>
           ))}
         {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} />}
-        {view === 'relations' && <RelationsView world={world} entry={selected} onOpen={(id) => setSelectedId(id)} />}
+        {view === 'relations' && <RelationsView world={world} entry={selected} mode={relMode} onMode={setRelMode} onOpen={(id) => setSelectedId(id)} />}
       </main>
       <WarningsPanel warnings={warnings} selectedId={selectedId} actions={actions} />
       {preview && <PreviewDialog dir={dir} world={world} kind={preview} onClose={() => setPreview(null)} onSave={savePdf} />}

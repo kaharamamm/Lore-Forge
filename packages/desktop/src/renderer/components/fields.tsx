@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { describeDate, parseDate, TYPE_EMOJI, TYPE_SINGULAR, WorldIndex, type Calendar, type World } from '@lore-forge/core';
+import { DATE_FORMATS_HINT, describeDate, parseDate, TYPE_EMOJI, TYPE_SINGULAR, WorldIndex, type Calendar, type World } from '@lore-forge/core';
 
 /** Empty input -> undefined, so empty fields disappear from the file. */
 export const opt = (s: string): string | undefined => (s.trim() === '' ? undefined : s);
@@ -63,7 +63,7 @@ export function ListText(props: { label: string; field: string; value: string[] 
 export function DateField(props: { label: string; field: string; value: string | undefined; calendar: Calendar; onChange: (v: string | undefined) => void }) {
   const r = parseDate(props.value, props.calendar);
   const invalid = r.kind === 'invalid';
-  const hint = props.value === undefined || props.value.trim() === '' ? 'Empty. e.g. 1800, ~1800, 1920-03-12, 410 OK, unknown' : describeDate(props.value, props.calendar);
+  const hint = props.value === undefined || props.value.trim() === '' ? `Empty. Type ${DATE_FORMATS_HINT}, e.g. 1920, 03.1920, 12.03.1920, 12.03` : describeDate(props.value, props.calendar);
   return (
     <Field label={props.label} field={props.field} hint={hint} invalid={invalid}>
       {(id, hintId) => (

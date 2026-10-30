@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'preact/hooks';
+import { useMemo } from 'preact/hooks';
 import { familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, WorldIndex, type Entry, type RelationGroup, type World } from '@lore-forge/core';
 import { FamilyTreeSvg, RelationWebSvg } from './graphs.tsx';
 import { EntryLabel, EntryLink } from './type.tsx';
@@ -12,10 +12,15 @@ interface Link {
   when?: string;
 }
 
-type Mode = 'web' | 'tree';
+export type RelationMode = 'web' | 'tree';
+type Mode = RelationMode;
 
-export function RelationsView({ world, entry, onOpen }: { world: World; entry: Entry | undefined; onOpen: (id: string) => void }) {
-  const [mode, setMode] = useState<Mode>(entry?.type === 'character' ? 'tree' : 'web');
+/** Default graph for an entry: characters open on their family tree, everything else on the web. */
+export const defaultRelationMode = (entry: Entry | undefined): Mode => (entry?.type === 'character' ? 'tree' : 'web');
+
+export function RelationsView({ world, entry, mode: chosen, onMode, onOpen }: { world: World; entry: Entry | undefined; mode: Mode | null; onMode: (m: Mode) => void; onOpen: (id: string) => void }) {
+  const mode = chosen ?? defaultRelationMode(entry);
+  const setMode = onMode;
   const tree = useMemo(() => (mode === 'tree' ? familyTree(world, entry?.id) : undefined), [world, entry?.id, mode]);
   const web = useMemo(() => (mode === 'web' && entry ? relationWeb(world, entry.id) : undefined), [world, entry?.id, mode]);
   if (!entry) {

@@ -16,12 +16,12 @@ function useMatcher(world: World): MentionMatcher {
 function EntryCard({ ix, entry }: { ix: WorldIndex; entry: Entry }) {
   const life = ix.life(entry);
   const dates = life.start || life.end ? `${life.start ? ix.fmt(life.start.date) : '?'} – ${life.end ? ix.fmt(life.end.date) : ''}` : 'No dates';
-  const s = statusOf(entry);
-  const status = s ? LIFECYCLE[entry.type]?.statuses.find((x) => x.value === s) : undefined;
+  const status = LIFECYCLE[entry.type]?.statuses.find((x) => x.value === statusOf(entry));
+  const race = entry.type === 'character' && entry.race ? ix.nameOf(entry.race) : undefined;
   return (
     <div class="card-body">
       <div class="card-title"><EntryLabel entry={entry} /></div>
-      <div class="card-meta"><TypeBadge type={entry.type} /> <span>{dates}</span>{status && <span> · <span aria-hidden="true">{status.emoji} </span>{status.label}</span>}</div>
+      <div class="card-meta"><TypeBadge type={entry.type} />{race && <span class="card-race"> {race}</span>} <span>{dates}</span>{status && <span> · <span aria-hidden="true">{status.emoji} </span>{status.label}</span>}</div>
       {entry.summary && <p class="card-summary">{entry.summary}</p>}
     </div>
   );

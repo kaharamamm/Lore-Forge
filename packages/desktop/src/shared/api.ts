@@ -25,8 +25,12 @@ export interface LoreApi {
   exportPdf(dir: string, kind: PdfKind, options?: PublishOptions): Promise<PdfExport | null>;
   /** Reveal a saved file in the system file manager. */
   showInFolder(path: string): Promise<void>;
+  /** Back/forward from the OS (Windows app-command: mouse buttons 4/5, media keys). */
+  onNavigate(cb: (direction: 'back' | 'forward') => void): void;
   /** Used by the headless smoke test only. */
   smokeReport(summary: Record<string, unknown>): void;
+  /** Smoke test only: set the window's content size. */
+  smokeResize(width: number, height: number): Promise<void>;
 }
 
 declare global {

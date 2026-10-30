@@ -1,5 +1,5 @@
 import {
-  endFieldVisible, endValue, LIFECYCLE, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_EMOJI, TYPE_SINGULAR, VISUAL_FIELDS, WorldIndex,
+  DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_EMOJI, TYPE_SINGULAR, VISUAL_FIELDS, WorldIndex,
   type Action, type Character, type Entry, type EntryType, type LocationSpan, type LoreEvent, type Participant, type Relation, type RelationGroup, type Warning, type World,
 } from '@lore-forge/core';
 import { useState } from 'preact/hooks';
@@ -54,7 +54,7 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
       </div>
 
       {LIFECYCLE[entry.type] && <LifecycleFields world={world} entry={entry} onChange={onChange} />}
-      {entry.type === 'character' && <CharacterFields world={world} e={entry} set={set(entry)} />}
+      {entry.type === 'character' && <CharacterFields world={world} e={entry} set={set(entry)} onOpen={onOpen} />}
       {entry.type === 'place' && (
         <div class="grid-3">
           <RefField label="Part of (region)" field="partOf" value={entry.partOf} world={world} types={['place']} onChange={(partOf) => set(entry)({ partOf })} />
@@ -131,6 +131,16 @@ function Pick(props: { label: string; field: string; value: string; options: str
   );
 }
 
+/** Arrow keys move the single selected status, like a radio group; there is always exactly one. */
+function statusKeys(ev: KeyboardEvent, values: string[], current: string, pick: (v: string) => void): void {
+  const step = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? -1 : 0;
+  if (!step || ev.altKey) return;
+  ev.preventDefault();
+  const next = values[(values.indexOf(current) + step + values.length) % values.length]!;
+  pick(next);
+  requestAnimationFrame(() => (ev.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
+}
+
 const START_FIELD: Partial<Record<EntryType, [string, string]>> = { character: ['born', 'Born'], place: ['founded', 'Founded'], faction: ['founded', 'Founded'], item: ['created', 'Made'] };
 
 /**
@@ -142,7 +152,7 @@ function LifecycleFields({ world, entry, onChange }: { world: World; entry: Entr
   const cal = world.manifest.calendar;
   const rec = entry as unknown as Record<string, string | undefined>;
   const put = (patch: Record<string, string | undefined>) => onChange(clean({ ...entry, ...patch }) as Entry);
-  const status = rec['status'];
+  const status = statusOf(entry) ?? DEFAULT_STATUS;
   const [startField, startLabel] = START_FIELD[entry.type]!;
   const showEnd = endFieldVisible(entry);
   const hidden = !showEnd ? endValue(entry) : undefined;
@@ -153,10 +163,10 @@ function LifecycleFields({ world, entry, onChange }: { world: World; entry: Entr
       <div class="grid-3">
         <Field label="Status" field="status">
           {(id) => (
-            <div class="status-pills" role="radiogroup" id={id} aria-label="Status">
+            <div class="status-pills" role="radiogroup" id={id} aria-label="Status" onKeyDown={(ev) => statusKeys(ev, lc.statuses.map((x) => x.value), status, (v) => put({ status: v }))}>
               {lc.statuses.map((o) => (
-                <button key={o.value} type="button" role="radio" aria-checked={status === o.value} class={`pill status-${o.value}`}
-                  onClick={() => put({ status: status === o.value ? undefined : o.value })}>
+                <button key={o.value} type="button" role="radio" aria-checked={status === o.value} tabIndex={status === o.value ? 0 : -1} class={`pill status-${o.value}`}
+                  onClick={() => status !== o.value && put({ status: o.value })}>
                   <span aria-hidden="true">{o.emoji} </span>{o.label}
                 </button>
               ))}
@@ -215,10 +225,26 @@ function RelationTypeField({ world, entry, r, field, onChange }: { world: World;
   );
 }
 
-function CharacterFields({ world, e, set }: { world: World; e: Character; set: (p: Partial<Character>) => void }) {
+/** Race or kind: free text, suggestions from the world first; linked when an entry has that id or name. */
+function RaceField({ world, e, set, onOpen }: { world: World; e: Character; set: (p: Partial<Character>) => void; onOpen: (id: string) => void }) {
+  const target = e.race ? new WorldIndex(world).resolve(e.race) : undefined;
+  return (
+    <Field label="Race or kind" field="race" hint={target ? <>Linked to <button type="button" class="link" data-race-link={target.id} onClick={() => onOpen(target.id)}>{target.name}</button></> : 'Free text, e.g. human, camel-folk, ghoul, vampire'}>
+      {(id, hintId) => (
+        <>
+          <input id={id} type="text" list={`${id}-list`} value={e.race ?? ''} aria-describedby={hintId} onInput={(ev) => set({ race: ev.currentTarget.value.trim() === '' ? undefined : ev.currentTarget.value })} />
+          <datalist id={`${id}-list`}>{raceSuggestions(world.entries).map((r) => <option key={r} value={r} />)}</datalist>
+        </>
+      )}
+    </Field>
+  );
+}
+
+function CharacterFields({ world, e, set, onOpen }: { world: World; e: Character; set: (p: Partial<Character>) => void; onOpen: (id: string) => void }) {
   const cal = world.manifest.calendar;
   return (
     <>
+      <RaceField world={world} e={e} set={set} onOpen={onOpen} />
       <ListEditor<LocationSpan>
         title="Locations over time"
         field="locations"

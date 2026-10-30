@@ -153,6 +153,9 @@ function registerIpc(): void {
     if (r.canceled || !r.filePath) return null;
     return publish(dir, kind, r.filePath, options);
   });
+  ipcMain.handle('smokeResize', (_e, width: number, height: number) => {
+    if (SMOKE) win?.setContentSize(width, height);
+  });
   ipcMain.on('smokeReport', (_e, summary: unknown) => {
     if (!SMOKE) return;
     const dir = initialWorld();
@@ -173,8 +176,8 @@ function createWindow(): void {
   win = new BrowserWindow({
     width: 1360,
     height: 860,
-    minWidth: 480,
-    minHeight: 400,
+    minWidth: 800,
+    minHeight: 480,
     title: 'Lore-Forge',
     backgroundColor: '#14161b',
     show: !SMOKE,
@@ -187,6 +190,11 @@ function createWindow(): void {
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e) => e.preventDefault());
+  // Windows sends the mouse back/forward buttons as app commands; Linux and macOS deliver them to the page.
+  win.on('app-command', (_e, cmd) => {
+    if (cmd === 'browser-backward') win?.webContents.send('navigate', 'back');
+    if (cmd === 'browser-forward') win?.webContents.send('navigate', 'forward');
+  });
   if (SMOKE) {
     win.webContents.on('console-message', (e) => {
       if (e.level === 'error') {

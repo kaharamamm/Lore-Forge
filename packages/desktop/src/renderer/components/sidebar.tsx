@@ -49,6 +49,7 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
                 <li key={e.id}>
                   <button type="button" class={`entry-link t-${e.type}${ended ? ' is-ended' : ''}`} aria-current={e.id === selectedId ? 'page' : undefined} data-entry-id={e.id} onClick={() => onSelect(e.id)}>
                     <span class="entry-name">{e.name}{ended && lc && <span class="ended-mark" title={lc.endedWord}> <span aria-hidden="true">{lc.endedMark}</span><span class="sr-only">({lc.endedWord})</span></span>}</span>
+                    {e.type === 'character' && e.race && <span class="entry-sub">{e.race}</span>}
                     <CountBadge warnings={warnings.filter((w) => involves(w, e.id))} />
                   </button>
                 </li>

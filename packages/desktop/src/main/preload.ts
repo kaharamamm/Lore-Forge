@@ -14,7 +14,9 @@ const api: LoreApi = {
   readImage: (dir, path) => ipcRenderer.invoke('readImage', dir, path),
   exportPdf: (dir, kind, options) => ipcRenderer.invoke('exportPdf', dir, kind, options ?? {}),
   showInFolder: (path) => ipcRenderer.invoke('showInFolder', path),
+  onNavigate: (cb) => void ipcRenderer.on('navigate', (_e, direction: 'back' | 'forward') => cb(direction)),
   smokeReport: (summary) => ipcRenderer.send('smokeReport', summary),
+  smokeResize: (width, height) => ipcRenderer.invoke('smokeResize', width, height),
 };
 
 contextBridge.exposeInMainWorld('lore', api);
