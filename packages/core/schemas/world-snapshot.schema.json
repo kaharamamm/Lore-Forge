@@ -16,6 +16,7 @@
         "required": ["entry", "file", "dates"],
         "properties": {
           "entry": {
+            "type": "object",
             "allOf": [{ "$ref": "entry.schema.json" }],
             "required": ["body"],
             "properties": {

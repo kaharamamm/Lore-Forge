@@ -26,5 +26,9 @@
     "@types/node": "^24.19.2",
     "ajv": "^8.20.0",
     "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true
   }
 }

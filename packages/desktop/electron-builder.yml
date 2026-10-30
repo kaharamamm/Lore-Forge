@@ -1,0 +1,18 @@
+appId: dev.kaharamamm.loreforge
+productName: Lore-Forge
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: ../../examples
+    to: examples
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+linux:
+  target: AppImage
+  category: Office
