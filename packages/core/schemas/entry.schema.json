@@ -45,14 +45,26 @@
         "additionalProperties": false
       }
     },
+    "visual": {
+      "type": "object",
+      "description": "Free-text visual description for art. Usual keys: character appearance/build/clothing/palette/features/props; place architecture/climate/palette/scale; faction emblem/attire/palette; item material/size/details; event scene/mood. Other keys allowed.",
+      "additionalProperties": { "type": "string" }
+    },
+    "chapter": { "type": "string", "description": "Story Book chapter title override (events and notes)." },
+    "bookOrder": { "type": "number", "description": "Story Book order inside the chapter; default 0, lower first, ties by date then name." },
     "images": {
       "type": "array",
+      "description": "Reference images, on any entry type.",
       "items": {
         "type": "object",
         "required": ["file", "view"],
         "properties": {
           "file": { "type": "string", "description": "Path relative to the world folder, normally images/<entryId>/<file>." },
-          "view": { "enum": ["a-pose", "front", "back", "left", "right", "three-quarter", "concept"] },
+          "view": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "description": "Kebab-case view label. Usual views per type: character a-pose/front/back/left/right/three-quarter/concept; place establishing/map/interior/exterior/mood/concept; faction emblem/banner/uniform/headquarters/concept; item front/back/side/top/detail/concept; event scene/establishing/map/mood/concept; note illustration/map/concept. Others are allowed (info warning image-view)."
+          },
           "provenance": {
             "type": "object",
             "properties": {

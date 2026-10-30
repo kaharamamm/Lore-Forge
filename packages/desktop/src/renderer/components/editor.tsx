@@ -1,4 +1,4 @@
-import { bodyLinks, TYPE_LABELS, WorldIndex, type Action, type Character, type Entry, type LocationSpan, type LoreEvent, type Participant, type Relation, type Warning, type World } from '@lore-forge/core';
+import { bodyLinks, TYPE_LABELS, VISUAL_FIELDS, WorldIndex, type Action, type Character, type Entry, type LocationSpan, type LoreEvent, type Participant, type Relation, type Warning, type World } from '@lore-forge/core';
 import { DateField, ListEditor, ListText, RefField, SelectField, TextField } from './fields.tsx';
 import { ImageSlots } from './images.tsx';
 import { WarningItem, type WarningActions } from './warnings.tsx';
@@ -50,7 +50,7 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
         <ListText label="Tags (comma-separated)" field="tags" value={entry.tags} onChange={(tags) => base({ tags })} resetKey={entry.id} />
       </div>
 
-      {entry.type === 'character' && <CharacterFields dir={dir} world={world} e={entry} set={set(entry)} />}
+      {entry.type === 'character' && <CharacterFields world={world} e={entry} set={set(entry)} />}
       {entry.type === 'place' && (
         <div class="grid-3">
           <DateField label="Founded" field="founded" value={entry.founded} calendar={cal} onChange={(founded) => set(entry)({ founded })} />
@@ -71,6 +71,37 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
         </div>
       )}
       {entry.type === 'event' && <EventFields world={world} e={entry} set={set(entry)} />}
+      {entry.type === 'note' && (
+        <div class="grid-3">
+          <DateField label="Date (optional)" field="date" value={entry.date} calendar={cal} onChange={(date) => set(entry)({ date })} />
+        </div>
+      )}
+      {(entry.type === 'event' || entry.type === 'note') && (
+        <fieldset class="list-editor">
+          <legend>Story Book</legend>
+          <div class="grid-2">
+            <TextField label="Chapter (optional)" field="chapter" value={entry.chapter} onChange={(chapter) => base({ chapter })} hint="Leave empty to place it by date in its era or year range." />
+            <TextField label="Order in chapter" field="bookOrder" value={entry.bookOrder?.toString()} onChange={(v) => base({ bookOrder: v !== undefined && Number.isFinite(Number(v)) ? Number(v) : undefined })} hint="Default 0. Lower comes first; ties go by date." />
+          </div>
+        </fieldset>
+      )}
+
+      {VISUAL_FIELDS[entry.type].length > 0 && (
+        <fieldset class="list-editor" data-field="visual">
+          <legend>Visual description</legend>
+          <p class="muted">Free text for artists and image or 3D tools. Used for the art briefs in the World Bible.</p>
+          <div class="grid-2">
+            {VISUAL_FIELDS[entry.type].map((f) => (
+              <TextField key={f.key} label={f.label} field={`visual.${f.key}`} value={entry.visual?.[f.key]} placeholder={f.hint} multiline
+                onChange={(v) => {
+                  const visual = Object.fromEntries(Object.entries({ ...entry.visual, [f.key]: v }).filter(([, x]) => x !== undefined)) as Record<string, string>;
+                  base({ visual: Object.keys(visual).length ? visual : undefined });
+                }} />
+            ))}
+          </div>
+        </fieldset>
+      )}
+      <ImageSlots dir={dir} entry={entry} onChange={(images) => base({ images })} />
 
       <ListEditor<Relation>
         title="Relationships"
@@ -129,7 +160,7 @@ function Pick(props: { label: string; field: string; value: string; options: str
   );
 }
 
-function CharacterFields({ dir, world, e, set }: { dir: string; world: World; e: Character; set: (p: Partial<Character>) => void }) {
+function CharacterFields({ world, e, set }: { world: World; e: Character; set: (p: Partial<Character>) => void }) {
   const cal = world.manifest.calendar;
   return (
     <>
@@ -153,7 +184,6 @@ function CharacterFields({ dir, world, e, set }: { dir: string; world: World; e:
           </>
         )}
       />
-      <ImageSlots dir={dir} entry={e} onChange={(images) => set({ images })} />
     </>
   );
 }

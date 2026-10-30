@@ -14,7 +14,7 @@ const LIFE_FIELDS = {
   faction: [['founded', 'was founded'], ['dissolved', 'was dissolved']],
   item: [['created', 'was made'], ['destroyed', 'was destroyed']],
   event: [['date', 'started'], ['end', 'ended']],
-  note: [],
+  note: [['date', 'is set']],
 } as const satisfies Record<Entry['type'], readonly (readonly [string, string])[]>;
 
 export const normalizeName = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ');

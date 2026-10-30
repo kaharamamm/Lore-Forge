@@ -41,6 +41,16 @@
       },
       "additionalProperties": false
     },
+    "book": {
+      "type": "object",
+      "description": "Story Book export settings.",
+      "properties": {
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "chapterYears": { "type": "integer", "minimum": 1, "description": "Split each era into chapters of this many years; default one chapter per era." }
+      },
+      "additionalProperties": false
+    },
     "rules": {
       "type": "object",
       "additionalProperties": { "enum": ["error", "warning", "info", "off"] }

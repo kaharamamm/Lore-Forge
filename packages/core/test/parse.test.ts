@@ -56,3 +56,22 @@ test('duplicate ids and misplaced files become load issues', () => {
   assert.deepEqual(w.entries.map((e) => e.id), ['a', 'b']);
   assert.deepEqual(w.issues.map((i) => i.file), ['notes/a.md', 'notes/b.md']);
 });
+
+test('every entry type can carry reference images, a visual description and book fields', () => {
+  const entries: Entry[] = [
+    { id: 'place-gate', type: 'place', name: 'Gate', visual: { architecture: 'Bronze arch', palette: 'copper, sand' }, images: [{ file: 'images/place-gate/establishing.png', view: 'establishing' }], body: '' },
+    { id: 'item-compass', type: 'item', name: 'Compass', visual: { material: 'Glass and brass' }, images: [{ file: 'images/item-compass/top.png', view: 'top', provenance: { tool: 'Blender' } }], body: '' },
+    { id: 'evt-fall', type: 'event', name: 'Fall', date: '1920', visual: { scene: 'Towers burning', mood: 'grim' }, images: [{ file: 'images/evt-fall/scene.png', view: 'scene' }], chapter: 'The Fall', bookOrder: -1, body: '' },
+    { id: 'fac-guard', type: 'faction', name: 'Guard', images: [{ file: 'images/fac-guard/emblem.png', view: 'emblem' }], body: '' },
+    { id: 'note-song', type: 'note', name: 'Song', date: '~1850', bookOrder: 2, images: [{ file: 'images/note-song/illustration.png', view: 'illustration' }], body: 'Ş ğ İ ı\n' },
+  ];
+  for (const e of entries) {
+    const { entry, problems } = parseEntry(serializeEntry(e));
+    assert.deepEqual(problems, []);
+    assert.deepEqual(entry, e);
+  }
+});
+
+test('a non-number bookOrder is reported', () => {
+  assert.deepEqual(parseEntry('---\nid: a\ntype: note\nname: A\nbookOrder: soon\n---\n').problems, ['"bookOrder" should be a number.']);
+});

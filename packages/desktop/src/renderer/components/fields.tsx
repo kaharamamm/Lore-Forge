@@ -26,10 +26,12 @@ export function Field({ label, field, hint, invalid, children }: FieldProps) {
   );
 }
 
-export function TextField(props: { label: string; field: string; value: string | undefined; onChange: (v: string | undefined) => void; placeholder?: string; hint?: string }) {
+export function TextField(props: { label: string; field: string; value: string | undefined; onChange: (v: string | undefined) => void; placeholder?: string; hint?: string; multiline?: boolean }) {
   return (
     <Field label={props.label} field={props.field} hint={props.hint}>
-      {(id, hintId) => (
+      {(id, hintId) => props.multiline ? (
+        <textarea id={id} rows={2} value={props.value ?? ''} placeholder={props.placeholder} aria-describedby={props.hint ? hintId : undefined} onInput={(e) => props.onChange(opt(e.currentTarget.value))} />
+      ) : (
         <input id={id} type="text" value={props.value ?? ''} placeholder={props.placeholder} aria-describedby={props.hint ? hintId : undefined} onInput={(e) => props.onChange(opt(e.currentTarget.value))} />
       )}
     </Field>

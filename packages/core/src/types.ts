@@ -63,6 +63,15 @@ export interface WorldManifest {
   calendar: Calendar;
   /** Per-rule severity overrides, e.g. { "duplicate-name": "off" }. */
   rules?: Record<string, RuleSetting>;
+  /** Story Book export settings. */
+  book?: BookSettings;
+}
+
+export interface BookSettings {
+  title?: string;
+  author?: string;
+  /** Split each era into chapters of this many years. Without it, one chapter per era. */
+  chapterYears?: number;
 }
 
 export interface Relation {
@@ -82,8 +91,66 @@ export interface LocationSpan {
   note?: string;
 }
 
-export const IMAGE_VIEWS = ['a-pose', 'front', 'back', 'left', 'right', 'three-quarter', 'concept'] as const;
-export type ImageView = (typeof IMAGE_VIEWS)[number];
+/**
+ * Suggested reference-image views per entry type: what the app offers and what exports expect.
+ * `view` may be any kebab-case label; one outside this list gets an info-level `image-view` warning.
+ */
+export const IMAGE_VIEWS: Record<EntryType, readonly string[]> = {
+  character: ['a-pose', 'front', 'back', 'left', 'right', 'three-quarter', 'concept'],
+  place: ['establishing', 'map', 'interior', 'exterior', 'mood', 'concept'],
+  faction: ['emblem', 'banner', 'uniform', 'headquarters', 'concept'],
+  item: ['front', 'back', 'side', 'top', 'detail', 'concept'],
+  event: ['scene', 'establishing', 'map', 'mood', 'concept'],
+  note: ['illustration', 'map', 'concept'],
+};
+export type ImageView = string;
+
+const VIEW_LABELS: Record<string, string> = {
+  'a-pose': 'A-pose',
+  'three-quarter': 'Three-quarter',
+  establishing: 'Establishing shot',
+  headquarters: 'Headquarters',
+};
+/** Display label for a view id, e.g. "a-pose" -> "A-pose", "establishing" -> "Establishing shot". */
+export function viewLabel(view: string): string {
+  return VIEW_LABELS[view] ?? view.charAt(0).toUpperCase() + view.slice(1).replace(/-/g, ' ');
+}
+
+/**
+ * Optional free-text visual description fields per type, for artists and image/3D tools.
+ * Stored under `visual:` in the front matter. Other keys are allowed and kept.
+ */
+export const VISUAL_FIELDS: Record<EntryType, readonly { key: string; label: string; hint: string }[]> = {
+  character: [
+    { key: 'appearance', label: 'Appearance', hint: 'Species, face, hair, skin, age as seen' },
+    { key: 'build', label: 'Height & build', hint: 'e.g. 1.9 m, broad-shouldered' },
+    { key: 'clothing', label: 'Clothing', hint: 'What they usually wear' },
+    { key: 'palette', label: 'Colour palette', hint: 'Main colours' },
+    { key: 'features', label: 'Distinguishing features', hint: 'Scars, marks, posture' },
+    { key: 'props', label: 'Props', hint: 'Things they always carry' },
+  ],
+  place: [
+    { key: 'architecture', label: 'Architecture', hint: 'Buildings, materials, style' },
+    { key: 'climate', label: 'Climate & weather', hint: 'Light, weather, season' },
+    { key: 'palette', label: 'Colour palette', hint: 'Main colours' },
+    { key: 'scale', label: 'Scale', hint: 'Size, population, distances' },
+  ],
+  faction: [
+    { key: 'emblem', label: 'Emblem & symbols', hint: 'Banner, sigil' },
+    { key: 'attire', label: 'Attire', hint: 'Uniforms, armour, colours worn' },
+    { key: 'palette', label: 'Colour palette', hint: 'Main colours' },
+  ],
+  item: [
+    { key: 'material', label: 'Material', hint: 'What it is made of' },
+    { key: 'size', label: 'Size', hint: 'Dimensions, weight' },
+    { key: 'details', label: 'Details', hint: 'Engravings, wear, moving parts' },
+  ],
+  event: [
+    { key: 'scene', label: 'Scene description', hint: 'What a picture of it shows' },
+    { key: 'mood', label: 'Mood', hint: 'Light, atmosphere, emotion' },
+  ],
+  note: [],
+};
 
 export interface Provenance {
   tool?: string;
@@ -121,6 +188,14 @@ interface EntryBase {
   tags?: string[];
   summary?: string;
   relations?: Relation[];
+  /** Reference images. Views come from IMAGE_VIEWS[type]. */
+  images?: RefImage[];
+  /** Free-text visual description; keys from VISUAL_FIELDS[type]. */
+  visual?: Record<string, string>;
+  /** Story Book: put this page in a chapter with this title instead of the automatic era/year chapter. */
+  chapter?: string;
+  /** Story Book: order inside the chapter. Default 0; lower comes first; ties go by date, then name. */
+  bookOrder?: number;
   /** Markdown body. May reference entries as [[id]], [[Name]], [[id|label]] or @id. */
   body: string;
   /** Front-matter keys Lore-Forge does not know. Kept as-is when the file is saved. */
@@ -133,7 +208,6 @@ export interface Character extends EntryBase {
   died?: DateText;
   status?: 'alive' | 'dead' | 'unknown';
   locations?: LocationSpan[];
-  images?: RefImage[];
 }
 export interface Place extends EntryBase {
   type: 'place';
@@ -162,6 +236,8 @@ export interface LoreEvent extends EntryBase {
 }
 export interface Note extends EntryBase {
   type: 'note';
+  /** Optional in-world date the page is about; used to place it in the Story Book. */
+  date?: DateText;
 }
 
 export type Entry = Character | Place | Faction | Item | LoreEvent | Note;

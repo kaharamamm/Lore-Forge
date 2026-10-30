@@ -91,7 +91,7 @@ function registerIpc(): void {
     const src = r.filePaths[0];
     if (r.canceled || !src) return null;
     const safeId = entryId.replace(/[^\w-]+/g, '-');
-    const rel = `images/${safeId}/${view}-${basename(src).replace(/[^\w.-]+/g, '-')}`;
+    const rel = `images/${safeId}/${view.replace(/[^\w-]+/g, '-')}-${basename(src).replace(/[^\w.-]+/g, '-')}`;
     const full = inside(dir, rel);
     await mkdir(join(full, '..'), { recursive: true });
     await copyFile(src, full);

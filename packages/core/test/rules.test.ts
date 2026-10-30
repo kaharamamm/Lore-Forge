@@ -177,3 +177,17 @@ test('custom rules can be registered; ids must be unique', () => {
 test('a clean world has no warnings', () => {
   assert.deepEqual(warnings([X, Y, { id: 'e', type: 'event', name: 'Met', date: '1795', participants: [{ id: 'char-x' }] }]), []);
 });
+
+test('image-view: an unusual view label is info, usual views for the type are fine', () => {
+  const ws = warnings([
+    { id: 'item-a', type: 'item', name: 'A', images: [{ file: 'a.png', view: 'top' }, { file: 'b.png', view: 'a-pose' }] },
+    { id: 'char-b', type: 'character', name: 'B', images: [{ file: 'c.png', view: 'a-pose' }, { file: 'd.png', view: 'fornt' }] },
+    { id: 'place-c', type: 'place', name: 'C', images: [{ file: 'e.png', view: 'establishing' }] },
+  ], 'image-view');
+  assert.deepEqual(ws.map((w) => [w.id, w.severity]), [['image-view:char-b:1', 'info'], ['image-view:item-a:1', 'info']].sort());
+  assert.match(ws.find((w) => w.id === 'image-view:item-a:1')!.message, /"a-pose", which is not a usual view for an item \(usual: Front, Back, Side, Top, Detail, Concept\)/);
+});
+
+test('a dated note is checked like any other date', () => {
+  assert.equal(warnings([{ id: 'note-a', type: 'note', name: 'A', date: '1750 XX' }], 'invalid-date').length, 1);
+});

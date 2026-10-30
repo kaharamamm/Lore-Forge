@@ -1,6 +1,6 @@
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { Document, isScalar, parse as parseYaml, visit } from 'yaml';
 import {
-  ENTRY_TYPES, IMAGE_VIEWS, SCHEMA_VERSION, TYPE_FOLDERS,
+  ENTRY_TYPES, SCHEMA_VERSION, TYPE_FOLDERS,
   type Action, type Entry, type EntryType, type IntendedMark, type LoadIssue, type LocationSpan,
   type Participant, type Provenance, type RefImage, type Relation, type World, type WorldManifest,
 } from './types.ts';
@@ -50,6 +50,27 @@ class Reader {
     });
     return out;
   }
+  num(o: Obj, key: string): number | undefined {
+    const v = o[key];
+    if (v === undefined || v === null) return undefined;
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    this.problems.push(`"${key}" should be a number.`);
+    return undefined;
+  }
+  strMap(o: Obj, key: string): Record<string, string> | undefined {
+    const v = o[key];
+    if (v === undefined || v === null) return undefined;
+    if (!isObj(v)) {
+      this.problems.push(`"${key}" should be a set of "name: text" lines.`);
+      return undefined;
+    }
+    const out: Record<string, string> = {};
+    for (const k of Object.keys(v)) {
+      const s = this.str(v, k);
+      if (s !== undefined && s.trim() !== '') out[k] = s;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
   need(o: Obj, key: string, where: string): string | undefined {
     const v = this.str(o, key);
     if (v === undefined || v.trim() === '') this.problems.push(where === 'entry' ? `Missing "${key}".` : `"${where}" needs "${key}".`);
@@ -63,14 +84,14 @@ function clean<T extends object>(o: T): T {
 }
 
 const KNOWN_KEYS: Record<EntryType, string[]> = {
-  character: ['born', 'died', 'status', 'locations', 'images'],
+  character: ['born', 'died', 'status', 'locations'],
   place: ['founded', 'destroyed', 'partOf'],
   faction: ['founded', 'dissolved'],
   item: ['created', 'destroyed'],
   event: ['date', 'end', 'place', 'participants', 'actions'],
-  note: [],
+  note: ['date'],
 };
-const BASE_KEYS = ['id', 'type', 'name', 'aliases', 'tags', 'summary', 'relations'];
+const BASE_KEYS = ['id', 'type', 'name', 'aliases', 'tags', 'summary', 'relations', 'images', 'visual', 'chapter', 'bookOrder'];
 
 export function splitFrontMatter(content: string): { data: unknown; body: string } | { error: string } {
   const text = content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
@@ -108,6 +129,16 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
     if (!rt || !target) return undefined;
     return clean({ type: rt, target, from: r.str(x, 'from'), to: r.str(x, 'to'), note: r.str(x, 'note') });
   };
+  const image = (x: Obj, w: string): RefImage | undefined => {
+    const file = r.need(x, 'file', w);
+    const view = r.need(x, 'view', w);
+    if (!file || !view) return undefined;
+    const p = x['provenance'];
+    const provenance: Provenance | undefined = isObj(p)
+      ? clean({ tool: r.str(p, 'tool'), prompt: r.str(p, 'prompt'), date: r.str(p, 'date'), sources: r.strList(p, 'sources'), rights: r.str(p, 'rights') })
+      : undefined;
+    return clean({ file, view, provenance });
+  };
   const extraKeys = Object.keys(o).filter((k) => !BASE_KEYS.includes(k) && !KNOWN_KEYS[t].includes(k));
   const base = clean({
     id, name,
@@ -115,6 +146,10 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
     tags: r.strList(o, 'tags'),
     summary: r.str(o, 'summary'),
     relations: r.list(o, 'relations', relation),
+    images: r.list(o, 'images', image),
+    visual: r.strMap(o, 'visual'),
+    chapter: r.str(o, 'chapter'),
+    bookOrder: r.num(o, 'bookOrder'),
     body: split.body,
     extra: extraKeys.length ? Object.fromEntries(extraKeys.map((k) => [k, o[k]])) : undefined,
   });
@@ -128,21 +163,10 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
         const place = r.need(x, 'place', w);
         return place ? clean({ place, from: r.str(x, 'from'), to: r.str(x, 'to'), note: r.str(x, 'note') }) : undefined;
       };
-      const image = (x: Obj, w: string): RefImage | undefined => {
-        const file = r.need(x, 'file', w);
-        const view = r.need(x, 'view', w);
-        if (view && !(IMAGE_VIEWS as readonly string[]).includes(view)) r.problems.push(`"${w}.view" must be one of: ${IMAGE_VIEWS.join(', ')}.`);
-        if (!file || !view) return undefined;
-        const p = x['provenance'];
-        const provenance: Provenance | undefined = isObj(p)
-          ? clean({ tool: r.str(p, 'tool'), prompt: r.str(p, 'prompt'), date: r.str(p, 'date'), sources: r.strList(p, 'sources'), rights: r.str(p, 'rights') })
-          : undefined;
-        return clean({ file, view: view as RefImage['view'], provenance });
-      };
       entry = clean({
         ...base, type: t, born: r.str(o, 'born'), died: r.str(o, 'died'),
         status: status as 'alive' | 'dead' | 'unknown' | undefined,
-        locations: r.list(o, 'locations', location), images: r.list(o, 'images', image),
+        locations: r.list(o, 'locations', location),
       });
       break;
     }
@@ -172,14 +196,14 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
       break;
     }
     case 'note':
-      entry = { ...base, type: t };
+      entry = clean({ ...base, type: t, date: r.str(o, 'date') });
       break;
   }
   return { entry, problems: r.problems };
 }
 
 /** Front-matter key order used when writing files, so diffs stay small. */
-const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'images'];
+const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'visual', 'images', 'chapter', 'bookOrder'];
 
 export function serializeEntry(entry: Entry): string {
   const { body, extra, ...fields } = entry;
@@ -190,7 +214,10 @@ export function serializeEntry(entry: Entry): string {
     if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
     data[k] = v;
   }
-  const yamlText = stringifyYaml(data, { lineWidth: 0 });
+  const doc = new Document(data);
+  // Quote date-like text ("1800", "~1200", "2026-10-30") so every YAML reader sees a string, not a number or timestamp.
+  visit(doc, { Scalar: (_k, node) => { if (isScalar(node) && typeof node.value === 'string' && /^[~?\d-]/.test(node.value)) node.type = 'QUOTE_DOUBLE'; } });
+  const yamlText = doc.toString({ lineWidth: 0 });
   return `---\n${yamlText}---\n\n${body.replace(/^\n+/, '')}${body.endsWith('\n') || body === '' ? '' : '\n'}`;
 }
 
