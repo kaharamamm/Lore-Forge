@@ -3,23 +3,31 @@ import { realpathSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { check, report, snapshot, storyBook, worldCodex, WorldFormatError, type Warning } from '@lore-forge/core';
+import { check, report, snapshot, storyBook, TRIMS, worldCodex, WorldFormatError, type TrimSize, type Warning, type World } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
-import { writePublication } from '@lore-forge/pdf';
+import { writeDocx, writePublication } from '@lore-forge/pdf';
 
 const USAGE = `Usage:
   lore check <worldDir> [--json]     Print consistency warnings. Exit 1 if there are errors.
   lore export <worldDir> [--out <file>]  Write one versioned JSON snapshot (stdout by default).
   lore codex <worldDir> [-o <file.pdf>]  World Codex PDF for artists and AI tools, plus a .md copy (alias: bible).
-  lore book <worldDir> [-o <file.pdf>]   Story Book PDF: events and notes in story order, plus a .md copy.
+  lore book <worldDir> [-o <file.pdf|file.docx>] [--trim 6x9|5.5x8.5|a5]
+                                         Print-ready Story Book: PDF plus a .md copy, or a Word .docx.
 
 Exit codes: 0 = no errors, 1 = errors found, 2 = bad usage or unreadable world.`;
 
 const LABEL: Record<Warning['severity'], string> = { error: 'ERROR  ', warning: 'WARNING', info: 'INFO   ' };
 
-function formatWarning(w: Warning): string {
+/** 'Story/The Salt Road (story/01-the-salt-road.md): "Hadi fought..."' for story facts; "Characters/Hadi (born)" for entry facts. */
+function where(f: Warning['offending'], world: World | undefined): string {
+  if (!f.chapter || !f.span) return `${f.source} (${f.field})`;
+  const quote = world?.story?.find((c) => c.file === f.chapter)?.body.slice(f.span[0], f.span[1]);
+  return `${f.source} (${f.chapter})${quote ? `: "${quote.length > 100 ? `${quote.slice(0, 97)}...` : quote}"` : ''}`;
+}
+
+function formatWarning(w: Warning, world?: World): string {
   const tag = w.intended ? 'INTENDED' : LABEL[w.severity];
-  const lines = [`${tag} [${w.ruleId}] ${w.message}`, `         at ${w.offending.source} (${w.offending.field})`];
+  const lines = [`${tag} [${w.ruleId}] ${w.message}`, `         at ${where(w.offending, world)}`];
   if (w.intended?.note) lines.push(`         note: ${w.intended.note}`);
   return lines.join('\n');
 }
@@ -59,16 +67,28 @@ export async function run(argv: string[], out: (s: string) => void = (s) => proc
       out(USAGE + '\n');
       return 2;
     }
-    const doc = cmd === 'codex' ? worldCodex(world) : storyBook(world);
+    const t = rest.indexOf('--trim');
+    const trim = t >= 0 ? rest[t + 1] : undefined;
+    if (t >= 0 && (cmd !== 'book' || !trim || !(trim in TRIMS))) {
+      out(USAGE + '\n');
+      return 2;
+    }
+    const doc = cmd === 'codex' ? worldCodex(world) : storyBook(world, trim ? { trim: trim as TrimSize } : {});
+    if (cmd === 'book' && file.toLowerCase().endsWith('.docx')) {
+      await writeDocx(doc, resolve(dir), file);
+      out(`Wrote ${file}\n`);
+      return 0;
+    }
     const r = await writePublication(doc, resolve(dir), file);
-    out(`Wrote ${r.pdf} (${r.pages} pages)\nWrote ${r.md}\n`);
+    out(`Wrote ${r.pdf} (${r.pages} pages)\nWrote ${r.md}\n${r.notes.map((n) => `Note: ${n}\n`).join('')}`);
     return 0;
   }
   const r = report(world, check(world));
   if (rest.includes('--json')) out(JSON.stringify(r, null, 2) + '\n');
   else {
-    out(`${world.manifest.name}: ${world.entries.length} entries\n\n`);
-    for (const w of r.warnings) out(formatWarning(w) + '\n\n');
+    const chapters = world.story?.length ?? 0;
+    out(`${world.manifest.name}: ${world.entries.length} entries${chapters ? `, ${chapters} story chapter${chapters === 1 ? '' : 's'}` : ''}\n\n`);
+    for (const w of r.warnings) out(formatWarning(w, world) + '\n\n');
     out(`${r.counts.error} errors, ${r.counts.warning} warnings, ${r.counts.info} info, ${r.counts.intended} marked intended\n`);
   }
   return r.counts.error > 0 ? 1 : 0;

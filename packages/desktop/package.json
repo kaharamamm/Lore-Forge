@@ -1,10 +1,11 @@
 {
   "name": "@lore-forge/desktop",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Lore-Forge desktop app (Electron).",
   "author": "Ahmet Kadir Zengin",
   "main": "dist/main.cjs",
+  "desktopName": "lore-forge.desktop",
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
@@ -13,13 +14,14 @@
     "dev": "node build.mjs && node run.mjs",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:linux": "electron-builder --linux AppImage --publish never",
-    "contrast": "node scripts/contrast.mjs"
+    "contrast": "node scripts/contrast.mjs",
+    "icons": "electron scripts/app-icon.cjs"
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.3.0",
     "@formkit/auto-animate": "^0.10.0",
-    "@lore-forge/core": "0.3.1",
-    "@lore-forge/pdf": "0.3.1",
+    "@lore-forge/core": "0.4.0",
+    "@lore-forge/pdf": "0.4.0",
     "@xyflow/react": "^12.12.0",
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",

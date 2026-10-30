@@ -23,7 +23,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div class="palette-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div class="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section class="about" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <header class="about-head">
           <Icon name="laurels" class="about-mark" />

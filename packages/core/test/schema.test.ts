@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Ajv2020 } from 'ajv/dist/2020.js';
-import { check, report, snapshot } from '@lore-forge/core';
+import { check, report, serializeStoryIgnored, snapshot } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 
 const schemaDir = join(import.meta.dirname, '..', 'schemas');
-const exampleDir = join(import.meta.dirname, '..', '..', '..', 'examples', 'shifting-sands');
+const exampleDir = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
 const ajv = new Ajv2020({ allErrors: true });
 for (const f of readdirSync(schemaDir)) ajv.addSchema(JSON.parse(readFileSync(join(schemaDir, f), 'utf8')));
 const base = 'https://lore-forge.local/schemas/v1/';
@@ -20,7 +20,11 @@ test('the example world files match the published JSON Schemas', async () => {
   valid('world-manifest.schema.json', JSON.parse(readFileSync(join(exampleDir, 'world.json'), 'utf8')));
   valid('intended.schema.json', JSON.parse(readFileSync(join(exampleDir, 'intended.json'), 'utf8')));
   // The schema checks date syntax only; "1750 XX" is well-formed and its unknown era is caught by the invalid-date rule.
-  for (const { body: _body, ...front } of (await loadWorld(exampleDir)).entries) valid('entry.schema.json', front);
+  const w = await loadWorld(exampleDir);
+  for (const { body: _body, ...front } of w.entries) valid('entry.schema.json', front);
+  assert.ok(w.story?.length, 'the example has a story chapter');
+  for (const ch of w.story!) valid('story-chapter.schema.json', { title: ch.title, order: ch.order, ...(ch.date ? { date: ch.date } : {}), ...ch.extra });
+  valid('story-ignored.schema.json', JSON.parse(serializeStoryIgnored([{ key: 'create:character:baran', name: 'Baran', ignoredAt: '2026-10-30' }])));
 });
 
 test('lore export and lore check --json output match their schemas', async () => {
@@ -33,4 +37,12 @@ test('the schema rejects a bad entry', () => {
   const v = ajv.getSchema(base + 'entry.schema.json')!;
   assert.equal(v({ id: 'a', type: 'dragon', name: 'A' }), false);
   assert.equal(v({ id: 'a', type: 'character', name: 'A', born: 'next spring' }), false);
+});
+
+test('world.json cover settings: colours with alpha, emblem, picture and title style', () => {
+  const manifest = JSON.parse(readFileSync(join(exampleDir, 'world.json'), 'utf8'));
+  valid('world-manifest.schema.json', { ...manifest, cover: { color: '#336699cc', color2: '#112233', icon: 'castle', iconColor: '#e0bd6a', image: 'none', titleStyle: 'serif', titleColor: '#ffcc00' } });
+  const bad = ajv.getSchema(`${base}world-manifest.schema.json`)!;
+  assert.equal(bad({ ...manifest, cover: { titleStyle: 'gothic' } }), false);
+  assert.equal(bad({ ...manifest, cover: { color: 'red' } }), false);
 });

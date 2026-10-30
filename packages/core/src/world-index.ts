@@ -18,7 +18,11 @@ const LIFE_FIELDS = {
   note: [['date', 'is set']],
 } as const satisfies Record<Entry['type'], readonly (readonly [string, string])[]>;
 
-export const normalizeName = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ');
+/**
+ * Key for comparing names: case-insensitive, spaces collapsed, and Turkish dotted/dotless i folded together
+ * (I, ı, İ and i all count as i), so "İlsa", "Ilsa" and "ılsa" are the same name.
+ */
+export const normalizeName = (s: string): string => s.normalize('NFC').trim().replace(/[Iıİ]/g, 'i').toLowerCase().replace(/\s+/g, ' ');
 
 /** Read-only lookups over a World, shared by all rules. */
 export class WorldIndex {

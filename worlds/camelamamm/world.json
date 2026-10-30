@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "camelamamm",
+  "name": "Camelamamm",
+  "description": "An oasis city of tea houses and camel-folk, and the patient Mr Camel who wakes its silent well.",
+  "calendar": {
+    "eras": [
+      { "id": "BW", "name": "Before the Wells", "start": -600, "color": "#8a6a3d" },
+      { "id": "CR", "name": "Camelamamm Reckoning", "start": 1, "color": "#c9822f" }
+    ],
+    "defaultEra": "CR",
+    "months": [
+      { "name": "Dawnwind", "days": 60 },
+      { "name": "Saltsun", "days": 60 },
+      { "name": "Highheat", "days": 60 },
+      { "name": "Palmfall", "days": 60 },
+      { "name": "Duskwind", "days": 60 },
+      { "name": "Starfrost", "days": 60 }
+    ],
+    "approxYears": 5
+  },
+  "rules": {},
+  "book": {
+    "title": "Mr Camel and the Singing Well",
+    "author": "Ahmet Kadir Zengin",
+    "trim": "6x9",
+    "dedication": "For everyone who has ever waited for the kettle to sing.",
+    "epigraph": "Water remembers the way home. So should you.",
+    "epigraphSource": "Saying of the Well Wardens"
+  },
+  "cover": {
+    "color": "#d9893a",
+    "color2": "#3b2350",
+    "icon": "camel-head",
+    "iconColor": "#f7d98b",
+    "font": "Cinzel Decorative",
+    "titleColor": "#fff1d2"
+  }
+}

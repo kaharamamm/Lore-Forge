@@ -1,8 +1,11 @@
 import { Fragment } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { docSheets, inlineRuns, storyBook, TYPE_ICON, TYPE_LABELS, worldCodex, type Block, type ChapterGrouping, type Doc, type EntryType, type World } from '@lore-forge/core';
+import { DEFAULT_TRIM, docSheets, inlineRuns, storyBook, TRIMS, TYPE_ICON, TYPE_LABELS, worldCodex, type Block, type BookSettings, type ChapterGrouping, type Doc, type EntryType, type TrimSize, type World } from '@lore-forge/core';
 import type { PdfKind, PublishOptions } from '../../shared/api.ts';
 import { Icon } from './icon.tsx';
+import { Aura } from './aura.tsx';
+import { Select } from './select.tsx';
+import { titleFont, useImage, WorldCover } from './cover.tsx';
 
 const ALL_TYPES: EntryType[] = ['character', 'place', 'faction', 'item', 'event', 'note'];
 const TITLE: Record<PdfKind, string> = { codex: 'World Codex', book: 'Story Book' };
@@ -41,15 +44,63 @@ function DocImage({ dir, file, caption }: { dir: string; file: string; caption: 
   return <img src={src} alt={caption} />;
 }
 
+const TRIM_LABEL: Record<TrimSize, string> = { '6x9': '6 × 9 in (trade paperback)', '5.5x8.5': '5.5 × 8.5 in (digest)', a5: 'A5 (148 × 210 mm)' };
+type DetailKey = 'title' | 'author' | 'publisher' | 'dedication' | 'epigraph' | 'epigraphSource' | 'copyright';
+const DETAILS: [DetailKey, string, string, boolean][] = [
+  ['title', 'Book title', 'The world name', false],
+  ['author', 'Author', 'Unknown', false],
+  ['publisher', 'Publisher', 'None', false],
+  ['dedication', 'Dedication', 'None (no dedication page)', true],
+  ['epigraph', 'Epigraph', 'None (no epigraph page)', true],
+  ['epigraphSource', 'Epigraph by', 'Unknown', false],
+  ['copyright', 'Copyright page', 'Copyright © year author. All rights reserved.', true],
+];
+
 const anchorId = (b: Extract<Block, { kind: 'heading' }>, i: number) => `pv-${b.anchor ?? `h-${i}`}`;
+
+/** The first page: the world's cover art with the title, as the PDF draws it. */
+function CoverSheet({ doc, dir }: { doc: Doc; dir: string }) {
+  const c = doc.cover;
+  const image = useImage(dir, c.art?.image);
+  const trim = doc.print ? ` is-print trim-${doc.print.trim.replace('.', '-')}` : '';
+  if (!c.art) {
+    return (
+      <section class="sheet sheet-cover">
+        <p class="sheet-title">{c.title}</p>
+        <p class="sheet-sub">{c.subtitle}</p>
+        {c.lines.map((l, i) => <p key={i} class="doc-small">{l}</p>)}
+      </section>
+    );
+  }
+  return (
+    <section class={`sheet sheet-cover has-art${trim}`} aria-label="Cover">
+      <span class="world-cover"><WorldCover art={c.art} image={image} /></span>
+      <div class="sheet-cover-text">
+        {c.art.showTitle && <p class={`sheet-title title-${c.art.titleStyle}${c.art.font ? ' has-font' : ''}`} style={{ color: c.art.titleColor, ...titleFont(c.art) }}>{c.title}</p>}
+        <p class="sheet-sub">{c.subtitle}</p>
+        {c.lines.map((l, i) => <p key={i} class="doc-small">{l.replace(/\*\*/g, '')}</p>)}
+      </div>
+    </section>
+  );
+}
 
 function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: number }) {
   switch (b.kind) {
     case 'heading': {
       const H = (`h${b.level + 1}`) as 'h2' | 'h3' | 'h4';
+      if (b.opener) {
+        const m = /^(Chapter \d+)\.\s+(.*)$/.exec(b.text);
+        return <H id={anchorId(b, i)} class="doc-h doc-h1 doc-opener">{m && <span class="doc-opener-label">{m[1]}</span>}{m ? m[2] : b.text}</H>;
+      }
       return <H id={anchorId(b, i)} class={`doc-h doc-h${b.level}`}>{b.icon && <><Icon name={b.icon} /> </>}{b.text}{b.mark && <> <Icon class="doc-mark" name={b.mark} /></>}</H>;
     }
-    case 'para': return <p class={`doc-p${b.style ? ` doc-${b.style}` : ''}`}><Inline text={b.text} /></p>;
+    case 'para': return <p class={`doc-p${b.style ? ` doc-${b.style}` : ''}${b.dropCap ? ' doc-dropcap' : ''}`}><Inline text={b.text} /></p>;
+    case 'front':
+      return (
+        <div class={`doc-front doc-front-${b.role}`}>
+          {b.lines.filter((l) => l !== '').map((l, j) => <p key={j}>{l}</p>)}
+        </div>
+      );
     case 'facts':
       return (
         <dl class="doc-facts">
@@ -90,7 +141,7 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
               </li>
             ))}
           </ol>
-          <p class="doc-small">Page numbers are added in the PDF.</p>
+          <p class="doc-small">Page numbers are added in the PDF{doc.print ? ' and in Word' : ''}.</p>
         </nav>
       );
     }
@@ -103,24 +154,37 @@ interface Props {
   kind: PdfKind;
   onClose: () => void;
   onSave: (kind: PdfKind, options: PublishOptions) => Promise<void>;
+  onSaveDocx?: (options: PublishOptions) => Promise<void>;
+  /** Save the book details into world.json. */
+  onSaveBook?: (book: BookSettings) => Promise<void>;
 }
 
 /** In-app preview of the World Codex / Story Book, from the same Doc the PDF uses; "Save PDF" only after looking. */
-export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
+export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, onSaveBook }: Props) {
   const [types, setTypes] = useState<EntryType[]>(ALL_TYPES);
   const [warnings, setWarnings] = useState(true);
   const [artBriefs, setArtBriefs] = useState(true);
   const manifestYears = world.manifest.book?.chapterYears;
   const [grouping, setGrouping] = useState<ChapterGrouping>(manifestYears && manifestYears >= 1 ? 'years' : 'era');
   const [chapterYears, setChapterYears] = useState(manifestYears ?? 100);
+  const [appendix, setAppendix] = useState(true);
+  const [trim, setTrim] = useState<TrimSize>(world.manifest.book?.trim ?? DEFAULT_TRIM);
+  const [book, setBook] = useState<BookSettings>(world.manifest.book ?? {});
+  const bookWorld = useMemo(() => (kind === 'book' ? { ...world, manifest: { ...world.manifest, book: { ...world.manifest.book, ...book } } } : world), [world, kind, book]);
+  const editBook = (k: DetailKey, v: string) => setBook((b) => ({ ...b, [k]: v }));
+  const persist = (patch: BookSettings) => {
+    const saved = world.manifest.book ?? {};
+    if (Object.entries(patch).some(([k, v]) => (saved[k as keyof BookSettings] ?? '') !== v)) void onSaveBook?.(patch);
+  };
+  const hasStory = (world.story?.length ?? 0) > 0;
   const [busy, setBusy] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
 
   const options: PublishOptions = kind === 'codex'
     ? { types: ALL_TYPES.filter((t) => types.includes(t)), warnings, artBriefs }
-    : { grouping, ...(grouping === 'years' ? { chapterYears } : {}) };
+    : { grouping, ...(grouping === 'years' ? { chapterYears } : {}), ...(hasStory && !appendix ? { appendix: false } : {}), trim };
   const key = JSON.stringify(options);
-  const doc = useMemo(() => previewDoc(world, kind, options), [world, kind, key]);
+  const doc = useMemo(() => previewDoc(bookWorld, kind, options), [bookWorld, kind, key]);
   const sheets = useMemo(() => sheetsOf(doc.blocks), [doc]);
 
   useEffect(() => {
@@ -130,7 +194,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
       if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
       if (e.key !== 'Tab' || !dialog.current) return;
       // Keep focus inside the dialog.
-      const items = [...dialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), input, a[href], [tabindex="0"]')];
+      const items = [...dialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), input, select, textarea, a[href], [tabindex="0"]')];
       const first = items[0], last = items[items.length - 1];
       if (!first || !last) return;
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -143,6 +207,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
 
   const toggleType = (t: EntryType) => setTypes((ts) => (ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]));
   const save = async () => { setBusy(true); try { await onSave(kind, options); } finally { setBusy(false); } };
+  const saveDocx = async () => { setBusy(true); try { await onSaveDocx?.(options); } finally { setBusy(false); } };
   const count = world.entries.filter((e) => types.includes(e.type)).length;
 
   return (
@@ -150,15 +215,21 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
       <div class="preview" role="dialog" aria-modal="true" aria-labelledby="preview-title" ref={dialog}>
         <header class="preview-head">
           <h2 id="preview-title" tabIndex={-1}><Icon name={TITLE_ICON[kind]} /> {TITLE[kind]} <span class="muted">preview</span></h2>
-          <p class="muted">{sheets.length + 1} sheets here; the PDF paginates further. This is the same content the PDF gets.</p>
+          <p class="muted">{doc.print ? `${TRIM_LABEL[doc.print.trim]}, print layout. ${sheets.length} sheets here; the PDF paginates further, adds running heads and page numbers, and starts each chapter on a right-hand page.` : `${sheets.length + 1} sheets here; the PDF paginates further. This is the same content the PDF gets.`}</p>
           <div class="preview-actions">
             <button type="button" class="primary" disabled={busy || (kind === 'codex' && types.length === 0)} onClick={() => void save()}>
               <Icon name="save" /> {busy ? 'Saving…' : 'Save PDF…'}
             </button>
+            {kind === 'book' && onSaveDocx && (
+              <button type="button" class="save-docx" disabled={busy} onClick={() => void saveDocx()}>
+                <Icon name="quill-ink" /> Save Word (.docx)…
+              </button>
+            )}
             <button type="button" class="ghost" onClick={onClose}>Close <kbd>Esc</kbd></button>
           </div>
         </header>
         <div class="preview-body">
+          <Aura calm local />
           <aside class="preview-options" aria-label="Options">
             {kind === 'codex' ? (
               <>
@@ -179,8 +250,39 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
                 </fieldset>
               </>
             ) : (
+              <>
               <fieldset>
-                <legend>Chapters</legend>
+                <legend>Print</legend>
+                <label class="field">
+                  <span>Trim size</span>
+                  <Select class="trim-select" value={trim} onChange={(v) => { const t = v as TrimSize; setTrim(t); persist({ trim: t }); }} options={(Object.keys(TRIMS) as TrimSize[]).map((t) => ({ value: t, label: TRIM_LABEL[t] }))} />
+                </label>
+                <p class="hint">Margins are mirrored with a wider inside edge for the binding.</p>
+              </fieldset>
+              <fieldset class="book-details">
+                <legend>Book details</legend>
+                {DETAILS.map(([k, label, empty, long]) => (
+                  <label key={k} class="field">
+                    <span>{label}</span>
+                    {long ? (
+                      <textarea name={`book-${k}`} rows={k === 'copyright' ? 3 : 2} placeholder={empty} value={book[k] ?? ''} onInput={(e) => editBook(k, e.currentTarget.value)} onBlur={(e) => persist({ [k]: e.currentTarget.value.trim() })} />
+                    ) : (
+                      <input name={`book-${k}`} placeholder={empty} value={book[k] ?? ''} onInput={(e) => editBook(k, e.currentTarget.value)} onBlur={(e) => persist({ [k]: e.currentTarget.value.trim() })} />
+                    )}
+                  </label>
+                ))}
+                <p class="hint">All optional. Saved in world.json.</p>
+              </fieldset>
+              {hasStory && (
+                <fieldset>
+                  <legend>Story</legend>
+                  <p class="hint">Your written chapters are the book. The chronicle of events and notes follows them.</p>
+                  <label class="check"><input type="checkbox" checked={appendix} onChange={() => setAppendix(!appendix)} /> <Icon name="hourglass" /> Chronicle appendix</label>
+                </fieldset>
+              )}
+              {(!hasStory || appendix) && (
+              <fieldset>
+                <legend>{hasStory ? 'Chronicle chapters' : 'Chapters'}</legend>
                 {([['era', 'One per era'], ['years', 'By year ranges'], ['single', 'One chapter']] as const).map(([g, label]) => (
                   <label key={g} class="check">
                     <input type="radio" name="grouping" checked={grouping === g} onChange={() => setGrouping(g)} /> {label}
@@ -194,16 +296,14 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave }: Props) {
                 )}
                 <p class="hint">A page's own “chapter:” always wins.</p>
               </fieldset>
+              )}
+              </>
             )}
           </aside>
           <div class="preview-pages" tabIndex={0} aria-label="Preview pages">
-            <section class="sheet sheet-cover">
-              <p class="cover-title">{doc.cover.title}</p>
-              <p class="cover-sub">{doc.cover.subtitle}</p>
-              {doc.cover.lines.map((l, i) => <p key={i} class="doc-small">{l}</p>)}
-            </section>
+            {(!doc.print || doc.cover.art) && <CoverSheet doc={doc} dir={dir} />}
             {sheets.map((s, i) => (
-              <section class="sheet" key={i}>
+              <section class={doc.print ? `sheet is-print trim-${doc.print.trim.replace('.', '-')}${s[0]?.kind === 'front' ? ' is-front' : ''}` : 'sheet'} key={i}>
                 {s.map((b, j) => <BlockView key={j} b={b} dir={dir} doc={doc} i={doc.blocks.indexOf(b)} />)}
               </section>
             ))}

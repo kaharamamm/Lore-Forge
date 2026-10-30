@@ -1,21 +1,16 @@
 import { createContext } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
-import { raceIcon, TYPE_ICON, type Entry, type IconName } from '@lore-forge/core';
+import { coverArt, coverImageFile, entryIcon, hash, ICONS, portraitFile, type CoverArt, type Entry, type IconName, type World, type WorldCoverSettings } from '@lore-forge/core';
 import { Icon, SvgIcon } from './icon.tsx';
+
+export { hash, portraitFile, coverImageFile };
 
 /** The open world's folder, for components deep in the tree that load its images (portraits in hover cards). */
 export const WorldDir = createContext<string | null>(null);
 
-/** FNV-1a: the same name always gets the same colours and emblem. */
-export function hash(s: string): number {
-  let h = 0x811c9dc5;
-  for (const c of s) h = Math.imul(h ^ c.codePointAt(0)!, 0x01000193) >>> 0;
-  return h;
-}
-
 /** One image read per file per session: sidebar, cards and hover cards share it. */
 const images = new Map<string, Promise<string | null>>();
-function useImage(dir: string | null, file: string | undefined): string | null {
+export function useImage(dir: string | null, file: string | undefined): string | null {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     setSrc(null);
@@ -31,82 +26,123 @@ function useImage(dir: string | null, file: string | undefined): string | null {
 /** Forget cached images (after Reload, files may have changed on disk). */
 export const forgetImages = () => images.clear();
 
-const PREFERRED = ['front', 'three-quarter', 'concept', 'establishing', 'emblem', 'scene', 'illustration', 'exterior', 'banner', 'mood', 'a-pose'];
-/** The image that best shows an entry at a glance, if it has any. */
-export function portraitFile(entry: Entry): string | undefined {
-  const imgs = entry.images ?? [];
-  return (PREFERRED.map((v) => imgs.find((i) => i.view === v)).find(Boolean) ?? imgs[0])?.file;
+/** The entry's card icon: the one picked for it on the Home page, else the default from core (gender, race, keywords). */
+export function entryEmblem(entry: Entry, raceName?: string): IconName {
+  const chosen = entry.picture?.icon;
+  return chosen && chosen in ICONS ? (chosen as IconName) : entryIcon(entry, raceName?.split(',')[0]?.trim() || undefined);
 }
 
-export function entryEmblem(entry: Entry, raceName?: string): IconName {
-  return entry.type === 'character' && raceName ? raceIcon(raceName) : TYPE_ICON[entry.type];
-}
+/** Reference images smaller than this are sketches or placeholders: blown up on a card they look pixelated, so the icon disc shows instead. */
+const MIN_PORTRAIT_PX = 128;
 
 /**
  * An entry's picture: its best reference image, or a generated placeholder
  * (a disc in its type colour, shaded by its name, with its race or type emblem).
+ * A picture chosen on Home always shows; a reference image only when it is big enough to look sharp.
  */
 export function Portrait({ entry, raceName, size = 'sm' }: { entry: Entry; raceName?: string; size?: 'xs' | 'sm' | 'md' | 'lg' }) {
   const dir = useContext(WorldDir);
-  const src = useImage(dir, portraitFile(entry));
+  const file = portraitFile(entry);
+  const src = useImage(dir, file);
+  const [tiny, setTiny] = useState<string | null>(null);
   const turn = hash(entry.id) % 360;
+  const pic = entry.picture ?? {};
+  const show = src && tiny !== src;
+  const style: Record<string, string> = { '--turn': `${turn}deg`, ...(pic.color ? { '--pic-bg': pic.color } : {}), ...(pic.accent ? { '--pic-fg': pic.accent } : {}) };
+  const onLoad = (e: Event) => {
+    const img = e.currentTarget as HTMLImageElement;
+    if (!pic.image && Math.min(img.naturalWidth, img.naturalHeight) < MIN_PORTRAIT_PX) setTiny(img.src);
+  };
   return (
-    <span class={`portrait portrait-${size} t-${entry.type}${src ? ' has-image' : ''}`} style={{ '--turn': `${turn}deg` }} aria-hidden="true">
-      {src ? <img src={src} alt="" /> : <Icon name={entryEmblem(entry, raceName)} />}
+    <span class={`portrait portrait-${size} t-${entry.type}${show ? ' has-image' : ''}${pic.color ? ' has-colour' : ''}${pic.accent ? ' has-accent' : ''}`} style={style} aria-hidden="true">
+      {show ? <img src={src} alt="" onLoad={onLoad} /> : <Icon name={entryEmblem(entry, raceName)} />}
     </span>
   );
 }
 
-const EMBLEMS: IconName[] = ['world', 'castle', 'dragon-head', 'crystal-ball', 'compass', 'treasure-map', 'sands-of-time', 'crown', 'scroll-unfurled', 'village'];
-
-/** Deterministic stars for a cover: same world, same sky. */
-function stars(seed: number, n: number): [number, number, number][] {
-  let s = seed || 1;
-  const next = () => ((s = Math.imul(s ^ (s >>> 15), 0x2c1b3c6d) >>> 0), s / 2 ** 32);
-  return Array.from({ length: n }, () => [next() * 240, next() * 200, 0.4 + next() * 1.2]);
-}
-
 /**
- * A generated book cover for a world: a night gradient picked by the world's name, stars, a gold frame and an emblem.
- * A real image (the world's first place or event picture) shows through when there is one.
+ * A world's book cover: the gradient, picture, stars, gold frame and emblem from its CoverArt (see core/cover.ts),
+ * with the title on top when given. The PDF draws the same art.
  */
-export function WorldCover({ seed, image }: { seed: string; image?: string | null }) {
-  const h = hash(seed);
-  const hue = h % 360;
-  const hue2 = (hue + 40 + (h >>> 9) % 80) % 360;
-  const id = `cv${h.toString(36)}`;
+export function WorldCover({ art, image, title }: { art: CoverArt; image?: string | null; title?: string }) {
+  const font = titleFont(art);
+  const id = `cv${hash(`${art.top}${art.bottom}${art.glow}${art.stars[0]?.join() ?? ''}`).toString(36)}`;
   return (
-    <svg class="cover-art" viewBox="0 0 240 320" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <defs>
-        <linearGradient id={`${id}g`} x1="0" y1="0" x2="0.4" y2="1">
-          <stop offset="0" stop-color={`hsl(${hue} 45% 22%)`} />
-          <stop offset="1" stop-color={`hsl(${hue2} 50% 9%)`} />
-        </linearGradient>
-        <radialGradient id={`${id}r`} cx="0.5" cy="0.42" r="0.6">
-          <stop offset="0" stop-color={`hsl(${hue} 70% 60% / 0.35)`} />
-          <stop offset="1" stop-color="transparent" />
-        </radialGradient>
-      </defs>
-      <rect width="240" height="320" fill={`url(#${id}g)`} />
-      {image && <image href={image} width="240" height="320" preserveAspectRatio="xMidYMid slice" opacity="0.55" />}
-      <rect width="240" height="320" fill={`url(#${id}r)`} />
-      {stars(h, 28).map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill="#fff" opacity={0.25 + (i % 4) * 0.12} />)}
-      <rect class="cover-frame" x="10" y="10" width="220" height="300" rx="6" />
-      <rect class="cover-frame thin" x="16" y="16" width="208" height="288" rx="4" />
-      <g class="cover-emblem"><SvgIcon name={EMBLEMS[h % EMBLEMS.length]!} x={84} y={70} size={72} /></g>
-    </svg>
+    <>
+      <svg class="cover-art" viewBox="0 0 240 320" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id={`${id}g`} x1="0" y1="0" x2="0.4" y2="1">
+            <stop offset="0" stop-color={art.top} />
+            <stop offset="1" stop-color={art.bottom} />
+          </linearGradient>
+          <radialGradient id={`${id}r`} cx="0.5" cy="0.42" r="0.6">
+            <stop offset="0" stop-color={art.glow} />
+            <stop offset="1" stop-color="transparent" />
+          </radialGradient>
+        </defs>
+        <rect width="240" height="320" fill={`url(#${id}g)`} />
+        {image && <image href={image} width="240" height="320" preserveAspectRatio="xMidYMid slice" opacity={art.imageOpacity} />}
+        <rect width="240" height="320" fill={`url(#${id}r)`} />
+        {art.stars.map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill="#fff" opacity={0.25 + (i % 4) * 0.12} />)}
+        <rect class="cover-frame" x="10" y="10" width="220" height="300" rx="6" />
+        <rect class="cover-frame thin" x="16" y="16" width="208" height="288" rx="4" />
+        {art.icon && art.showEmblem && <g class="cover-emblem" style={{ color: art.iconColor }}><SvgIcon name={art.icon} x={84} y={70} size={72} /></g>}
+      </svg>
+      {title !== undefined && art.showTitle && <span class={`cover-title title-${art.titleStyle}${font ? ' has-font' : ''}`} style={{ color: art.titleColor, ...font }}>{title}</span>}
+    </>
   );
 }
 
-/** The world's best picture for its cover: a place, then an event, then anything with an image. */
-export function coverImageFile(entries: Entry[]): string | undefined {
-  for (const t of ['place', 'event', 'item', 'character'] as const) {
-    const e = entries.find((x) => x.type === t && portraitFile(x));
-    if (e) return portraitFile(e);
-  }
-  return undefined;
+/** The lettering each title style falls back to when the chosen font is missing. */
+const STYLE_STACK: Record<CoverArt['titleStyle'], string> = { display: 'var(--display)', serif: "'DejaVu Serif', Georgia, serif", sans: "system-ui, 'DejaVu Sans', sans-serif" };
+/** The chosen cover font as a CSS variable (with the title style's lettering behind it), for the cover, spine and preview titles. */
+export function titleFont(art: CoverArt): Record<string, string> | undefined {
+  return art.font ? { '--cover-font': `"${art.font.replace(/["\\]/g, '')}", ${STYLE_STACK[art.titleStyle]}` } : undefined;
 }
 
-export function useCoverImage(dir: string | null, entries: Entry[] | undefined): string | null {
-  return useImage(dir, entries ? coverImageFile(entries) : undefined);
+/** Left-edge colour per picture, read once per session. */
+const edges = new Map<string, Promise<string | undefined>>();
+function readEdge(src: string): Promise<string | undefined> {
+  return new Promise((ok) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const h = 32, c = document.createElement('canvas');
+        c.width = 4;
+        c.height = h;
+        const g = c.getContext('2d', { willReadFrequently: true })!;
+        // The leftmost 4% of the picture, squeezed into a 4 x 32 strip, then averaged.
+        g.drawImage(img, 0, 0, Math.max(1, img.naturalWidth * 0.04), img.naturalHeight, 0, 0, 4, h);
+        const d = g.getImageData(0, 0, 4, h).data;
+        let r = 0, gr = 0, b = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i + 3]! > 0) { r += d[i]!; gr += d[i + 1]!; b += d[i + 2]!; n++; }
+        const hex = (v: number) => Math.round(v / n).toString(16).padStart(2, '0');
+        ok(n ? `#${hex(r)}${hex(gr)}${hex(b)}` : undefined);
+      } catch {
+        ok(undefined);
+      }
+    };
+    img.onerror = () => ok(undefined);
+    img.src = src;
+  });
+}
+/** The colour down the left edge of a picture, for the book's spine. */
+export function useEdgeColour(src: string | null | undefined): string | undefined {
+  const [edge, setEdge] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setEdge(undefined);
+    if (!src) return;
+    if (!edges.has(src)) edges.set(src, readEdge(src));
+    let live = true;
+    void edges.get(src)!.then((e) => live && setEdge(e));
+    return () => void (live = false);
+  }, [src]);
+  return edge;
+}
+
+/** A world's cover as set in world.json "cover" (or `cover` while it is being edited), else the generated defaults. */
+export function WorldBookCover({ dir, world, fallbackName, title, cover }: { dir: string | null; world: World | null | undefined; fallbackName?: string; title?: string; cover?: WorldCoverSettings }) {
+  const art = world ? coverArt(world.manifest.id, cover ?? world.manifest.cover, coverImageFile(world.entries)) : coverArt(fallbackName ?? '');
+  const image = useImage(dir, art.image);
+  return <WorldCover art={art} image={image} {...(title !== undefined ? { title } : {})} />;
 }

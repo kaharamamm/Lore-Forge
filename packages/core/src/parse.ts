@@ -2,9 +2,12 @@ import { Document, isScalar, parse as parseYaml, visit } from 'yaml';
 import {
   ENTRY_TYPES, SCHEMA_VERSION, TYPE_FOLDERS,
   type Action, type Entry, type EntryType, type IntendedMark, type LoadIssue, type LocationSpan,
-  type FactionStatus, type ItemStatus, type Participant, type PlaceStatus, type Provenance, type RefImage, type Relation, type World, type WorldManifest,
+  type FactionStatus, type ItemStatus, type Participant, type Picture, type PlaceStatus, type Provenance, type RefImage, type Relation, type StoryChapter, type StoryIgnore, type World, type WorldManifest,
 } from './types.ts';
+import { DETAIL_FIELDS } from './details.ts';
+import { HEX_COLOUR } from './color.ts';
 import { LIFECYCLE } from './lifecycle.ts';
+import { parseChapter, parseStoryIgnored, sortChapters, STORY_FOLDER, STORY_IGNORED_FILE } from './story.ts';
 
 export const MANIFEST_FILE = 'world.json';
 export const INTENDED_FILE = 'intended.json';
@@ -92,7 +95,7 @@ const KNOWN_KEYS: Record<EntryType, string[]> = {
   event: ['date', 'end', 'place', 'participants', 'actions'],
   note: ['date'],
 };
-const BASE_KEYS = ['id', 'type', 'name', 'aliases', 'tags', 'summary', 'relations', 'images', 'visual', 'chapter', 'bookOrder'];
+const BASE_KEYS = ['id', 'type', 'name', 'aliases', 'tags', 'summary', 'relations', 'images', 'picture', 'visual', 'chapter', 'bookOrder'];
 
 export function splitFrontMatter(content: string): { data: unknown; body: string } | { error: string } {
   const text = content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
@@ -140,7 +143,35 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
       : undefined;
     return clean({ file, view, provenance });
   };
-  const extraKeys = Object.keys(o).filter((k) => !BASE_KEYS.includes(k) && !KNOWN_KEYS[t].includes(k));
+  const picture = (): Picture | undefined => {
+    const m = r.strMap(o, 'picture');
+    if (!m) return undefined;
+    const hex = (k: string) => {
+      const v = m[k]?.trim();
+      if (v && !HEX_COLOUR.test(v)) r.problems.push(`"picture.${k}" should be a colour like #a07c2c.`);
+      return v && HEX_COLOUR.test(v) ? v : undefined;
+    };
+    const pic = clean({ icon: m['icon']?.trim() || undefined, color: hex('color'), accent: hex('accent'), image: m['image']?.trim() || undefined });
+    return Object.keys(pic).length ? pic : undefined;
+  };
+  const detailKeys = DETAIL_FIELDS[t].map((f) => f.key);
+  const extraKeys = Object.keys(o).filter((k) => !BASE_KEYS.includes(k) && !KNOWN_KEYS[t].includes(k) && !detailKeys.includes(k));
+  const details: Record<string, string | string[]> = {};
+  for (const f of DETAIL_FIELDS[t]) {
+    const v = o[f.key];
+    if (v === undefined || v === null) continue;
+    const text = (x: unknown) => (typeof x === 'string' ? x : typeof x === 'number' || typeof x === 'boolean' ? String(x) : undefined);
+    if (f.kind === 'list' || f.kind === 'refs') {
+      const items = Array.isArray(v) ? v.map(text) : typeof v === 'string' ? v.split(',') : [text(v)];
+      if (items.some((x) => x === undefined)) r.problems.push(`"${f.key}" should be a list of names.`);
+      const list = items.filter((x): x is string => x !== undefined).map((x) => x.trim()).filter(Boolean);
+      if (list.length) details[f.key] = list;
+    } else {
+      const s = text(v);
+      if (s === undefined) r.problems.push(`"${f.key}" should be text.`);
+      else if (s.trim()) details[f.key] = s;
+    }
+  }
   const base = clean({
     id, name,
     aliases: r.strList(o, 'aliases'),
@@ -148,9 +179,11 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
     summary: r.str(o, 'summary'),
     relations: r.list(o, 'relations', relation),
     images: r.list(o, 'images', image),
+    picture: picture(),
     visual: r.strMap(o, 'visual'),
     chapter: r.str(o, 'chapter'),
     bookOrder: r.num(o, 'bookOrder'),
+    details: Object.keys(details).length ? details : undefined,
     body: split.body,
     extra: extraKeys.length ? Object.fromEntries(extraKeys.map((k) => [k, o[k]])) : undefined,
   });
@@ -170,7 +203,7 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
         return place ? clean({ place, from: r.str(x, 'from'), to: r.str(x, 'to'), note: r.str(x, 'note') }) : undefined;
       };
       entry = clean({
-        ...base, type: t, race: r.str(o, 'race'), born: r.str(o, 'born'), died: r.str(o, 'died'),
+        ...base, type: t, race: Array.isArray(o['race']) ? (r.strList(o, 'race') ?? []).join(', ') || undefined : r.str(o, 'race'), born: r.str(o, 'born'), died: r.str(o, 'died'),
         status: status as 'alive' | 'dead' | 'unknown' | undefined,
         locations: r.list(o, 'locations', location),
       });
@@ -209,12 +242,13 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
 }
 
 /** Front-matter key order used when writing files, so diffs stay small. */
-const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'race', 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'visual', 'images', 'chapter', 'bookOrder'];
+const DETAIL_KEYS = [...new Set(Object.values(DETAIL_FIELDS).flatMap((fs) => fs.map((f) => f.key)))];
+const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'race', ...DETAIL_KEYS, 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'visual', 'picture', 'images', 'chapter', 'bookOrder'];
 
 export function serializeEntry(entry: Entry): string {
-  const { body, extra, ...fields } = entry;
+  const { body, extra, details, ...fields } = entry;
   const data: Obj = {};
-  const all: Obj = { ...fields, ...extra };
+  const all: Obj = { ...fields, ...details, ...extra };
   for (const k of [...KEY_ORDER, ...Object.keys(all).filter((k) => !KEY_ORDER.includes(k))]) {
     const v = all[k];
     if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
@@ -319,5 +353,20 @@ export function parseWorld(files: WorldFile[]): World {
     paths[entry.id] = f.path;
     entries.push(entry);
   }
-  return { manifest: m.manifest, entries, intended, files: paths, issues };
+
+  const story: StoryChapter[] = [];
+  for (const f of files) {
+    if (!f.path.startsWith(`${STORY_FOLDER}/`) || !f.path.endsWith('.md')) continue;
+    const r = parseChapter(f.content, f.path);
+    for (const p of r.problems) issues.push({ file: f.path, message: p });
+    story.push(r.chapter);
+  }
+  let storyIgnored: StoryIgnore[] = [];
+  const ignoredText = byPath.get(STORY_IGNORED_FILE);
+  if (ignoredText !== undefined) {
+    const r = parseStoryIgnored(ignoredText);
+    storyIgnored = r.ignored;
+    for (const p of r.problems) issues.push({ file: STORY_IGNORED_FILE, message: p });
+  }
+  return { manifest: m.manifest, entries, intended, files: paths, issues, story: sortChapters(story), storyIgnored };
 }

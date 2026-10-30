@@ -108,7 +108,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
         <div class="tl-canvas">
           <div class="tl-bands" style={{ width: `${width}px` }} aria-hidden="true">
             {model.eras.map((era, i) => (
-              <div key={era.id} class={`tl-band band-${i % 2}`} style={{ left: `${xOf(era.from)}px`, width: `${Math.max(2, (era.to - era.from) * ppd)}px` }}>
+              <div key={era.id} class={`tl-band band-${i % 2}`} style={{ left: `${xOf(era.from)}px`, width: `${Math.max(2, (era.to - era.from) * ppd)}px`, ...(era.color ? { background: `color-mix(in srgb, ${era.color} 16%, transparent)`, borderLeftColor: era.color } : {}) }}>
                 <span class="tl-band-name">{era.name}</span>
               </div>
             ))}

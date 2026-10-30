@@ -3,44 +3,107 @@
   "$id": "https://lore-forge.local/schemas/v1/world-snapshot.schema.json",
   "title": "Lore-Forge world snapshot (lore export), schema version 1",
   "type": "object",
-  "required": ["format", "schemaVersion", "generator", "manifest", "entries", "check"],
+  "required": [
+    "format",
+    "schemaVersion",
+    "generator",
+    "manifest",
+    "entries",
+    "check"
+  ],
   "properties": {
-    "format": { "const": "lore-forge.world-snapshot" },
-    "schemaVersion": { "const": 1 },
-    "generator": { "type": "string" },
-    "manifest": { "$ref": "world-manifest.schema.json" },
+    "format": {
+      "const": "lore-forge.world-snapshot"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "generator": {
+      "type": "string"
+    },
+    "manifest": {
+      "$ref": "world-manifest.schema.json"
+    },
     "entries": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["entry", "file", "dates"],
+        "required": [
+          "entry",
+          "file",
+          "dates"
+        ],
         "properties": {
           "entry": {
             "type": "object",
-            "allOf": [{ "$ref": "entry.schema.json" }],
-            "required": ["body"],
+            "allOf": [
+              {
+                "$ref": "entry.schema.json"
+              }
+            ],
+            "required": [
+              "body"
+            ],
             "properties": {
-              "body": { "type": "string", "description": "Markdown body." },
-              "extra": { "type": "object", "description": "Unknown front-matter keys, as written." }
+              "body": {
+                "type": "string",
+                "description": "Markdown body."
+              },
+              "extra": {
+                "type": "object",
+                "description": "Unknown front-matter keys, as written."
+              }
             }
           },
-          "file": { "type": "string" },
+          "file": {
+            "type": "string"
+          },
           "dates": {
             "type": "object",
             "description": "Parsed date fields keyed by field path (e.g. died, relations[0].from). lo/hi are absolute day numbers on the world axis, inclusive.",
             "additionalProperties": {
               "type": "object",
-              "required": ["text", "year", "era", "approx", "precision", "lo", "hi"],
+              "required": [
+                "text",
+                "year",
+                "era",
+                "approx",
+                "precision",
+                "lo",
+                "hi"
+              ],
               "properties": {
-                "text": { "type": "string" },
-                "year": { "type": "integer" },
-                "month": { "type": "integer" },
-                "day": { "type": "integer" },
-                "era": { "type": "string" },
-                "approx": { "type": "boolean" },
-                "precision": { "enum": ["year", "month", "day"] },
-                "lo": { "type": "integer" },
-                "hi": { "type": "integer" }
+                "text": {
+                  "type": "string"
+                },
+                "year": {
+                  "type": "integer"
+                },
+                "month": {
+                  "type": "integer"
+                },
+                "day": {
+                  "type": "integer"
+                },
+                "era": {
+                  "type": "string"
+                },
+                "approx": {
+                  "type": "boolean"
+                },
+                "precision": {
+                  "enum": [
+                    "year",
+                    "month",
+                    "day"
+                  ]
+                },
+                "lo": {
+                  "type": "integer"
+                },
+                "hi": {
+                  "type": "integer"
+                }
               },
               "additionalProperties": false
             }
@@ -50,13 +113,26 @@
             "description": "Every reference the entry makes: fields, [[links]], @mentions, and plain names or aliases written in the text (implicit: true). id is set when the reference resolves; ambiguous: true when a plain name is shared by several entries (one item per candidate).",
             "items": {
               "type": "object",
-              "required": ["field", "ref"],
+              "required": [
+                "field",
+                "ref"
+              ],
               "properties": {
-                "field": { "type": "string" },
-                "ref": { "type": "string" },
-                "id": { "type": "string" },
-                "implicit": { "const": true },
-                "ambiguous": { "const": true }
+                "field": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "implicit": {
+                  "const": true
+                },
+                "ambiguous": {
+                  "const": true
+                }
               },
               "additionalProperties": false
             }
@@ -65,7 +141,49 @@
         "additionalProperties": false
       }
     },
-    "check": { "$ref": "check-report.schema.json" }
+    "story": {
+      "type": "array",
+      "description": "The story manuscript (story/*.md) in reading order. Only present when the world has chapters.",
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "title",
+          "order",
+          "body",
+          "words"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "order": {
+            "type": "number"
+          },
+          "date": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "Markdown prose."
+          },
+          "words": {
+            "type": "integer"
+          },
+          "extra": {
+            "type": "object",
+            "description": "Unknown header keys, as written."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "check": {
+      "$ref": "check-report.schema.json"
+    }
   },
   "additionalProperties": false
 }

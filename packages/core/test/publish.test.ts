@@ -5,7 +5,7 @@ import { artBrief, bookChapters, LORE_AND_LEGENDS, resolveLinks, storyBook, toMa
 import { loadWorld } from '@lore-forge/core/node';
 import { world } from './helpers.ts';
 
-const example = join(import.meta.dirname, '..', '..', '..', 'examples', 'shifting-sands');
+const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
 
 test('links in text resolve to display names; labels win; unknown refs keep their text', () => {
   const ix = new WorldIndex(world([{ id: 'char-a', type: 'character', name: 'Ayşe' }]));
@@ -85,13 +85,13 @@ test('story book of the example world resolves links and uses the place image fo
   assert.ok(doc.blocks.some((b) => b.kind === 'image' && b.file === 'images/evt-fall-of-saltmere/scene.png'));
 });
 
-test('codex headings carry type icons, and a tombstone for the dead', async () => {
+test('codex headings carry default entry pictures (Leyla: female), and a tombstone for the dead', async () => {
   const w = await loadWorld(example);
   const leyla = w.entries.find((e) => e.id === 'char-leyla')!;
   const dead = { ...w, entries: w.entries.map((e) => (e.id === leyla.id ? ({ ...e, status: 'dead' } as typeof e) : e)) };
   const doc = worldCodex(dead);
   const h = doc.blocks.find((b) => b.kind === 'heading' && b.text === leyla.name);
-  assert.deepEqual(h && h.kind === 'heading' && [h.icon, h.mark], ['person', 'tombstone']);
+  assert.deepEqual(h && h.kind === 'heading' && [h.icon, h.mark], ['female', 'tombstone']);
   assert.ok(doc.blocks.some((b) => b.kind === 'heading' && b.level === 1 && b.text === 'Characters' && b.icon === 'person'));
   assert.doesNotMatch(toMarkdown(doc), /undefined/);
 });

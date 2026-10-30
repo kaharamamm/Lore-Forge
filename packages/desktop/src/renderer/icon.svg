@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Lore-Forge</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="70%">
+      <stop offset="0" stop-color="#2c3142"/>
+      <stop offset="1" stop-color="#121419"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6dc95"/>
+      <stop offset="0.55" stop-color="#e0bd6a"/>
+      <stop offset="1" stop-color="#9c7230"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbf1d6"/>
+      <stop offset="1" stop-color="#d9c28e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffd77a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffd77a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="104" fill="url(#bg)"/>
+  <rect x="34" y="34" width="444" height="444" rx="88" fill="none" stroke="#e0bd6a" stroke-opacity="0.55" stroke-width="6"/>
+  <!-- Forge glow behind the book -->
+  <circle cx="256" cy="200" r="150" fill="url(#glow)"/>
+  <!-- Spark -->
+  <path d="M256 74 L268 136 L326 150 L268 164 L256 226 L244 164 L186 150 L244 136 Z" fill="url(#gold)"/>
+  <circle cx="330" cy="98" r="7" fill="#f6dc95"/>
+  <circle cx="178" cy="108" r="5" fill="#f6dc95"/>
+  <circle cx="352" cy="178" r="4" fill="#f6dc95"/>
+  <!-- Open book -->
+  <path d="M256 250 C222 226 178 218 122 222 L122 278 C178 274 222 282 256 304 Z" fill="url(#page)" stroke="#6b4e22" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M256 250 C290 226 334 218 390 222 L390 278 C334 274 290 282 256 304 Z" fill="url(#page)" stroke="#6b4e22" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M150 240 C186 238 214 244 238 256 M150 258 C186 256 214 262 238 274 M362 240 C326 238 298 244 274 256 M362 258 C326 256 298 262 274 274" fill="none" stroke="#a88a52" stroke-width="5" stroke-linecap="round"/>
+  <!-- Anvil -->
+  <path d="M74 300 C112 300 140 306 160 314 L352 314 L352 300 L432 300 C432 330 414 348 384 352 C356 356 340 368 334 386 L330 398 L364 398 C376 398 384 406 384 418 L384 428 L128 428 L128 418 C128 406 136 398 148 398 L182 398 L178 386 C170 362 148 350 118 342 C96 336 80 320 74 300 Z" fill="url(#gold)" stroke="#5a3f16" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M164 326 L352 326" stroke="#fff3c9" stroke-opacity="0.7" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -1,7 +1,9 @@
 import { useState } from 'preact/hooks';
 import type { FactRef, Warning } from '@lore-forge/core';
 import { animated } from '../motion.ts';
-import { kindOf, SeverityBadge } from './severity.tsx';
+import { BADGE, kindOf, SeverityBadge, type BadgeKind } from './severity.tsx';
+import { Icon } from './icon.tsx';
+import { EditErasLink } from './world-settings.tsx';
 
 export interface WarningActions {
   onJump: (fact: FactRef) => void;
@@ -19,16 +21,17 @@ export function WarningItem({ w, actions, compact }: { w: Warning; actions: Warn
         <code class="rule-id">{w.ruleId}</code>
       </div>
       <p class="warning-message">{w.message}</p>
+      <EditErasLink message={w.message} />
       {w.intended?.note && <p class="warning-note">Note: {w.intended.note}</p>}
       <div class="warning-actions">
         {!compact && (
           <button type="button" class="link" onClick={() => actions.onJump(w.offending)}>
-            Go to {w.offending.source} <span class="muted">({w.offending.field})</span>
+            Go to {w.offending.source} <span class="muted">({w.offending.chapter ? 'sentence' : w.offending.field})</span>
           </button>
         )}
         {w.conflicting && (
           <button type="button" class="link" onClick={() => actions.onJump(w.conflicting!)}>
-            Canon: {w.conflicting.source} <span class="muted">({w.conflicting.field})</span>
+            Canon: {w.conflicting.source} <span class="muted">({w.conflicting.chapter ? 'sentence' : w.conflicting.field})</span>
           </button>
         )}
         {w.intended ? (
@@ -61,11 +64,21 @@ export function WarningItem({ w, actions, compact }: { w: Warning; actions: Warn
   );
 }
 
+const COLLAPSED_KEY = 'lore-forge.warningSections';
+const SECTIONS: [BadgeKind, string][] = [['error', 'Errors'], ['warning', 'Warnings'], ['info', 'Info'], ['intended', 'Marked intended']];
+
 export function WarningsPanel({ warnings, selectedId, actions }: { warnings: Warning[]; selectedId: string | null; actions: WarningActions }) {
   const [scope, setScope] = useState<'all' | 'entry'>('all');
   const shown = scope === 'entry' && selectedId ? warnings.filter((w) => involves(w, selectedId)) : warnings;
   const active = shown.filter((w) => !w.intended);
-  const intended = shown.filter((w) => w.intended);
+  const [collapsed, setCollapsed] = useState<BadgeKind[]>(() => {
+    try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '["intended"]') as BadgeKind[]; } catch { return ['intended']; }
+  });
+  const toggle = (k: BadgeKind) => {
+    const next = collapsed.includes(k) ? collapsed.filter((x) => x !== k) : [...collapsed, k];
+    setCollapsed(next);
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+  };
   const count = (s: Warning['severity']) => warnings.filter((w) => !w.intended && w.severity === s).length;
   return (
     <aside class="warnings-panel" aria-labelledby="warnings-title">
@@ -80,17 +93,25 @@ export function WarningsPanel({ warnings, selectedId, actions }: { warnings: War
         </div>
       </div>
       {active.length === 0 && <p class="ok-line"><span aria-hidden="true">✓ </span>No open warnings{scope === 'entry' ? ' for this entry' : ''}.</p>}
-      <ul class="warning-list" ref={animated}>
-        {active.map((w) => <WarningItem key={w.id} w={w} actions={actions} />)}
-      </ul>
-      {intended.length > 0 && (
-        <details class="intended-group">
-          <summary>Marked intended ({intended.length})</summary>
-          <ul class="warning-list" ref={animated}>
-            {intended.map((w) => <WarningItem key={w.id} w={w} actions={actions} />)}
-          </ul>
-        </details>
-      )}
+      {SECTIONS.map(([kind, label]) => {
+        const list = shown.filter((w) => kindOf(w) === kind);
+        if (!list.length) return null;
+        const open = !collapsed.includes(kind);
+        return (
+          <section key={kind} class={`warning-section is-${kind}${open ? ' is-open' : ''}`} data-kind={kind}>
+            <h3>
+              <button type="button" class="section-toggle" aria-expanded={open} onClick={() => toggle(kind)}>
+                <Icon name="play-button" class="chevron" /> <Icon name={BADGE[kind].icon} /> {label} <span class="section-count">({list.length})</span>
+              </button>
+            </h3>
+            {open && (
+              <ul class="warning-list" ref={animated}>
+                {list.map((w) => <WarningItem key={w.id} w={w} actions={actions} />)}
+              </ul>
+            )}
+          </section>
+        );
+      })}
     </aside>
   );
 }

@@ -12,6 +12,10 @@ export interface Mention {
 const WORD = '[\\p{L}\\p{N}\\p{M}_]';
 const MIN_LENGTH = 2;
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Turkish dotted and dotless i are the same letter for matching (case still counts): i = ı, I = İ. */
+const foldI = (s: string) => s.normalize('NFC').replace(/ı/g, 'i').replace(/İ/g, 'I');
+/** Regex source for one word of a name, with ı/i and İ/I matching each other. */
+export const namePattern = (s: string) => escape(s).replace(/i/g, '[iı]').replace(/I/g, '[Iİ]');
 
 /** Spans that already are explicit links or code: [[...]], @id and `code`. Implicit matching skips them. */
 function maskedRanges(text: string): [number, number][] {
@@ -24,7 +28,7 @@ function maskedRanges(text: string): [number, number][] {
 
 /**
  * Finds entry names and aliases written as plain words in text.
- * Case-sensitive, whole words only (Unicode-aware boundaries), longest name first,
+ * Case-sensitive (except that Turkish ı/i and İ/I match each other), whole words only (Unicode-aware boundaries), longest name first,
  * so "Kadir Humpback" wins over "Kadir". Names shorter than two characters are ignored.
  */
 export class MentionMatcher {
@@ -34,7 +38,7 @@ export class MentionMatcher {
   constructor(entries: readonly Entry[]) {
     for (const e of entries) {
       for (const raw of [e.name, ...(e.aliases ?? [])]) {
-        const n = raw.trim().replace(/\s+/g, ' ');
+        const n = foldI(raw.trim().replace(/\s+/g, ' '));
         if ([...n].length < MIN_LENGTH) continue;
         const ids = this.owners.get(n) ?? [];
         if (!ids.includes(e.id)) ids.push(e.id);
@@ -43,7 +47,7 @@ export class MentionMatcher {
     }
     const names = [...this.owners.keys()].sort((a, b) => [...b].length - [...a].length || a.localeCompare(b));
     // A space inside a name matches any run of spaces or tabs (not line breaks).
-    const alts = names.map((n) => n.split(' ').map(escape).join('[ \\t]+'));
+    const alts = names.map((n) => n.split(' ').map(namePattern).join('[ \\t]+'));
     this.re = alts.length ? new RegExp(`(?<!${WORD})(?:${alts.join('|')})(?!${WORD})`, 'gu') : undefined;
   }
 
@@ -56,7 +60,7 @@ export class MentionMatcher {
       const start = m.index;
       const end = start + m[0].length;
       if (masks.some(([a, b]) => start < b && end > a)) continue;
-      const ids = (this.owners.get(m[0].replace(/[ \t]+/g, ' ')) ?? []).filter((id) => id !== opts.exclude);
+      const ids = (this.owners.get(foldI(m[0].replace(/[ \t]+/g, ' '))) ?? []).filter((id) => id !== opts.exclude);
       if (ids.length) out.push({ start, end, text: m[0], ids });
     }
     return out;

@@ -1,3 +1,4 @@
+import { detailRelations } from '../details.ts';
 import { isEnded } from '../lifecycle.ts';
 import { RELATION_GROUPS, relationKind, relationLabel, type RelationGroup } from '../relation-kinds.ts';
 import type { Entry, World } from '../types.ts';
@@ -23,6 +24,19 @@ export interface WebEdge {
   label: string;
   group: RelationGroup;
   groupLabel: string;
+  /** The entry whose file holds this link. */
+  holder: string;
+  /** Index into the holder's `relations`, when it is a plain relation. */
+  index?: number;
+  /** Detail field the link comes from (e.g. "home"), when it is not a plain relation. Edit it in the editor. */
+  field?: string;
+}
+
+export interface WebOptions {
+  /** Extra entries to show (e.g. dropped onto the canvas), even when not related yet. */
+  add?: readonly string[];
+  /** Entries to leave out of the view (the entries themselves are untouched). */
+  hide?: readonly string[];
 }
 
 export interface RelationWeb {
@@ -37,19 +51,22 @@ export interface RelationWeb {
  * neighbours sorted by relation group so allies, enemies and members cluster.
  * Relations between two neighbours are drawn too.
  */
-export function relationWeb(world: World, focusId: string): RelationWeb | undefined {
+export function relationWeb(world: World, focusId: string, opts: WebOptions = {}): RelationWeb | undefined {
   const ix = new WorldIndex(world);
   const focus = ix.byIdOf(focusId);
   if (!focus) return undefined;
   const all: WebEdge[] = [];
   for (const e of ix.entries) {
-    for (const r of e.relations ?? []) {
-      const t = ix.resolve(r.target);
-      if (!t || t.id === e.id) continue;
-      const group = relationKind(r.type)?.group ?? 'other';
-      all.push({ from: e.id, to: t.id, type: r.type, label: relationLabel(r.type), group, groupLabel: RELATION_GROUPS[group].label });
-    }
+    const push = (from: Entry | undefined, to: Entry | undefined, type: string, link: { index?: number; field?: string }) => {
+      if (!from || !to || from.id === to.id) return;
+      const group = relationKind(type)?.group ?? 'other';
+      all.push({ from: from.id, to: to.id, type, label: relationLabel(type), group, groupLabel: RELATION_GROUPS[group].label, holder: e.id, ...link });
+    };
+    (e.relations ?? []).forEach((r, index) => push(e, ix.resolve(r.target), r.type, { index }));
+    for (const d of detailRelations(e)) push(ix.resolve(d.source), ix.resolve(d.target), d.type, { field: d.field });
   }
+  const hide = new Set(opts.hide ?? []);
+  hide.delete(focus.id);
   const touching = all.filter((ed) => ed.from === focus.id || ed.to === focus.id);
   const order = Object.keys(RELATION_GROUPS);
   const firstGroup = new Map<string, number>();
@@ -58,7 +75,9 @@ export function relationWeb(world: World, focusId: string): RelationWeb | undefi
     const g = order.indexOf(ed.group);
     firstGroup.set(other, Math.min(firstGroup.get(other) ?? g, g));
   }
+  for (const id of opts.add ?? []) if (id !== focus.id && ix.byIdOf(id) && !firstGroup.has(id)) firstGroup.set(id, order.length);
   const around = [...firstGroup.keys()]
+    .filter((id) => !hide.has(id))
     .map((id) => ix.byIdOf(id)!)
     .sort((a, b) => firstGroup.get(a.id)! - firstGroup.get(b.id)! || a.name.localeCompare(b.name));
   const { nodeW, nodeH, margin } = WEB_LAYOUT;

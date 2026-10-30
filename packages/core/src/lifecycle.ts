@@ -67,24 +67,6 @@ export function statusLabel(e: Entry): string | undefined {
   return LIFECYCLE[e.type]?.statuses.find((x) => x.value === s)?.label ?? s;
 }
 
-/** Races to suggest: the ones already used in the world first, then common defaults. */
-export const DEFAULT_RACES = ['human', 'elf', 'dwarf', 'orc', 'camel-folk', 'ghoul', 'zombie', 'vampire', 'spirit', 'djinn'];
-
-const RACE_ICONS: Record<string, IconName> = {
-  human: 'person', elf: 'woman-elf-face', dwarf: 'dwarf-face', orc: 'orc-head', 'camel-folk': 'camel-head', camel: 'camel-head',
-  ghoul: 'daemon-skull', zombie: 'shambling-zombie', vampire: 'vampire-dracula', spirit: 'spectre', ghost: 'spectre', djinn: 'djinn', jinn: 'djinn',
-};
-
-/** Icon for a race or kind: a known one by its (singular, lower-case) word, otherwise a hooded figure. */
-export function raceIcon(race: string): IconName {
-  const key = race.trim().toLowerCase().replace(/\s+/g, '-');
-  return RACE_ICONS[key] ?? RACE_ICONS[key.replace(/s$/, '')] ?? 'hood';
-}
-export function raceSuggestions(entries: readonly Entry[]): string[] {
-  const used = entries.flatMap((e) => (e.type === 'character' && e.race?.trim() ? [e.race.trim()] : []));
-  return [...new Set([...used.sort((a, b) => a.localeCompare(b)), ...DEFAULT_RACES])];
-}
-
 /** The end date text (died/destroyed/dissolved), even when the editor hides it. */
 export function endValue(e: Entry): string | undefined {
   const lc = LIFECYCLE[e.type];

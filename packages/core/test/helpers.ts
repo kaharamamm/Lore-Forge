@@ -16,13 +16,16 @@ export interface Draft {
 }
 
 /** Build a world the same way the app and CLI do: from files. */
-export function world(drafts: Draft[], opts: { intended?: IntendedMark[]; manifest?: Partial<WorldManifest> } = {}): World {
+export function world(drafts: Draft[], opts: { intended?: IntendedMark[]; manifest?: Partial<WorldManifest>; story?: string | string[]; ignored?: string[] } = {}): World {
   const files = drafts.map((d) => {
     const e = { body: '', ...d } as unknown as Entry;
     return { path: entryPath(e), content: serializeEntry(e) };
   });
   files.push({ path: 'world.json', content: JSON.stringify({ ...manifest, ...opts.manifest }) });
   if (opts.intended) files.push({ path: 'intended.json', content: JSON.stringify({ schemaVersion: 1, intended: opts.intended }) });
+  const story = typeof opts.story === 'string' ? [opts.story] : (opts.story ?? []);
+  story.forEach((body, i) => files.push({ path: `story/0${i + 1}-chapter-${i + 1}.md`, content: `---\ntitle: Chapter ${i + 1}\norder: ${i + 1}\n---\n\n${body}\n` }));
+  if (opts.ignored) files.push({ path: 'story-ignored.json', content: JSON.stringify({ schemaVersion: 1, ignored: opts.ignored.map((key) => ({ key })) }) });
   return parseWorld(files);
 }
 

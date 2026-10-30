@@ -44,6 +44,12 @@ export function toMarkdown(doc: Doc, imageHref: (file: string) => string = (f) =
       case 'prompt':
         out.push(`**${b.label}:**`, '', '```text', b.text, '```', '');
         break;
+      case 'front':
+        // The cover lines above already give the title page; the other front pages follow as plain text.
+        if (b.role === 'copyright') out.push(...b.lines.filter((l) => !doc.cover.lines.includes(l)).map((l) => `<small>${l}</small>  `), '');
+        if (b.role === 'dedication') out.push(...b.lines.map((l) => `*${l}*`), '');
+        if (b.role === 'epigraph') out.push(...b.lines.map((l) => `> ${l}`), '');
+        break;
       case 'box':
         out.push(`${'#'.repeat(Math.min(4 + depth, 6))} ${b.title}`, '');
         for (const inner of b.blocks) write(inner, depth + 1);

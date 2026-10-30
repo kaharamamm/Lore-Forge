@@ -1,7 +1,7 @@
 import type { IconName, Warning } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
 
-const BADGE = {
+export const BADGE = {
   error: { icon: 'cancel', label: 'Error' },
   warning: { icon: 'hazard-sign', label: 'Warning' },
   info: { icon: 'info', label: 'Info' },

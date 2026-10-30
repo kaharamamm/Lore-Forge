@@ -1,6 +1,6 @@
 {
   "name": "@lore-forge/pdf",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Renders Lore-Forge publish documents (World Codex, Story Book) to PDF with pdfkit and embedded DejaVu fonts.",
   "type": "module",
@@ -9,17 +9,36 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "fonts"
   ],
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
-    "@lore-forge/core": "0.3.1",
+    "@fontsource/almendra": "^5.3.0",
+    "@fontsource/caladea": "^5.3.0",
+    "@fontsource/carlito": "^5.3.0",
+    "@fontsource/cinzel-decorative": "^5.3.0",
+    "@fontsource/cormorant-garamond": "^5.3.0",
+    "@fontsource/eb-garamond": "^5.3.0",
+    "@fontsource/great-vibes": "^5.3.0",
+    "@fontsource/im-fell-english": "^5.3.0",
+    "@fontsource/medievalsharp": "^5.3.0",
+    "@fontsource/metamorphous": "^5.3.0",
+    "@fontsource/pirata-one": "^5.3.0",
+    "@fontsource/playfair-display": "^5.3.0",
+    "@fontsource/uncial-antiqua": "^5.3.0",
+    "@fontsource/unifrakturmaguntia": "^5.3.0",
+    "@lore-forge/core": "0.4.0",
     "dejavu-fonts-ttf": "^2.37.3",
+    "docx": "^9.15.0",
+    "fflate": "^0.8.3",
+    "hyphen": "^1.14.1",
     "pdfkit": "^0.20.2"
   }
 }

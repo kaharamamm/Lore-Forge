@@ -8,7 +8,7 @@ import { createWorld } from '@lore-forge/core/node';
 import { builtinRules } from '@lore-forge/core';
 
 const main = join(import.meta.dirname, '..', 'src', 'main.ts');
-const example = join(import.meta.dirname, '..', '..', '..', 'examples', 'shifting-sands');
+const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
 const lore = (...args: string[]) => spawnSync(process.execPath, ['--conditions=source', main, ...args], { encoding: 'utf8' });
 
 test('lore check on the example world prints every starter rule and exits 1', () => {
@@ -17,7 +17,8 @@ test('lore check on the example world prints every starter rule and exits 1', ()
   assert.match(r.stdout, /Orsan the Grey can't kill Queen Ilsa in 1920: Orsan the Grey died in 1800 \(source: Characters\/Orsan the Grey\)\./);
   for (const rule of builtinRules) assert.match(r.stdout, new RegExp(`\\[${rule.id}\\]`), `rule ${rule.id} should fire on the example world`);
   assert.match(r.stdout, /INTENDED \[after-death\] Nur the Twice-Born/);
-  assert.match(r.stdout, /10 errors, 4 warnings, 1 info, 1 marked intended/);
+  assert.match(r.stdout, /11 errors, 5 warnings, 1 info, 1 marked intended/);
+  assert.match(r.stdout, /\[story-contradiction\] The story says Orsan the Grey was born in 1745, but Characters\/Orsan the Grey says 1740\.\n\s+at Story\/The Salt Road \(story\/01-the-salt-road\.md\): "Orsan the Grey was born in 1745/);
 });
 
 test('lore check --json prints a versioned report', () => {
@@ -25,8 +26,9 @@ test('lore check --json prints a versioned report', () => {
   assert.equal(r.status, 1);
   const report = JSON.parse(r.stdout);
   assert.equal(report.schemaVersion, 1);
-  assert.deepEqual(report.counts, { error: 10, warning: 4, info: 1, intended: 1 });
-  assert.equal(new Set(report.warnings.map((w: { ruleId: string }) => w.ruleId)).size, builtinRules.length);
+  assert.deepEqual(report.counts, { error: 11, warning: 5, info: 1, intended: 1 });
+  // Every starter rule fires once in the example, plus the story check (story/01-the-salt-road.md).
+  assert.equal(new Set(report.warnings.map((w: { ruleId: string }) => w.ruleId)).size, builtinRules.length + 1);
 });
 
 test('lore export writes one deterministic snapshot', () => {
@@ -55,7 +57,7 @@ test('lore codex and lore book write a PDF and a Markdown sidecar', () => {
   const book = lore('book', example, '--out', join(dir, 'book.pdf'));
   assert.equal(book.status, 0, book.stdout + book.stderr);
   assert.ok(existsSync(join(dir, 'book.pdf')));
-  assert.match(readFileSync(join(dir, 'book.md'), 'utf8'), /## Chapter 4\. The Fall of Saltmere/);
+  assert.match(readFileSync(join(dir, 'book.md'), 'utf8'), /## Chapter 1\. The Salt Road[\s\S]*## Appendix: Chronicle[\s\S]*#### The Fall of Saltmere/);
   assert.equal(lore('book', example, '-o').status, 2);
 });
 

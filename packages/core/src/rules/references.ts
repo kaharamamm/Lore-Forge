@@ -1,4 +1,5 @@
 import type { Finding, Rule } from '../engine.ts';
+import { DETAIL_FIELDS, detailList } from '../details.ts';
 import { bodyLinks } from '../links.ts';
 import type { Entry } from '../types.ts';
 import { normalizeName, type WorldIndex } from '../world-index.ts';
@@ -29,6 +30,7 @@ export function references(e: Entry, ix?: WorldIndex): Reference[] {
       if (a.target) out.push({ ref: a.target, field: `actions[${i}]` });
     });
   }
+  for (const f of DETAIL_FIELDS[e.type]) if (f.kind === 'ref' || f.kind === 'refs') for (const ref of detailList(e, f.key)) out.push({ ref, field: f.key });
   for (const l of bodyLinks(e.body)) out.push({ ref: l.ref, field: 'body' });
   if (ix) {
     for (const m of ix.mentions.find(e.body, { exclude: e.id })) {

@@ -64,6 +64,10 @@ export interface Era {
   name: string;
   /** Absolute year on the world's single axis that this era's year 1 maps to. */
   start: number;
+  /** Optional last absolute year of the era (inclusive). Without it the era lasts until the next one starts. */
+  end?: number;
+  /** Optional colour of the era's band on the timeline, #rrggbb. */
+  color?: string;
 }
 
 export interface Month {
@@ -94,6 +98,35 @@ export interface WorldManifest {
   rules?: Record<string, RuleSetting>;
   /** Story Book export settings. */
   book?: BookSettings;
+  /** How the world's book looks on the library shelf. */
+  cover?: WorldCoverSettings;
+}
+
+export interface WorldCoverSettings {
+  /** Cover colour (the top of the gradient), #rrggbb or #rrggbbaa. Without it the colours come from the world id. */
+  color?: string;
+  /** Bottom of the gradient. The same as "color" for a plain cover; without it a darker shade of "color". */
+  color2?: string;
+  /** game-icons.net emblem name, or "none". Without it one is picked by the world id. */
+  icon?: string;
+  /** Emblem colour. Default gold. */
+  iconColor?: string;
+  /** Cover picture, relative to the world folder (e.g. images/cover.png), or "none" for no picture at all. */
+  image?: string;
+  /** Title lettering: "display" (Cinzel capitals, the default), "serif" or "sans". */
+  titleStyle?: string;
+  /** Title colour. Default parchment white. */
+  titleColor?: string;
+  /** Title font family: a bundled cover font (see BUNDLED_FONTS) or a system font. Without it, the title style's lettering. */
+  font?: string;
+  /** false hides the title on the front cover (it stays on the spine). Default true. */
+  showTitle?: boolean;
+  /** false hides the emblem on the front cover (it stays on the spine). Default true. */
+  showEmblem?: boolean;
+  /** Spine colour on the shelf. Without it, the left edge of the cover picture, else a darker shade of the cover colour. */
+  spineColor?: string;
+  /** Spine title colour. Without it, gold, parchment or ink, whichever reads on the spine. */
+  spineInk?: string;
 }
 
 export interface BookSettings {
@@ -101,7 +134,16 @@ export interface BookSettings {
   author?: string;
   /** Split each era into chapters of this many years. Without it, one chapter per era. */
   chapterYears?: number;
+  /** Print trim size. Default 6x9 inches. */
+  trim?: TrimSize;
+  dedication?: string;
+  epigraph?: string;
+  epigraphSource?: string;
+  /** Copyright page text; a plain notice with the author and year is used when empty. */
+  copyright?: string;
+  publisher?: string;
 }
+export type TrimSize = '6x9' | '5.5x8.5' | 'a5';
 
 export interface Relation {
   /** parent-of, child-of, member-of, leader-of, ally-of, enemy-of, rules, owns, killed, spouse-of, sibling-of, ... */
@@ -198,6 +240,18 @@ export interface RefImage {
   provenance?: Provenance;
 }
 
+/** Card picture choice: a game-icon, colours, or one of the entry's images. Missing parts use the defaults. */
+export interface Picture {
+  /** game-icons.net icon name, e.g. "castle". */
+  icon?: string;
+  /** Background colour, #rrggbb or #rrggbbaa. */
+  color?: string;
+  /** Icon (accent) colour, #rrggbb or #rrggbbaa. */
+  accent?: string;
+  /** Image to show, relative to the world folder (also listed in `images`). */
+  image?: string;
+}
+
 export interface Participant {
   id: string;
   role?: string;
@@ -219,12 +273,19 @@ interface EntryBase {
   relations?: Relation[];
   /** Reference images. Views come from IMAGE_VIEWS[type]. */
   images?: RefImage[];
+  /** How the entry's card looks when it has no image of its own (or which image to show). Set from the Home page. */
+  picture?: Picture;
   /** Free-text visual description; keys from VISUAL_FIELDS[type]. */
   visual?: Record<string, string>;
   /** Story Book: put this page in a chapter with this title instead of the automatic era/year chapter. */
   chapter?: string;
   /** Story Book: order inside the chapter. Default 0; lower comes first; ties go by date, then name. */
   bookOrder?: number;
+  /**
+   * Optional detail fields from DETAIL_FIELDS[type] (gender, occupation, ruler, ...), stored as top-level
+   * front-matter keys. Text, or a list for list/refs fields. Missing means unknown.
+   */
+  details?: Record<string, string | string[]>;
   /** Markdown body. May reference entries as [[id]], [[Name]], [[id|label]] or @id. */
   body: string;
   /** Front-matter keys Lore-Forge does not know. Kept as-is when the file is saved. */
@@ -233,7 +294,10 @@ interface EntryBase {
 
 export interface Character extends EntryBase {
   type: 'character';
-  /** Race or kind, free text: human, camel-folk, ghoul, vampire... Links to an entry when one has this id or name. */
+  /**
+   * Race or kind, free text: human, camel-folk, ghoul, vampire... Several are comma-separated ("elf, human");
+   * a YAML list is read the same way. Each links to an entry when one has this id or name.
+   */
   race?: string;
   born?: DateText;
   died?: DateText;
@@ -296,6 +360,35 @@ export interface World {
   files: Record<string, string>;
   /** Files that could not be read cleanly. Reported by the file-error rule. */
   issues: LoadIssue[];
+  /** The story manuscript (story/*.md), in reading order. Missing or empty in worlds without a story. */
+  story?: StoryChapter[];
+  /** Story proposals the author chose to ignore (story-ignored.json). */
+  storyIgnored?: StoryIgnore[];
+}
+
+/** One chapter of the story manuscript: story/NN-slug.md, YAML header (title, order, date) and Markdown prose. */
+export interface StoryChapter {
+  /** Path inside the world folder. Chosen when the chapter is made; it stays put when the title or order changes. */
+  file: string;
+  title: string;
+  /** Reading order; lower comes first. */
+  order: number;
+  /** Optional in-world date the chapter is set at, written like any date ("1920", "312 OK"). */
+  date?: DateText;
+  /** Markdown prose. Names of entries are linked automatically, like entry text. */
+  body: string;
+  /** Header keys Lore-Forge does not know. Kept as-is when the file is saved. */
+  extra?: Record<string, unknown>;
+}
+
+/** A story proposal the author ignored, so it does not come back. */
+export interface StoryIgnore {
+  /** Proposal key (see Proposal.key). */
+  key: string;
+  /** Name shown in the list, for people reading the file. */
+  name?: string;
+  /** Real-world ISO date. */
+  ignoredAt?: string;
 }
 
 export interface LoadIssue {
@@ -309,8 +402,11 @@ export interface FactRef {
   entryId: string;
   /** Field inside the entry, e.g. "died", "actions[0]", "body". */
   field: string;
-  /** Human-readable source, e.g. "Characters/Orsan the Grey". */
+  /** Human-readable source, e.g. "Characters/Orsan the Grey" or "Story/The Salt Road". */
   source: string;
+  /** Story facts only: the chapter file (story/NN-slug.md) and the [start, end) offsets in its text. */
+  chapter?: string;
+  span?: [number, number];
 }
 
 export interface Warning {

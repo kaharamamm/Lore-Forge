@@ -3,39 +3,137 @@
   "$id": "https://lore-forge.local/schemas/v1/check-report.schema.json",
   "title": "Lore-Forge check report (lore check --json), schema version 1",
   "type": "object",
-  "required": ["schemaVersion", "world", "counts", "warnings"],
+  "required": [
+    "schemaVersion",
+    "world",
+    "counts",
+    "warnings"
+  ],
   "$defs": {
     "fact": {
       "type": "object",
-      "required": ["entryId", "field", "source"],
-      "properties": { "entryId": { "type": "string" }, "field": { "type": "string" }, "source": { "type": "string" } },
+      "required": [
+        "entryId",
+        "field",
+        "source"
+      ],
+      "properties": {
+        "entryId": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "chapter": {
+          "type": "string",
+          "description": "Story facts only: chapter file, e.g. story/01-the-salt-road.md. entryId is then \"story:\" + the file."
+        },
+        "span": {
+          "type": "array",
+          "description": "Story facts only: [start, end) character offsets into the chapter body.",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
       "additionalProperties": false
     },
     "warning": {
       "type": "object",
-      "required": ["id", "ruleId", "severity", "message", "offending"],
+      "required": [
+        "id",
+        "ruleId",
+        "severity",
+        "message",
+        "offending"
+      ],
       "properties": {
-        "id": { "type": "string", "description": "Stable: <ruleId>:<key>. Used by intended.json." },
-        "ruleId": { "type": "string" },
-        "severity": { "enum": ["error", "warning", "info"] },
-        "message": { "type": "string" },
-        "offending": { "$ref": "#/$defs/fact" },
-        "conflicting": { "$ref": "#/$defs/fact" },
-        "intended": { "$ref": "intended.schema.json#/properties/intended/items" }
+        "id": {
+          "type": "string",
+          "description": "Stable: <ruleId>:<key>. Used by intended.json."
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "offending": {
+          "$ref": "#/$defs/fact"
+        },
+        "conflicting": {
+          "$ref": "#/$defs/fact"
+        },
+        "intended": {
+          "$ref": "intended.schema.json#/properties/intended/items"
+        }
       },
       "additionalProperties": false
     }
   },
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "world": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string" }, "name": { "type": "string" } }, "additionalProperties": false },
-    "counts": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "world": {
       "type": "object",
-      "required": ["error", "warning", "info", "intended"],
-      "properties": { "error": { "type": "integer" }, "warning": { "type": "integer" }, "info": { "type": "integer" }, "intended": { "type": "integer" } },
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
       "additionalProperties": false
     },
-    "warnings": { "type": "array", "items": { "$ref": "#/$defs/warning" } }
+    "counts": {
+      "type": "object",
+      "required": [
+        "error",
+        "warning",
+        "info",
+        "intended"
+      ],
+      "properties": {
+        "error": {
+          "type": "integer"
+        },
+        "warning": {
+          "type": "integer"
+        },
+        "info": {
+          "type": "integer"
+        },
+        "intended": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/warning"
+      }
+    }
   },
   "additionalProperties": false
 }

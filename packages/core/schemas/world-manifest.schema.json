@@ -22,7 +22,9 @@
             "properties": {
               "id": { "type": "string", "pattern": "^[A-Za-z]\\w*$" },
               "name": { "type": "string" },
-              "start": { "type": "integer", "description": "Absolute year on the world axis that year 1 of this era maps to." }
+              "start": { "type": "integer", "description": "Absolute year on the world axis that year 1 of this era maps to." },
+              "end": { "type": "integer", "description": "Optional last absolute year of the era; without it the era lasts until the next one starts." },
+              "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "Optional colour of the era band on the timeline." }
             },
             "additionalProperties": false
           }
@@ -47,7 +49,32 @@
       "properties": {
         "title": { "type": "string" },
         "author": { "type": "string" },
-        "chapterYears": { "type": "integer", "minimum": 1, "description": "Split each era into chapters of this many years; default one chapter per era." }
+        "chapterYears": { "type": "integer", "minimum": 1, "description": "Split each era into chapters of this many years; default one chapter per era." },
+        "trim": { "enum": ["6x9", "5.5x8.5", "a5"], "description": "Print trim size of the Story Book. Default 6x9 (inches)." },
+        "dedication": { "type": "string", "description": "Optional dedication page text." },
+        "epigraph": { "type": "string", "description": "Optional epigraph (opening quotation)." },
+        "epigraphSource": { "type": "string", "description": "Who the epigraph is by." },
+        "copyright": { "type": "string", "description": "Copyright page text; a plain notice with the author and year is used when empty." },
+        "publisher": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "cover": {
+      "type": "object",
+      "description": "How the world's book looks on the library shelf.",
+      "properties": {
+        "color": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "description": "Top of the cover gradient." },
+        "color2": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "description": "Bottom of the cover gradient; the same as color for a plain cover." },
+        "icon": { "type": "string", "description": "game-icons.net emblem name, or none." },
+        "iconColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+        "image": { "type": "string", "description": "Cover picture, relative to the world folder, or none." },
+        "titleStyle": { "enum": ["display", "serif", "sans"] },
+        "titleColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+        "font": { "type": "string", "description": "Title font family: a bundled cover font or a system font." },
+        "showTitle": { "type": "boolean", "description": "false hides the title on the front cover; it stays on the spine." },
+        "showEmblem": { "type": "boolean", "description": "false hides the emblem on the front cover; it stays on the spine." },
+        "spineColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+        "spineInk": { "type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" }
       },
       "additionalProperties": false
     },

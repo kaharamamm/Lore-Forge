@@ -14,9 +14,17 @@ const USED = [
   'woman-elf-face', 'dwarf-face', 'orc-head', 'camel-head', 'daemon-skull', 'shambling-zombie', 'vampire-dracula', 'spectre', 'djinn', 'hood',
   // app
   'quill-ink', 'hourglass', 'sands-of-time', 'spider-web', 'book-cover', 'magnifying-glass', 'hazard-sign', 'cancel', 'check-mark', 'save', 'trash-can',
-  'quill', 'photo-camera', 'palette', 'sprout', 'compass', 'pointing', 'laurels', 'magic-swirl', 'treasure-map', 'world', 'return-arrow',
+  'quill', 'photo-camera', 'palette', 'sprout', 'compass', 'pointing', 'laurels', 'plain-arrow', 'perspective-dice-six-faces-random', 'spell-book', 'rune-stone', 'candle-flame', 'magic-swirl', 'treasure-map', 'world', 'return-arrow',
   'info', 'stars-stack', 'scroll-quill', 'locked-chest', 'pencil', 'files', 'book-pile', 'fast-backward-button', 'fast-forward-button',
   'cycle', 'exit-door', 'house', 'village', 'dragon-head', 'crystal-ball', 'expand', 'contract',
+  // story
+  'feather', 'play-button', 'semi-closed-eye',
+  // world settings
+  'calendar',
+  // default entry pictures (entry-icons.ts)
+  'anchor', 'ancient-ruins', 'angel-wings', 'battle-axe', 'beer-stein', 'bookshelf', 'bow-arrow', 'bowie-knife', 'breastplate', 'cargo-ship', 'cave-entrance', 'centaur', 'church', 'claw-hammer', 'coronation', 'crown-coin', 'crystal-wand', 'cyclops', 'death-skull', 'desert', 'elf-ear', 'fairy', 'female', 'forest', 'gem-pendant', 'giant', 'goblin-head', 'graveyard', 'great-pyramid', 'greek-temple', 'harp', 'hooded-assassin', 'hut', 'huts-village', 'imp-laugh', 'indian-palace', 'key', 'lighthouse', 'lightning-storm', 'magic-lamp', 'male', 'meeple-group', 'mermaid', 'minotaur', 'mountains', 'oasis', 'ogre', 'party-flags', 'pirate-flag', 'plague-doctor-profile', 'portculis', 'round-potion', 'shop', 'siege-tower', 'skeleton', 'spears', 'stone-bridge', 'stone-tower', 'tornado', 'tower-fall', 'troll', 'two-coins', 'visored-helm', 'well', 'wizard-staff', 'wolf-head', 'wolf-howl',
+  // library, images, app icon
+  'cog', 'paint-brush', 'cloud-upload', 'anvil', 'open-folder', 'paint-bucket',
 ];
 
 const require = createRequire(import.meta.url);

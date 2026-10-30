@@ -8,7 +8,7 @@ import { storyBook, worldCodex } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 import { defaultFontDir, inlineRuns, printable, renderPdf, sidecarPath, writePublication } from '@lore-forge/pdf';
 
-const example = join(import.meta.dirname, '..', '..', '..', 'examples', 'shifting-sands');
+const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
 const hasPdftotext = (() => {
   try {
     execFileSync('pdftotext', ['-v'], { stdio: 'ignore' });
@@ -55,7 +55,7 @@ test('writes the PDF and a Markdown sidecar with image links relative to it', as
     assert.match(md, /Art brief: Kadir Humpback/);
     assert.match(md, /Şafakta İlsa'nın ışığı söndü/);
     const link = /!\[Saltmere: Establishing shot\]\(([^)]+)\)/.exec(md)?.[1];
-    assert.ok(link && !link.startsWith('/') && link.endsWith('examples/shifting-sands/images/place-saltmere/establishing.png'), link);
+    assert.ok(link && !link.startsWith('/') && link.endsWith('worlds/shifting-sands/images/place-saltmere/establishing.png'), link);
     if (hasPdftotext) {
       const text = execFileSync('pdftotext', [out.pdf, '-'], { encoding: 'utf8' });
       assert.match(text, /Contents/);
@@ -99,4 +99,19 @@ test('no empty boxes: emoji the PDF font cannot draw are dropped, the words stay
     }
   }
   assert.ok(defaultFontDir());
+});
+
+test('cover fonts: a bundled font is embedded, a missing one falls back to DejaVu with a note, hidden titles skip it', async () => {
+  const world = await loadWorld(example);
+  const withCover = (cover: Record<string, unknown>) => ({ ...world, manifest: { ...world.manifest, cover: { ...world.manifest.cover, ...cover } } });
+  const names = (pdf: Buffer) => [...pdf.toString('latin1').matchAll(/\/BaseFont \/[A-Z]{6}\+([\w-]+)/g)].map((m) => m[1]);
+  for (const [family, face] of [['Pirata One', 'PirataOne'], ['Liberation Serif', 'LiberationSerif-Bold'], ['UnifrakturMaguntia', 'UnifrakturMaguntia']] as const) {
+    const r = await renderPdf(worldCodex(withCover({ font: family })), { worldDir: example });
+    assert.deepEqual(r.notes, [], family);
+    assert.ok(names(r.pdf).some((n) => n?.startsWith(face)), `${family}: ${names(r.pdf).join(', ')}`);
+  }
+  const missing = await renderPdf(worldCodex(withCover({ font: 'No Such Font 123' })), { worldDir: example });
+  assert.match(missing.notes[0] ?? '', /No Such Font 123.*DejaVu/);
+  const hidden = await renderPdf(worldCodex(withCover({ font: 'Pirata One', showTitle: false })), { worldDir: example });
+  assert.ok(!names(hidden.pdf).some((n) => n?.startsWith('PirataOne')));
 });

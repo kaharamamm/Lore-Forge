@@ -1,0 +1,11 @@
+# Launcher for running Lore-Forge from a source checkout on Linux (packaged AppImages make their own).
+# Copy to ~/.local/share/applications/, then replace /path/to/lore-forge with your checkout.
+[Desktop Entry]
+Type=Application
+Name=Lore-Forge
+Comment=Write and check the lore of your worlds
+Exec=sh -c "cd /path/to/lore-forge && npm run dev"
+Icon=/path/to/lore-forge/packages/desktop/build/icon.png
+Categories=Office;
+StartupWMClass=lore-forge
+Terminal=false

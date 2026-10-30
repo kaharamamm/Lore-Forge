@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lore-forge.local/schemas/v1/story-chapter.schema.json",
+  "title": "Lore-Forge story chapter header (story/NN-slug.md front matter), schema version 1",
+  "description": "YAML header of a manuscript chapter. The Markdown prose follows the header. A file without a header is read too: the title comes from the file name, the order from its NN- prefix.",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "order": {
+      "type": "number",
+      "description": "Reading order; lower comes first."
+    },
+    "date": {
+      "type": "string",
+      "description": "Optional in-world date the chapter is set at, e.g. \"1920\" or \"12.03.1920\" or \"~200 OK\"."
+    },
+    "era": {
+      "type": "string",
+      "description": "Optional era code, kept as an extra key."
+    },
+    "year": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "Optional year, kept as an extra key."
+    }
+  },
+  "additionalProperties": true
+}

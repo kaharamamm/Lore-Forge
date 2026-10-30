@@ -49,7 +49,12 @@ export function checkWorld(world: World, rules: readonly Rule[]): Warning[] {
       out.push(w);
     }
   }
-  return out.sort((a, b) => Number(!!a.intended) - Number(!!b.intended) || SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.id.localeCompare(b.id));
+  return sortWarnings(out);
+}
+
+/** Report order: open before intended, then by severity, then by id. Sorts in place. */
+export function sortWarnings(ws: Warning[]): Warning[] {
+  return ws.sort((a, b) => Number(!!a.intended) - Number(!!b.intended) || SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.id.localeCompare(b.id));
 }
 
 /** A list of rules you can extend: `registry.register(myRule)`. */

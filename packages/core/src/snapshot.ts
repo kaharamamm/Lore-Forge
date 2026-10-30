@@ -1,12 +1,14 @@
 import { parseDate, type ParsedDate } from './dates.ts';
-import { checkWorld, report, type CheckReport } from './engine.ts';
+import { checkWorld, report, sortWarnings, type CheckReport } from './engine.ts';
+import { analyzeStory } from './story-check.ts';
+import { wordCount } from './story.ts';
 import { builtinRules } from './rules/index.ts';
 import { references } from './rules/references.ts';
-import { SCHEMA_VERSION, type Entry, type WorldManifest, type World } from './types.ts';
+import { SCHEMA_VERSION, type Entry, type StoryChapter, type WorldManifest, type World } from './types.ts';
 import { WorldIndex } from './world-index.ts';
 
 export const SNAPSHOT_FORMAT = 'lore-forge.world-snapshot';
-export const GENERATOR = 'lore-forge 0.3.1';
+export const GENERATOR = 'lore-forge 0.4.0';
 
 export type SnapshotDate = Omit<ParsedDate, 'lo' | 'hi'> & { text: string; lo: number; hi: number };
 
@@ -37,6 +39,8 @@ export interface WorldSnapshot {
   generator: string;
   manifest: WorldManifest;
   entries: SnapshotEntry[];
+  /** The story manuscript in reading order. Only present when the world has story/ chapters. */
+  story?: (StoryChapter & { words: number })[];
   check: CheckReport;
 }
 
@@ -55,12 +59,16 @@ export function snapshot(world: World): WorldSnapshot {
     });
     return { entry, file: world.files[entry.id] ?? '', dates, references: refs };
   });
+  const story = world.story?.length ? world.story.map((c) => ({ ...c, words: wordCount(c.body) })) : undefined;
+  const warnings = checkWorld(world, builtinRules);
+  if (story) warnings.push(...analyzeStory(world).warnings);
   return {
     format: SNAPSHOT_FORMAT,
     schemaVersion: SCHEMA_VERSION,
     generator: GENERATOR,
     manifest: world.manifest,
     entries,
-    check: report(world, checkWorld(world, builtinRules)),
+    ...(story ? { story } : {}),
+    check: report(world, sortWarnings(warnings)),
   };
 }

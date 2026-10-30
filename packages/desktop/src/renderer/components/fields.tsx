@@ -1,7 +1,9 @@
 import { useEffect, useId, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { DATE_FORMATS_HINT, describeDate, parseDate, TYPE_SINGULAR, WorldIndex, type Calendar, type World } from '@lore-forge/core';
+import { DATE_FORMATS_HINT, describeDate, parseDate, TYPE_SINGULAR, WorldIndex, type Calendar, type IconName, type World } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
+import { Select } from './select.tsx';
+import { EditErasLink } from './world-settings.tsx';
 
 /** Empty input -> undefined, so empty fields disappear from the file. */
 export const opt = (s: string): string | undefined => (s.trim() === '' ? undefined : s);
@@ -68,7 +70,10 @@ export function DateField(props: { label: string; field: string; value: string |
   return (
     <Field label={props.label} field={props.field} hint={hint} invalid={invalid}>
       {(id, hintId) => (
-        <input id={id} type="text" class="date-input" value={props.value ?? ''} aria-invalid={invalid} aria-describedby={hintId} onInput={(e) => props.onChange(opt(e.currentTarget.value))} />
+        <>
+          <input id={id} type="text" class="date-input" value={props.value ?? ''} aria-invalid={invalid} aria-describedby={hintId} onInput={(e) => props.onChange(opt(e.currentTarget.value))} />
+          {r.kind === 'invalid' && <EditErasLink message={r.reason} />}
+        </>
       )}
     </Field>
   );
@@ -108,12 +113,8 @@ export function SelectField<T extends string>(props: { label: string; field: str
   return (
     <Field label={props.label} field={props.field}>
       {(id) => (
-        <select id={id} value={props.value ?? ''} onChange={(e) => props.onChange((e.currentTarget.value || undefined) as T | undefined)}>
-          <option value="">{props.emptyLabel ?? '(not set)'}</option>
-          {props.options.map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </select>
+        <Select id={id} value={props.value ?? ''} onChange={(v) => props.onChange((v || undefined) as T | undefined)}
+          options={[{ value: '', label: props.emptyLabel ?? '(not set)' }, ...props.options.map(([v, l]) => ({ value: v, label: l }))]} />
       )}
     </Field>
   );
@@ -151,5 +152,58 @@ export function ListEditor<T>(props: {
         + {props.addLabel}
       </button>
     </fieldset>
+  );
+}
+
+export interface ChipOption { value: string; label: string }
+
+/**
+ * Several short values as chips with an icon and a remove button; a text box with suggestions adds more
+ * (Enter, comma, picking a suggestion, or leaving the box). Used for race or kind and for links to entries.
+ */
+export function ChipInput(props: {
+  label: string; field: string; values: string[]; options: ChipOption[]; onChange: (v: string[]) => void;
+  icon: (v: string) => IconName; display?: (v: string) => string; hint?: ComponentChildren; placeholder?: string; invalid?: (v: string) => boolean;
+  onOpen?: (v: string) => void;
+}) {
+  const [text, setText] = useState('');
+  const listId = useId();
+  const add = (raw: string) => {
+    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean).map((s) => props.options.find((o) => o.label.toLowerCase() === s.toLowerCase())?.value ?? s);
+    const next = [...props.values];
+    for (const p of parts) if (!next.some((v) => v.toLowerCase() === p.toLowerCase())) next.push(p);
+    setText('');
+    if (next.length !== props.values.length) props.onChange(next);
+  };
+  const remove = (v: string) => props.onChange(props.values.filter((x) => x !== v));
+  const shown = (v: string) => props.display?.(v) ?? v;
+  return (
+    <Field label={props.label} field={props.field} hint={props.hint} invalid={props.values.some((v) => props.invalid?.(v))}>
+      {(id, hintId) => (
+        <div class="chip-input">
+          {props.values.map((v) => (
+            <span key={v} class={`chip${props.invalid?.(v) ? ' is-invalid' : ''}`} data-chip={v}>
+              <Icon name={props.icon(v)} />
+              {props.onOpen ? <button type="button" class="link chip-label" onClick={() => props.onOpen!(v)}>{shown(v)}</button> : <span class="chip-label">{shown(v)}</span>}
+              <button type="button" class="chip-remove" aria-label={`Remove ${shown(v)}`} onClick={() => remove(v)}>×</button>
+            </span>
+          ))}
+          <input id={id} type="text" list={listId} value={text} placeholder={props.values.length ? 'Add another…' : props.placeholder} aria-describedby={hintId}
+            onInput={(e) => {
+              const t = e.currentTarget.value;
+              if ((e as InputEvent).inputType === 'insertReplacementText' || t.endsWith(',')) add(t);
+              else setText(t);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && text.trim()) { e.preventDefault(); add(text); }
+              else if (e.key === 'Backspace' && !text && props.values.length) remove(props.values[props.values.length - 1]!);
+            }}
+            onBlur={() => text.trim() && add(text)} />
+          <datalist id={listId}>
+            {props.options.filter((o) => !props.values.includes(o.value)).map((o) => <option key={o.value} value={o.label} />)}
+          </datalist>
+        </div>
+      )}
+    </Field>
   );
 }

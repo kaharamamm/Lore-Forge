@@ -1,12 +1,12 @@
 import { useMemo } from 'preact/hooks';
-import { Background, Controls, Handle, MiniMap, Position, ReactFlow, type Edge, type EdgeProps, type Node, type NodeProps } from '@xyflow/react';
-import { LIFECYCLE, relationKind, TYPE_SINGULAR, WEB_LAYOUT, WorldIndex, type Entry, type RelationWeb, type World } from '@lore-forge/core';
+import { Background, ConnectionMode, Controls, Handle, MiniMap, Position, ReactFlow, type Connection, type Edge, type EdgeProps, type Node, type NodeProps } from '@xyflow/react';
+import { LIFECYCLE, relationKind, TYPE_SINGULAR, WEB_LAYOUT, WorldIndex, type Entry, type RelationWeb, type WebEdge as CoreWebEdge, type World } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
 import { Portrait } from './cover.tsx';
 
-type EntryNodeData = { entry: Entry; raceName?: string; ended: boolean; focus: boolean; onOpen: (id: string) => void };
+type EntryNodeData = { entry: Entry; raceName?: string; ended: boolean; focus: boolean; onOpen: (id: string) => void; onHide?: (id: string) => void; editable: boolean };
 type EntryNode = Node<EntryNodeData, 'entry'>;
-type WebEdgeData = { label: string; group: string; bend: number; arrow: boolean };
+type WebEdgeData = { label: string; group: string; bend: number; arrow: boolean; edge: CoreWebEdge };
 type WebEdge = Edge<WebEdgeData, 'web'>;
 
 const { nodeW: W, nodeH: H } = WEB_LAYOUT;
@@ -27,6 +27,10 @@ function EntryNodeView({ data }: NodeProps<EntryNode>) {
         </span>
       </button>
       <Handle type="source" position={Position.Bottom} class="web-handle" isConnectable={false} />
+      {data.editable && <Handle type="source" id="connect" position={Position.Right} class="web-connect" title="Drag onto another card to link them" />}
+      {data.onHide && !focus && (
+        <button type="button" class="node-hide-btn nodrag" aria-label={`Remove ${e.name} from this view`} title="Remove from this view (the entry stays)" onClick={() => data.onHide!(e.id)}>×</button>
+      )}
     </div>
   );
 }
@@ -42,6 +46,7 @@ function WebEdgeView({ id, sourceX, sourceY, targetX, targetY, data }: EdgeProps
   return (
     <g class={`web-edge g-${data?.group ?? 'other'}`}>
       <path id={id} class="edge" d={`M${x1} ${y1} Q${mx} ${my} ${x2} ${y2}`} marker-end={data?.arrow ? 'url(#web-arrow)' : undefined} />
+      <path class="edge-hit" d={`M${x1} ${y1} Q${mx} ${my} ${x2} ${y2}`}><title>Click to edit or delete this link</title></path>
       <text class="edge-label" x={mx} y={my - 4} text-anchor="middle">{data?.label}</text>
     </g>
   );
@@ -54,19 +59,21 @@ const edgeTypes = { web: WebEdgeView };
  * The relationship web on a pan-and-zoom canvas (React Flow through preact/compat):
  * the core layout places the boxes; drag to pan, Ctrl+scroll or the buttons to zoom, drag a card to move it.
  */
-export function RelationWebFlow({ world, web, onOpen }: { world: World; web: RelationWeb; onOpen: (id: string) => void }) {
+export function RelationWebFlow({ world, web, onOpen, onConnect, onHide, onEdit }: {
+  world: World; web: RelationWeb; onOpen: (id: string) => void; onConnect?: (from: string, to: string) => void; onHide?: (id: string) => void; onEdit?: (edge: CoreWebEdge) => void;
+}) {
   const ix = useMemo(() => new WorldIndex(world), [world]);
   const nodes = useMemo((): EntryNode[] => web.nodes.map((n) => ({
     id: n.id, type: 'entry', position: { x: n.x - W / 2, y: n.y - H / 2 }, width: W, height: H,
-    data: { entry: n.entry, ended: n.ended, focus: n.focus, onOpen, ...(n.entry.type === 'character' && n.entry.race ? { raceName: ix.nameOf(n.entry.race) } : {}) },
-  })), [web, ix, onOpen]);
+    data: { entry: n.entry, ended: n.ended, focus: n.focus, onOpen, editable: !!onConnect, ...(onHide ? { onHide } : {}), ...(n.entry.type === 'character' && n.entry.race ? { raceName: n.entry.race.split(',').map((r) => ix.nameOf(r.trim())).join(', ') } : {}) },
+  })), [web, ix, onOpen, onHide, onConnect]);
   const edges = useMemo((): WebEdge[] => {
     const seen = new Map<string, number>();
     return web.edges.map((ed, i) => {
       const pair = [ed.from, ed.to].sort().join('|');
       const bend = seen.get(pair) ?? 0;
       seen.set(pair, bend + 1);
-      return { id: `e${i}`, source: ed.from, target: ed.to, type: 'web', data: { label: ed.label, group: ed.group, bend, arrow: !relationKind(ed.type)?.symmetric } };
+      return { id: `e${i}`, source: ed.from, target: ed.to, type: 'web', data: { label: ed.label, group: ed.group, bend, arrow: !relationKind(ed.type)?.symmetric, edge: ed } };
     });
   }, [web]);
   return (
@@ -78,9 +85,12 @@ export function RelationWebFlow({ world, web, onOpen }: { world: World; web: Rel
           </marker>
         </defs>
       </svg>
-      <ReactFlow<EntryNode, WebEdge> defaultNodes={nodes} defaultEdges={edges} key={web.nodes.map((n) => n.id).join(',')} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+      <ReactFlow<EntryNode, WebEdge> defaultNodes={nodes} defaultEdges={edges} key={`${web.nodes.map((n) => n.id).join(',')}|${web.edges.map((e) => `${e.holder}:${e.index ?? e.field}:${e.type}`).join(',')}`} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
         colorMode="dark" fitView fitViewOptions={{ padding: 0.15, maxZoom: 1.2 }} minZoom={0.2} maxZoom={2.5}
-        nodesConnectable={false} nodesFocusable={false} edgesFocusable={false} elementsSelectable={false}
+        nodesConnectable={!!onConnect} connectionMode={ConnectionMode.Loose} connectionRadius={80}
+        onConnect={(c: Connection) => c.source && c.target && onConnect?.(c.source, c.target)}
+        onEdgeClick={(_ev, edge) => edge.data && onEdit?.(edge.data.edge)}
+        nodesFocusable={false} edgesFocusable={false} elementsSelectable={false}
         zoomOnScroll={false} zoomActivationKeyCode={['Control', 'Meta']} preventScrolling={false} zoomOnDoubleClick
         proOptions={{ hideAttribution: true }}>
         <Background gap={24} size={1} />

@@ -1,14 +1,16 @@
 import {
+  ageAtDeathText, DETAIL_FIELDS, detailList, detailOf, raceIcon, racesOf, type DetailField, type DetailSection, type IconName,
   DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_ICON, TYPE_SINGULAR, VISUAL_FIELDS, WorldIndex,
   type Action, type Character, type Entry, type EntryType, type LocationSpan, type LoreEvent, type Participant, type Relation, type RelationGroup, type Warning, type World,
 } from '@lore-forge/core';
 import { useState } from 'preact/hooks';
-import { DateField, Field, ListEditor, ListText, RefField, TextField } from './fields.tsx';
+import { ChipInput, DateField, Field, ListEditor, ListText, RefField, TextField } from './fields.tsx';
 import { ImageSlots } from './images.tsx';
 import { ProseField } from './prose.tsx';
 import { TypeBadge } from './type.tsx';
 import { WarningItem, type WarningActions } from './warnings.tsx';
 import { Icon } from './icon.tsx';
+import { Select } from './select.tsx';
 
 interface Props {
   dir: string;
@@ -47,69 +49,85 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
         )}
       </section>
 
-      <div class="grid-2">
-        <TextField label="Name" field="name" value={entry.name} onChange={(name) => base({ name: name ?? '' })} />
-        <ListText label="Aliases (comma-separated)" field="aliases" value={entry.aliases} onChange={(aliases) => base({ aliases })} resetKey={entry.id} />
-        <TextField label="Summary" field="summary" value={entry.summary} onChange={(summary) => base({ summary })} />
-        <ListText label="Tags (comma-separated)" field="tags" value={entry.tags} onChange={(tags) => base({ tags })} resetKey={entry.id} />
-      </div>
-
-      {LIFECYCLE[entry.type] && <LifecycleFields world={world} entry={entry} onChange={onChange} />}
-      {entry.type === 'character' && <CharacterFields world={world} e={entry} set={set(entry)} onOpen={onOpen} />}
-      {entry.type === 'place' && (
-        <div class="grid-3">
-          <RefField label="Part of (region)" field="partOf" value={entry.partOf} world={world} types={['place']} onChange={(partOf) => set(entry)({ partOf })} />
+      <Section id="basics" title="Basics" icon="scroll-unfurled">
+        <div class="grid-2">
+          <TextField label="Name" field="name" value={entry.name} onChange={(name) => base({ name: name ?? '' })} />
+          <ListText label="Aliases (comma-separated)" field="aliases" value={entry.aliases} onChange={(aliases) => base({ aliases })} resetKey={entry.id} />
         </div>
-      )}
-      {entry.type === 'event' && <EventFields world={world} e={entry} set={set(entry)} />}
-      {entry.type === 'note' && (
-        <div class="grid-3">
-          <DateField label="Date (optional)" field="date" value={entry.date} calendar={cal} onChange={(date) => set(entry)({ date })} />
-        </div>
-      )}
-      {(entry.type === 'event' || entry.type === 'note') && (
-        <fieldset class="list-editor">
-          <legend>Story Book</legend>
-          <div class="grid-2">
-            <TextField label="Chapter (optional)" field="chapter" value={entry.chapter} onChange={(chapter) => base({ chapter })} hint="Leave empty to place it by date in its era or year range." />
-            <TextField label="Order in chapter" field="bookOrder" value={entry.bookOrder?.toString()} onChange={(v) => base({ bookOrder: v !== undefined && Number.isFinite(Number(v)) ? Number(v) : undefined })} hint="Default 0. Lower comes first; ties go by date." />
+        <TextField label="Summary" field="summary" value={entry.summary} onChange={(summary) => base({ summary })} multiline hint="One or two lines: shown on cards, in hover cards and in the Codex." />
+        {entry.type === 'character' && <RaceField world={world} e={entry} set={set(entry)} onOpen={onOpen} />}
+        {LIFECYCLE[entry.type] && <LifecycleFields world={world} entry={entry} onChange={onChange} />}
+        {ageAtDeathText(entry, cal) && <p class="hint age-at-death" data-field="age"><Icon name="hourglass" /> Age at death: {ageAtDeathText(entry, cal)}</p>}
+        {entry.type === 'place' && (
+          <div class="grid-3">
+            <RefField label="Part of (region)" field="partOf" value={entry.partOf} world={world} types={['place']} onChange={(partOf) => set(entry)({ partOf })} />
           </div>
-        </fieldset>
-      )}
-
-      {VISUAL_FIELDS[entry.type].length > 0 && (
-        <fieldset class="list-editor" data-field="visual">
-          <legend>Visual description</legend>
-          <p class="muted">Free text for artists and image or 3D tools. Used for the art briefs in the World Codex.</p>
-          <div class="grid-2">
-            {VISUAL_FIELDS[entry.type].map((f) => (
-              <TextField key={f.key} label={f.label} field={`visual.${f.key}`} value={entry.visual?.[f.key]} placeholder={f.hint} multiline
-                onChange={(v) => {
-                  const visual = Object.fromEntries(Object.entries({ ...entry.visual, [f.key]: v }).filter(([, x]) => x !== undefined)) as Record<string, string>;
-                  base({ visual: Object.keys(visual).length ? visual : undefined });
-                }} />
-            ))}
-          </div>
-        </fieldset>
-      )}
-      <ImageSlots dir={dir} entry={entry} onChange={(images) => base({ images })} />
-
-      <ListEditor<Relation>
-        title="Relationships"
-        field="relations"
-        items={entry.relations}
-        addLabel="Add relationship"
-        empty={() => ({ type: relationKindsFor(entry.type)[0]?.type ?? 'related-to', target: '' })}
-        onChange={(relations) => base({ relations })}
-        render={(r, put, f) => (
-          <>
-            <RelationTypeField world={world} entry={entry} r={r} field={`${f}.type`} onChange={(type) => put({ ...r, type })} />
-            <RefField label="Target" field={`${f}.target`} value={r.target} world={world} types={relationTargets(r.type, entry.type)} exclude={entry.id} onChange={(target) => put({ ...r, target: target ?? '' })} />
-            <DateField label="From" field={`${f}.from`} value={r.from} calendar={cal} onChange={(from) => put(clean({ ...r, from }))} />
-            <DateField label="To" field={`${f}.to`} value={r.to} calendar={cal} onChange={(to) => put(clean({ ...r, to }))} />
-          </>
         )}
-      />
+        {entry.type === 'event' && <EventWhen world={world} e={entry} set={set(entry)} />}
+        {entry.type === 'note' && (
+          <div class="grid-3">
+            <DateField label="Date (optional)" field="date" value={entry.date} calendar={cal} onChange={(date) => set(entry)({ date })} />
+          </div>
+        )}
+        <DetailFields world={world} entry={entry} section="basics" onChange={onChange} onOpen={onOpen} />
+      </Section>
+
+      {(
+        <Section id="appearance" title="Appearance" icon="photo-camera">
+          {VISUAL_FIELDS[entry.type].length > 0 && (
+            <div data-field="visual">
+              <p class="muted">Free text for artists and image or 3D tools. Used for the art briefs in the World Codex.</p>
+              <div class="grid-2">
+                {VISUAL_FIELDS[entry.type].map((f) => (
+                  <TextField key={f.key} label={f.label} field={`visual.${f.key}`} value={entry.visual?.[f.key]} placeholder={f.hint} multiline
+                    onChange={(v) => {
+                      const visual = Object.fromEntries(Object.entries({ ...entry.visual, [f.key]: v }).filter(([, x]) => x !== undefined)) as Record<string, string>;
+                      base({ visual: Object.keys(visual).length ? visual : undefined });
+                    }} />
+                ))}
+              </div>
+            </div>
+          )}
+          <ImageSlots dir={dir} entry={entry} onChange={(images) => base({ images })} />
+        </Section>
+      )}
+
+      {(DETAIL_FIELDS[entry.type].some((f) => f.section === 'story') || entry.type === 'event' || entry.type === 'note') && (
+        <Section id="story" title="Story" icon="feather">
+          <DetailFields world={world} entry={entry} section="story" onChange={onChange} onOpen={onOpen} />
+          {(entry.type === 'event' || entry.type === 'note') && (
+            <fieldset class="list-editor">
+              <legend>Story Book</legend>
+              <div class="grid-2">
+                <TextField label="Chapter (optional)" field="chapter" value={entry.chapter} onChange={(chapter) => base({ chapter })} hint="Leave empty to place it by date in its era or year range." />
+                <TextField label="Order in chapter" field="bookOrder" value={entry.bookOrder?.toString()} onChange={(v) => base({ bookOrder: v !== undefined && Number.isFinite(Number(v)) ? Number(v) : undefined })} hint="Default 0. Lower comes first; ties go by date." />
+              </div>
+            </fieldset>
+          )}
+        </Section>
+      )}
+
+      <Section id="connections" title="Connections" icon="spider-web">
+        <DetailFields world={world} entry={entry} section="connections" onChange={onChange} onOpen={onOpen} />
+        {entry.type === 'character' && <CharacterFields world={world} e={entry} set={set(entry)} />}
+        {entry.type === 'event' && <EventFields world={world} e={entry} set={set(entry)} />}
+        <ListEditor<Relation>
+          title="Relationships"
+          field="relations"
+          items={entry.relations}
+          addLabel="Add relationship"
+          empty={() => ({ type: relationKindsFor(entry.type)[0]?.type ?? 'related-to', target: '' })}
+          onChange={(relations) => base({ relations })}
+          render={(r, put, f) => (
+            <>
+              <RelationTypeField world={world} entry={entry} r={r} field={`${f}.type`} onChange={(type) => put({ ...r, type })} />
+              <RefField label="Target" field={`${f}.target`} value={r.target} world={world} types={relationTargets(r.type, entry.type)} exclude={entry.id} onChange={(target) => put({ ...r, target: target ?? '' })} />
+              <DateField label="From" field={`${f}.from`} value={r.from} calendar={cal} onChange={(from) => put(clean({ ...r, from }))} />
+              <DateField label="To" field={`${f}.to`} value={r.to} calendar={cal} onChange={(to) => put(clean({ ...r, to }))} />
+            </>
+          )}
+        />
+      </Section>
 
       <ProseField world={world} entry={entry} onInput={(body) => base({ body })} onOpen={onOpen} />
     </article>
@@ -208,44 +226,108 @@ function RelationTypeField({ world, entry, r, field, onChange }: { world: World;
           <button type="button" class="ghost small" onClick={() => { setCustom(false); onChange(kinds[0]?.type ?? 'related-to'); }}>List</button>
         </div>
       ) : (
-        <select id={id} value={r.type} aria-describedby={hintId} aria-invalid={!!misfit}
-          onChange={(e) => { const v = e.currentTarget.value; if (v === '__custom') setCustom(true); else onChange(v); }}>
-          {!known && r.type && <option value={r.type}>{misfit ? '! ' : ''}{r.type.replace(/-/g, ' ')}{misfit ? ' (does not fit)' : ''}</option>}
-          {GROUP_ORDER.map((g) => {
-            const ks = kinds.filter((k) => k.group === g);
-            return ks.length ? (
-              <optgroup key={g} label={RELATION_GROUPS[g].label}>
-                {ks.map((k) => <option key={k.type} value={k.type}>{k.label}</option>)}
-              </optgroup>
-            ) : null;
-          })}
-          <option value="__custom">Custom type…</option>
-        </select>
+        <Select id={id} value={r.type} aria-describedby={hintId} invalid={!!misfit}
+          onChange={(v) => { if (v === '__custom') setCustom(true); else onChange(v); }}
+          options={[
+            ...(!known && r.type ? [{ value: r.type, label: `${misfit ? '! ' : ''}${r.type.replace(/-/g, ' ')}${misfit ? ' (does not fit)' : ''}` }] : []),
+            ...GROUP_ORDER.flatMap((g) => kinds.filter((k) => k.group === g).map((k) => ({ value: k.type, label: k.label, group: RELATION_GROUPS[g].label }))),
+            { value: '__custom', label: 'Custom type…' },
+          ]} />
       )}
     </Field>
   );
 }
 
-/** Race or kind: free text, suggestions from the world first; linked when an entry has that id or name. */
+/** Race or kind as chips with an icon each; suggestions are the races already used in this world, then common ones. More than one is fine. */
 function RaceField({ world, e, set, onOpen }: { world: World; e: Character; set: (p: Partial<Character>) => void; onOpen: (id: string) => void }) {
-  const target = e.race ? new WorldIndex(world).resolve(e.race) : undefined;
+  const ix = new WorldIndex(world);
+  const races = racesOf(e);
+  const linked = (r: string) => ix.resolve(r);
   return (
-    <Field label="Race or kind" field="race" hint={target ? <>Linked to <button type="button" class="link" data-race-link={target.id} onClick={() => onOpen(target.id)}>{target.name}</button></> : 'Free text, e.g. human, camel-folk, ghoul, vampire'}>
-      {(id, hintId) => (
-        <>
-          <input id={id} type="text" list={`${id}-list`} value={e.race ?? ''} aria-describedby={hintId} onInput={(ev) => set({ race: ev.currentTarget.value.trim() === '' ? undefined : ev.currentTarget.value })} />
-          <datalist id={`${id}-list`}>{raceSuggestions(world.entries).map((r) => <option key={r} value={r} />)}</datalist>
-        </>
-      )}
-    </Field>
+    <ChipInput label="Race or kind" field="race" values={races} placeholder="e.g. human, camel-folk, ghoul"
+      options={raceSuggestions(world.entries).map((r) => ({ value: r, label: r }))}
+      icon={(r) => raceIcon(linked(r)?.name ?? r)} display={(r) => linked(r)?.name ?? r}
+      {...(races.some((r) => linked(r)) ? { onOpen: (r: string) => { const t = linked(r); if (t) onOpen(t.id); } } : {})}
+      hint="Type and press Enter, or pick a suggestion. × removes one."
+      onChange={(list) => set({ race: list.length ? list.join(', ') : undefined })} />
   );
 }
 
-function CharacterFields({ world, e, set, onOpen }: { world: World; e: Character; set: (p: Partial<Character>) => void; onOpen: (id: string) => void }) {
+const SECTIONS_KEY = 'lore-forge.editorSections';
+const closedSections = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? '[]') as string[]; } catch { return []; }
+};
+
+/** A collapsible editor section; which ones are closed is remembered. A jump to a field inside opens it. */
+function Section({ id, title, icon, children }: { id: string; title: string; icon: IconName; children: preact.ComponentChildren }) {
+  const [open] = useState(() => !closedSections().includes(id));
+  return (
+    <details class="editor-section" data-section={id} open={open}
+      onToggle={(ev) => {
+        const isOpen = (ev.currentTarget as HTMLDetailsElement).open;
+        const rest = closedSections().filter((x) => x !== id);
+        localStorage.setItem(SECTIONS_KEY, JSON.stringify(isOpen ? rest : [...rest, id]));
+      }}>
+      <summary><Icon name="play-button" class="chevron" /> <Icon name={icon} /> {title}</summary>
+      <div class="section-body">{children}</div>
+    </details>
+  );
+}
+
+/** The optional detail fields of one section. Empty means unknown: nothing is written and exports leave it out. */
+function DetailFields({ world, entry, section, onChange, onOpen }: { world: World; entry: Entry; section: DetailSection; onChange: (e: Entry) => void; onOpen: (id: string) => void }) {
+  const fields = DETAIL_FIELDS[entry.type].filter((f) => f.section === section);
+  if (!fields.length) return null;
+  const put = (f: DetailField, v: string | string[] | undefined) => {
+    const details = { ...entry.details };
+    if (v === undefined || (Array.isArray(v) ? v.length === 0 : v.trim() === '')) delete details[f.key];
+    else details[f.key] = v;
+    const { details: _d, ...rest } = entry;
+    onChange((Object.keys(details).length ? { ...rest, details } : rest) as Entry);
+  };
+  const ix = new WorldIndex(world);
+  const short = fields.filter((f) => f.kind !== 'long');
+  const long = fields.filter((f) => f.kind === 'long');
+  const one = (f: DetailField) => {
+    const field = f.key;
+    switch (f.kind) {
+      case 'ref':
+        return <RefField key={field} label={f.label} field={field} value={detailOf(entry, field) as string | undefined} world={world} types={f.to ?? []} exclude={entry.id} onChange={(v) => put(f, v)} />;
+      case 'refs': {
+        const options = world.entries.filter((x) => x.id !== entry.id && (!f.to || f.to.includes(x.type))).sort((a, b) => a.name.localeCompare(b.name));
+        return (
+          <ChipInput key={field} label={f.label} field={field} values={detailList(entry, field)} placeholder={`Add ${(f.to ?? []).map((t) => TYPE_SINGULAR[t].toLowerCase()).join(' or ')}…`}
+            options={options.map((x) => ({ value: x.id, label: x.name }))} icon={(v) => TYPE_ICON[ix.resolve(v)?.type ?? (f.to?.[0] ?? 'note')]}
+            display={(v) => ix.resolve(v)?.name ?? v} invalid={(v) => !ix.resolve(v)} onOpen={(v) => { const t = ix.resolve(v); if (t) onOpen(t.id); }}
+            hint={f.relation ? `Also shown as “${f.relation.replace(/-/g, ' ')}” in the relationship web.` : undefined}
+            onChange={(v) => put(f, v)} />
+        );
+      }
+      case 'list':
+        return <ListText key={field} label={f.label} field={field} value={detailList(entry, field)} resetKey={entry.id} hint={f.hint} onChange={(v) => put(f, v)} />;
+      case 'long':
+        return <TextField key={field} label={f.label} field={field} value={detailOf(entry, field) as string | undefined} multiline onChange={(v) => put(f, v)} />;
+      default:
+        return f.suggest ? (
+          <Pick key={field} label={f.label} field={field} value={(detailOf(entry, field) as string | undefined) ?? ''} options={[...f.suggest]} onChange={(v) => put(f, v)} />
+        ) : (
+          <TextField key={field} label={f.label} field={field} value={detailOf(entry, field) as string | undefined} placeholder={f.hint} onChange={(v) => put(f, v)} />
+        );
+    }
+  };
+  return (
+    <div class="detail-fields" data-details={section}>
+      {short.length > 0 && <div class="grid-2">{short.map(one)}</div>}
+      {long.map(one)}
+      {section === 'basics' && <p class="hint">Every field is optional. Leave it empty when it is unknown; empty fields are not saved and do not show in exports.</p>}
+    </div>
+  );
+}
+
+function CharacterFields({ world, e, set }: { world: World; e: Character; set: (p: Partial<Character>) => void }) {
   const cal = world.manifest.calendar;
   return (
     <>
-      <RaceField world={world} e={e} set={set} onOpen={onOpen} />
       <ListEditor<LocationSpan>
         title="Locations over time"
         field="locations"
@@ -265,15 +347,20 @@ function CharacterFields({ world, e, set, onOpen }: { world: World; e: Character
   );
 }
 
-function EventFields({ world, e, set }: { world: World; e: LoreEvent; set: (p: Partial<LoreEvent>) => void }) {
+function EventWhen({ world, e, set }: { world: World; e: LoreEvent; set: (p: Partial<LoreEvent>) => void }) {
   const cal = world.manifest.calendar;
   return (
+    <div class="grid-3">
+      <DateField label="Date" field="date" value={e.date} calendar={cal} onChange={(date) => set({ date })} />
+      <DateField label="End (optional)" field="end" value={e.end} calendar={cal} onChange={(end) => set({ end })} />
+      <RefField label="Place" field="place" value={e.place} world={world} types={['place']} onChange={(place) => set({ place })} />
+    </div>
+  );
+}
+
+function EventFields({ world, e, set }: { world: World; e: LoreEvent; set: (p: Partial<LoreEvent>) => void }) {
+  return (
     <>
-      <div class="grid-3">
-        <DateField label="Date" field="date" value={e.date} calendar={cal} onChange={(date) => set({ date })} />
-        <DateField label="End (optional)" field="end" value={e.end} calendar={cal} onChange={(end) => set({ end })} />
-        <RefField label="Place" field="place" value={e.place} world={world} types={['place']} onChange={(place) => set({ place })} />
-      </div>
       <ListEditor<Participant>
         title="Participants"
         field="participants"

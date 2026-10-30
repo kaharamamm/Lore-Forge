@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lore-forge.local/schemas/v1/story-ignored.schema.json",
+  "title": "Lore-Forge ignored story proposals (story-ignored.json), schema version 1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "ignored"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "ignored": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Proposal key, e.g. create:character:camel or update:char-leyla:{...}."
+          },
+          "name": {
+            "type": "string"
+          },
+          "ignoredAt": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

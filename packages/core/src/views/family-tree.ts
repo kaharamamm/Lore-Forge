@@ -23,6 +23,9 @@ export interface TreeEdge {
   /** parent edges go parent -> child. */
   from: string;
   to: string;
+  /** The entry whose `relations[index]` states this link (for editing it from the tree). */
+  holder: string;
+  index: number;
 }
 
 export interface FamilyTree {
@@ -39,7 +42,7 @@ export interface FamilyTree {
  * or sibling relations); otherwise every family in the world, side by side.
  * Contradictory data (parent cycles) still lays out; the first generation found wins.
  */
-export function familyTree(world: World, focusId?: string | null): FamilyTree {
+export function familyTree(world: World, focusId?: string | null, opts: { add?: readonly string[]; hide?: readonly string[] } = {}): FamilyTree {
   const ix = new WorldIndex(world);
   const edges: TreeEdge[] = [];
   const seen = new Set<string>();
@@ -50,17 +53,21 @@ export function familyTree(world: World, focusId?: string | null): FamilyTree {
     edges.push(ed);
   };
   for (const p of parentEdges(ix)) {
-    if (p.parent.type === 'character' && p.child.type === 'character') add({ kind: 'parent', from: p.parent.id, to: p.child.id });
+    const index = Number(/\[(\d+)\]/.exec(p.at.field)?.[1] ?? 0);
+    if (p.parent.type === 'character' && p.child.type === 'character') add({ kind: 'parent', from: p.parent.id, to: p.child.id, holder: p.at.entryId, index });
   }
   for (const e of ix.entries) {
     if (e.type !== 'character') continue;
-    for (const r of e.relations ?? []) {
+    (e.relations ?? []).forEach((r, index) => {
       const t = ix.resolve(r.target);
-      if (t?.type !== 'character') continue;
-      if (r.type === 'spouse-of') add({ kind: 'spouse', from: e.id, to: t.id });
-      if (r.type === 'sibling-of') add({ kind: 'sibling', from: e.id, to: t.id });
-    }
+      if (t?.type !== 'character') return;
+      if (r.type === 'spouse-of') add({ kind: 'spouse', from: e.id, to: t.id, holder: e.id, index });
+      if (r.type === 'sibling-of') add({ kind: 'sibling', from: e.id, to: t.id, holder: e.id, index });
+    });
   }
+  // Hidden characters leave the view (and their lines with them); the entries are untouched.
+  const hide = new Set((opts.hide ?? []).filter((id) => id !== focusId));
+  for (let i = edges.length - 1; i >= 0; i--) if (hide.has(edges[i]!.from) || hide.has(edges[i]!.to)) edges.splice(i, 1);
   // Undirected adjacency with generation offsets.
   const adj = new Map<string, { id: string; dg: number }[]>();
   const link = (a: string, b: string, dg: number) => adj.set(a, [...(adj.get(a) ?? []), { id: b, dg }]);
@@ -73,7 +80,8 @@ export function familyTree(world: World, focusId?: string | null): FamilyTree {
   const byId = new Map(chars.map((c) => [c.id, c]));
   const bornLo = (c: Character) => ix.date(c.born)?.lo ?? Number.POSITIVE_INFINITY;
   const focus = focusId ? byId.get(focusId) : undefined;
-  const roots = focus ? [focus] : chars.filter((c) => adj.has(c.id)).sort((a, b) => bornLo(a) - bornLo(b) || a.name.localeCompare(b.name));
+  const added = (opts.add ?? []).flatMap((id) => (byId.has(id) && !hide.has(id) ? [byId.get(id)!] : []));
+  const roots = [...(focus ? [focus] : chars.filter((c) => adj.has(c.id) && !hide.has(c.id)).sort((a, b) => bornLo(a) - bornLo(b) || a.name.localeCompare(b.name))), ...added];
 
   // Generations by breadth-first search, one component at a time.
   const gen = new Map<string, number>();

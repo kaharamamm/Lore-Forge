@@ -1,8 +1,8 @@
-import { useLayoutEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Icon, SvgIcon } from './icon.tsx';
 import { Portrait } from './cover.tsx';
 import { usePanZoom, zoomIdentity, type PanZoom } from '../zoom.ts';
-import { LIFECYCLE, TREE_LAYOUT, TYPE_ICON, TYPE_SINGULAR, type Entry, type FamilyTree } from '@lore-forge/core';
+import { LIFECYCLE, TREE_LAYOUT, TYPE_ICON, TYPE_SINGULAR, type Entry, type FamilyTree, type TreeEdge } from '@lore-forge/core';
 
 const clip = (s: string, n: number) => ([...s].length > n ? `${[...s].slice(0, n - 1).join('')}…` : s);
 
@@ -12,12 +12,13 @@ function nodeLabel(e: Entry, ended: boolean, dates?: string): string {
 }
 
 /** One clickable SVG box. x/y is the top-left corner. */
-function Node(props: { e: Entry; x: number; y: number; w: number; h: number; ended: boolean; focus: boolean; sub: string; raceName?: string; onOpen: (id: string) => void }) {
+function Node(props: { e: Entry; x: number; y: number; w: number; h: number; ended: boolean; focus: boolean; sub: string; raceName?: string; onOpen: (id: string) => void;
+  onLinkStart?: (id: string, ev: PointerEvent) => void; onHide?: (id: string) => void }) {
   const { e, x, y, w, h, ended, focus } = props;
   const lc = LIFECYCLE[e.type];
   const open = () => props.onOpen(e.id);
   return (
-    <g class={`node t-${e.type}${ended ? ' is-ended' : ''}${focus ? ' is-focus' : ''}`} role="button" tabIndex={0} aria-label={nodeLabel(e, ended, props.sub)}
+    <g class={`node t-${e.type}${ended ? ' is-ended' : ''}${focus ? ' is-focus' : ''}`} role="button" tabIndex={0} aria-label={nodeLabel(e, ended, props.sub)} data-node-id={e.id}
       onClick={open} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } }}>
       <title>{`${TYPE_SINGULAR[e.type]}: ${e.name}${ended && lc ? ` (${lc.endedWord})` : ''}${props.sub ? `\n${props.sub}` : ''}`}</title>
       <rect x={x} y={y} width={w} height={h} rx={10} />
@@ -26,15 +27,52 @@ function Node(props: { e: Entry; x: number; y: number; w: number; h: number; end
       <text x={x + 52} y={y + h / 2 - 3} class="node-name">{clip(e.name, 13)}</text>
       {ended && lc && <SvgIcon class="node-mark" name={lc.endedIcon} x={x + w - 24} y={y + 6} size={16} />}
       <text x={x + 52} y={y + h / 2 + 15} class="node-sub">{clip(props.sub || TYPE_SINGULAR[e.type], 20)}</text>
+      {props.onLinkStart && (
+        <circle class="tree-connect" cx={x + w} cy={y + h / 2} r={7} onPointerDown={(ev) => { ev.stopPropagation(); props.onLinkStart!(e.id, ev); }} onClick={(ev) => ev.stopPropagation()}>
+          <title>Drag onto another card to link them</title>
+        </circle>
+      )}
+      {props.onHide && !focus && (
+        <g class="node-hide" role="button" aria-label={`Remove ${e.name} from this view`} onClick={(ev) => { ev.stopPropagation(); props.onHide!(e.id); }}>
+          <title>Remove from this view (the entry stays)</title>
+          <circle cx={x + w - 10} cy={y + h - 10} r={8} />
+          <path d={`M${x + w - 13} ${y + h - 13} l6 6 M${x + w - 7} ${y + h - 13} l-6 6`} />
+        </g>
+      )}
     </g>
   );
 }
 
-export function FamilyTreeSvg({ tree, onOpen }: { tree: FamilyTree; onOpen: (id: string) => void }) {
+export function FamilyTreeSvg({ tree, onOpen, onConnect, onHide, onEdit }: {
+  tree: FamilyTree; onOpen: (id: string) => void; onConnect?: (from: string, to: string) => void; onHide?: (id: string) => void; onEdit?: (edge: TreeEdge) => void;
+}) {
   const { nodeW: w, nodeH: h } = TREE_LAYOUT;
   const at = new Map(tree.nodes.map((n) => [n.id, n]));
   const svg = useRef<SVGSVGElement>(null);
-  const pz = usePanZoom(svg, { min: 0.2, max: 3 });
+  const pz = usePanZoom(svg, { min: 0.2, max: 3, ignore: '.tree-connect, .node-hide, .edge-hit' });
+  // A link being dragged from a card's connector: start point in layout units, pointer in layout units.
+  const [drag, setDrag] = useState<{ from: string; x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const toLayout = (ev: PointerEvent) => {
+    const r = svg.current!.getBoundingClientRect();
+    const [lx, ly] = pz.t.invert([ev.clientX - r.left, ev.clientY - r.top]);
+    return { x: lx, y: ly };
+  };
+  const startLink = (from: string, ev: PointerEvent) => {
+    const n = at.get(from)!;
+    const p = toLayout(ev);
+    setDrag({ from, x1: n.x + w, y1: n.y + h / 2, x2: p.x, y2: p.y });
+    const move = (m: PointerEvent) => { const q = toLayout(m); setDrag((d) => d && { ...d, x2: q.x, y2: q.y }); };
+    const up = (u: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setDrag(null);
+      const hit = document.elementFromPoint(u.clientX, u.clientY)?.closest<SVGGElement>('[data-node-id]');
+      const to = hit?.dataset['nodeId'];
+      if (to && to !== from) onConnect?.(from, to);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
   const fit = () => {
     const el = svg.current;
     if (!el) return;
@@ -46,14 +84,20 @@ export function FamilyTreeSvg({ tree, onOpen }: { tree: FamilyTree; onOpen: (id:
     <div class="zoom-frame">
     <svg ref={svg} class="graph family-tree" style={{ height: `clamp(14rem, ${tree.height + 48}px, 62vh)` }} role="group" aria-label={`Family tree, ${tree.generations} generations, ${tree.nodes.length} people. Drag to pan, Ctrl+scroll to zoom.`}>
       <g transform={pz.t.toString()}>
-      <g class="edges" aria-hidden="true">
+      <g class="edges">
         {tree.edges.map((ed, i) => {
           const a = at.get(ed.from)!;
           const b = at.get(ed.to)!;
+          const hit = (d: string) => onEdit && (
+            <path class="edge-hit" d={d} role="button" aria-label={`Edit the link between ${a.entry.name} and ${b.entry.name}`} onClick={() => onEdit(ed)}>
+              <title>Click to edit or delete this link</title>
+            </path>
+          );
           if (ed.kind === 'parent') {
             const x1 = a.x + w / 2, y1 = a.y + h, x2 = b.x + w / 2, y2 = b.y;
             const mid = y2 > y1 ? (y1 + y2) / 2 : y1 + 20;
-            return <path key={i} class="edge edge-parent" d={`M${x1} ${y1} V${mid} H${x2} V${y2}`} />;
+            const d = `M${x1} ${y1} V${mid} H${x2} V${y2}`;
+            return <g key={i}><path class="edge edge-parent" d={d} />{hit(d)}</g>;
           }
           const [l, r] = a.x <= b.x ? [a, b] : [b, a];
           if (ed.kind === 'spouse' && l.gen === r.gen) {
@@ -61,15 +105,19 @@ export function FamilyTreeSvg({ tree, onOpen }: { tree: FamilyTree; onOpen: (id:
             return (
               <g key={i}>
                 <line class="edge edge-spouse" x1={l.x + w} y1={y} x2={r.x} y2={y} />
+                {hit(`M${l.x + w} ${y} H${r.x}`)}
                 <SvgIcon class="edge-icon" name="diamond-ring" x={(l.x + w + r.x) / 2 - 8} y={y - 20} size={16} />
               </g>
             );
           }
           const x1 = l.x + w / 2, x2 = r.x + w / 2, y = Math.min(l.y, r.y);
-          return <path key={i} class={`edge edge-${ed.kind}`} d={`M${x1} ${y} C${x1} ${y - 22}, ${x2} ${y - 22}, ${x2} ${y}`} />;
+          const d = `M${x1} ${y} C${x1} ${y - 22}, ${x2} ${y - 22}, ${x2} ${y}`;
+          return <g key={i}><path class={`edge edge-${ed.kind}`} d={d} />{hit(d)}</g>;
         })}
       </g>
-      {tree.nodes.map((n) => <Node key={n.id} e={n.entry} x={n.x} y={n.y} w={w} h={h} ended={n.ended} focus={n.focus} sub={n.dates} onOpen={onOpen} {...(n.entry.type === 'character' && n.entry.race ? { raceName: n.entry.race } : {})} />)}
+      {tree.nodes.map((n) => <Node key={n.id} e={n.entry} x={n.x} y={n.y} w={w} h={h} ended={n.ended} focus={n.focus} sub={n.dates} onOpen={onOpen}
+        {...(onConnect ? { onLinkStart: startLink } : {})} {...(onHide ? { onHide } : {})} />)}
+      {drag && <line class="edge edge-drag" x1={drag.x1} y1={drag.y1} x2={drag.x2} y2={drag.y2} />}
       </g>
     </svg>
     <ZoomControls pz={pz} onFit={fit} />

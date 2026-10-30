@@ -25,6 +25,8 @@ export interface EraBand {
   name: string;
   from: number;
   to: number;
+  /** The era's own colour, when the calendar sets one. */
+  color?: string;
 }
 
 export interface TimelineGroup {
@@ -81,7 +83,7 @@ export function timelineModel(world: World, warnings: readonly Warning[]): Timel
   })).filter((g) => g.lanes.length);
   const eras = [...cal.eras].sort((a, b) => a.start - b.start);
   const bands: EraBand[] = eras
-    .map((e, i) => ({ id: e.id, name: e.name, from: e.start * perYear, to: i + 1 < eras.length ? eras[i + 1]!.start * perYear - 1 : max }))
+    .map((e, i) => ({ id: e.id, name: e.name, from: e.start * perYear, to: e.end !== undefined ? (e.end + 1) * perYear - 1 : i + 1 < eras.length ? eras[i + 1]!.start * perYear - 1 : max, ...(e.color ? { color: e.color } : {}) }))
     .map((b, i) => (i === 0 ? { ...b, from: Math.min(b.from, min) } : b))
     .filter((b) => b.to >= min && b.from <= max)
     .map((b) => ({ ...b, from: Math.max(b.from, min), to: Math.min(b.to, max) }));

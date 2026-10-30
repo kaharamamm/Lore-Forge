@@ -27,19 +27,23 @@ Every schema is in `packages/core/schemas/`, uses JSON Schema draft 2020-12, and
 | `intended.schema.json` | `intended.json` |
 | `check-report.schema.json` | `lore check --json` output |
 | `world-snapshot.schema.json` | `lore export` output |
+| `story-chapter.schema.json` | the YAML header of a `story/*.md` chapter |
+| `story-ignored.schema.json` | `story-ignored.json` |
 
-The test suite validates the example world, a real `lore check --json` and a real `lore export` against
+The test suite validates the sample world (`worlds/shifting-sands`), a real `lore check --json` and a real `lore export` against
 these schemas with ajv.
 
 ## World folder
 
 ```
 my-world/
-  world.json          manifest: id, name, description, calendar, rule overrides
+  world.json          manifest: id, name, description, calendar, rule overrides, book, cover
   intended.json       warnings marked "intended" (optional)
   characters/<id>.md  one file per entry; folder = type
   places/  factions/  items/  events/  notes/
   images/<entryId>/<view>.<ext>   reference images (any entry type)
+  story/NN-slug.md    the manuscript, one file per chapter (optional, 0.4)
+  story-ignored.json  story proposals the author ignored (optional, 0.4)
 ```
 
 An entry file has YAML front matter followed by a Markdown body:
@@ -78,7 +82,24 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   - item: `created`, `destroyed`
   - event: `date`, `end`, `place`, `participants[{id, role}]`, `actions[{actor, verb, target}]`
   - note: `date` (optional; places the note in the Story Book)
-- Fields on every type (all optional): `images`, `visual`, `chapter`, `bookOrder`.
+- Fields on every type (all optional): `images`, `visual`, `chapter`, `bookOrder`, `picture`.
+- Optional detail fields (0.4, `DETAIL_FIELDS` in core), stored as top-level keys. Empty means unknown and
+  is not written:
+
+  | Type | Fields |
+  |---|---|
+  | character | `gender`, `title`, `occupation`, `languages` (list), `personality`, `goals`, `skills`, `affiliations` (refs), `home` (ref), `possessions` (refs) |
+  | place | `kind`, `population`, `ruler` (ref), `features` |
+  | faction | `kind`, `leader` (ref), `headquarters` (ref), `ideology`, `allies` (refs), `enemies` (refs) |
+  | item | `kind`, `origin`, `location` (ref), `owners` (refs), `powers` |
+  | event | `kind`, `causes`, `outcome`, `consequences` |
+
+  `ref` fields hold one id or name, `refs` a list. They count as relations (a character's `home` as
+  `lives-in`, a place's `ruler` as `rules` from the ruler, ...) for the rules, the snapshot's `references` and the graphs.
+- `picture` (0.4) is the card picture: `{icon?, color?, accent?, image?}`, a game-icons name, background and
+  icon colours (`#rrggbb`), or one of the entry's images. Without it, `entryIcon(entry)` picks a default from
+  the gender, kind, name or summary.
+- `tags` (a list of keywords) is still read and kept, but the app no longer edits it.
 - `relations[].type` is free text. The rules give meaning to `parent-of`, `child-of` and `killed`. Others,
   such as `member-of`, `ally-of`, `enemy-of`, `owns` and `spouse-of`, are grouped in the UI.
 - `images[]` works on every entry type: `{file, view, provenance?}`. `view` is a kebab-case label. The usual
@@ -101,7 +122,11 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   faction `emblem`, `attire`, `palette`; item `material`, `size`, `details`; event `scene`, `mood`. Unknown
   keys are kept and printed in the World Codex.
 - `chapter` (string) and `bookOrder` (number, lower first, default 0) on events and notes control the Story
-  Book. `world.json` may hold `"book": {"title", "author", "chapterYears"}`.
+  Book. `world.json` may hold `"book": {"title", "author", "chapterYears", "trim", "dedication",
+  "epigraph", "epigraphSource", "copyright", "publisher"}` (all optional; `trim` is `6x9`, `5.5x8.5` or
+  `a5`) and `"cover": {"color", "color2", "icon", "iconColor", "image", "titleStyle", "titleColor"}` (all optional;
+  colours are `#rrggbb` or `#rrggbbaa`, `image` is a world-relative path or `"none"`, `icon` a game-icons name or
+  `"none"`, `titleStyle` is `display`, `serif` or `sans`) for the book cover on the shelf, Home and the PDFs.
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so
   diffs stay small.
 
@@ -117,7 +142,8 @@ the value stays in the file and the rules still use it. `LIFECYCLE`, `statusOf`,
 
 ### Race
 
-Characters may have `race: <free text>` (human, camel-folk, ghoul, vampire...). When an entry has that id or
+Characters may have `race: <free text>` (human, camel-folk, ghoul, vampire...). Several races are written as a
+comma-separated string or a YAML list; `racesOf(entry)` returns them as a list. When an entry has that id or
 name, the app and the Codex show it as a link. `raceSuggestions(entries)` lists races used in the world, then
 `DEFAULT_RACES`.
 
@@ -186,6 +212,68 @@ const warnings = registry.check(await loadWorld('path/to/world'));
 Rules are pure functions of the world. Rule ids must be unique, and you should namespace your own ids. The
 `rules` map in `world.json` can override any rule's severity or set it to `"off"`.
 
+## Story
+
+`story/` holds the manuscript, one Markdown file per chapter. The header is short YAML, the body is plain
+prose (names link themselves; `[[links]]` work too):
+
+```markdown
+---
+title: The Salt Road
+order: 1
+date: "1920"
+---
+
+The caravan left Qarim before dawn. ...
+```
+
+- `title` (text) and `order` (number; reading order, then file name) are written by the app. `date` is
+  optional and uses the normal date syntax. `year` and `era` are accepted instead of `date`. Other keys are
+  kept. Without `order`, the `NN-` prefix of the file name is used; without `title`, the file name.
+- New chapters are named `story/NN-slug.md`. Reordering changes `order`, not file names.
+- `story-ignored.json` is `{ "schemaVersion": 1, "ignored": [{ "key", "name"?, "ignoredAt"? }] }`. Keys are
+  `create:<type>:<name>` or `update:<entryId>:<fields>`, so an ignored proposal stays ignored after edits
+  elsewhere in the text.
+- Snapshot: `story: [{file, title, order, date?, body, words}]` when the world has chapters. Check report
+  facts on story sentences have `entryId: "story:<file>"`, `source: "Story/<title>"`, `chapter` (the file)
+  and `span: [start, end]` (UTF-16 offsets into the chapter body).
+- `lore check` includes story warnings: the timeline rules run on what the story says (as if its proposals
+  were added), plus `story-contradiction` when the story disagrees with an entry. `lore book` prints the
+  chapters as the book, with the chronicle as *Appendix: Chronicle* (`storyBook(world, {appendix: false})`
+  drops it).
+
+### Extractors (AI-HQ plug-in point)
+
+Reading the story is split in two, so a smarter extractor gets the same safety checks as the built-in one:
+
+1. An **extractor** turns chapters into raw findings. The built-in `ruleExtractor` is deterministic and
+   offline (sentence patterns for births, deaths, killings, marriages, parents, titles, battles, places and
+   named items; dates in the world's syntax).
+2. `reconcile(world, raw)` (shared, in core) matches names to existing entries (names, aliases, with or
+   without "The", titles stripped for characters), drops duplicates and anything already known, turns new
+   facts about an existing entry into `update` proposals, applies `story-ignored.json`, and gives every
+   proposal a stable `key`. `analyzeStory(world, extraction?)` runs both and the live checks.
+
+```ts
+interface Extractor {
+  id: string;
+  extract(input: { world: World; chapters: StoryChapter[] }): Extraction | Promise<Extraction>;
+}
+interface Extraction {
+  proposals: RawProposal[];      // { entryType, name, fields, sourceSpan, confidence, pattern }
+  appearances: StoryAppearance[]; // dated "X did Y" sentences, used only for warnings
+}
+// fields: { title?, aliases?, born?, died?, status?, date?, place?, participants?, actions?, relations? }
+// sourceSpan: { chapter: file, start, end, quote }  (offsets into the chapter body)
+```
+
+An LLM extractor (AI-HQ) should return the same shape: names as written in the text (or entry ids),
+dates in Lore-Forge's date syntax, `sourceSpan` pointing at the sentence it read, `confidence` 0..1 and
+`pattern` naming the extractor (e.g. `"ai-hq"`). Merge it with the rule extractor's output if you like
+(`[...a.proposals, ...b.proposals]`); `reconcile` dedupes. Then call `analyzeStory(world, extraction)`.
+Nothing is ever written by these functions; the app creates entries only when the author clicks, using
+`proposalEntry(proposal, world, takenIds)` or `applyFields(entry, fields, world)`.
+
 ## World Codex and Story Book
 
 The World Codex was called the World Bible before 0.3.1. `lore bible` still works as an alias of `lore codex`,
@@ -207,6 +295,15 @@ chapterYears?})` picks the chapters: one per era, year ranges inside each era (d
 `book.chapterYears`), or a single chapter. A page's own `chapter` always wins. The app's preview and its
 PDF are built from the same `Doc` with the same options. The CLI uses the defaults.
 
+The Story Book is a print layout (`doc.print.trim`, from `storyBook(world, {trim})`, else `book.trim`, else
+6x9). Its blocks start with `front` pages (`half-title`, `title`, `copyright`, then `dedication` and
+`epigraph` when set) and a `toc`; chapter headings have `opener: true` and the first paragraph of each
+chapter `dropCap: true`. `lore book <worldDir> -o out.docx` (or `renderDocx(doc, worldDir)` /
+`writeDocx(doc, worldDir, path)` in `@lore-forge/pdf`) writes the same book as a Word file: one section per
+chapter starting on an odd page, different first page, even/odd headers, page numbers from the first
+chapter, mirrored margins with a gutter, widow control and automatic hyphenation. Its table of contents is a
+Word field that Word updates on opening.
+
 Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral `Doc`; `toMarkdown(doc)` is in
 `@lore-forge/core` and `renderPdf(doc, {worldDir})` / `writePublication(...)` in `@lore-forge/pdf`.
 `artBrief(entry, index)` returns `{prompt, turnaround?, missing}`.
@@ -218,8 +315,9 @@ Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral 
 - **Additive changes** keep version 1: new optional fields, new rules, new image views, new relation types.
   Lore-Forge 0.2 (images on every type, `visual`, `chapter`, `bookOrder`, note `date`, manifest `book`, the
   `image-view` rule) was additive, and so was 0.3 (status on places, factions and items, the
-  `relation-kind` rule, snapshot `references`) and 0.3.1 (dotted and day-month dates, character `race`), so
-  worlds stay at version 1. Older files load unchanged and are never migrated.
+  `relation-kind` rule, snapshot `references`), 0.3.1 (dotted and day-month dates, character `race`) and
+  0.4 (`story/`, `story-ignored.json`, snapshot `story`, fact `chapter`/`span`, the `story-contradiction`
+  rule, detail fields, `picture`, several races, manifest `cover` and the new `book` keys), so worlds stay at version 1. Older files load unchanged and are never migrated.
   Consumers should ignore fields they don't know.
 - **Breaking changes** bump the version: removing or renaming fields, or changing the meaning of a field or
   of the date syntax. Lore-Forge will migrate older worlds when it opens them. Consumers should check
