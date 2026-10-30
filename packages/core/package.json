@@ -1,0 +1,30 @@
+{
+  "name": "@lore-forge/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lore-Forge world format, parser and consistency engine. Pure TypeScript, no Electron or DOM dependencies.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "source": "./src/node.ts",
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./schemas/*": "./schemas/*"
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  }
+}

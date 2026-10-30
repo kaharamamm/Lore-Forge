@@ -1,0 +1,30 @@
+{
+  "name": "lore-forge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first desktop app for writing game worlds, lore and characters, with a consistency checker.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "workspaces": [
+    "packages/core",
+    "packages/cli",
+    "packages/desktop"
+  ],
+  "scripts": {
+    "build": "npm run build -w @lore-forge/core -w @lore-forge/cli -w @lore-forge/desktop",
+    "typecheck": "tsc -b packages/core packages/cli && tsc -p tsconfig.test.json && npm run typecheck -w @lore-forge/desktop",
+    "test": "node --conditions=source --test \"packages/*/test/*.test.ts\"",
+    "lore": "node --conditions=source packages/cli/src/main.ts",
+    "dev": "npm run dev -w @lore-forge/desktop",
+    "dist:win": "npm run build && npm run dist:win -w @lore-forge/desktop",
+    "dist:linux": "npm run build && npm run dist:linux -w @lore-forge/desktop"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "ajv": "^8.20.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,214 @@
+/** Lore-Forge world format, schema version 1. Mirrors schemas/*.schema.json. */
+
+export const SCHEMA_VERSION = 1;
+
+export const ENTRY_TYPES = ['character', 'place', 'faction', 'item', 'event', 'note'] as const;
+export type EntryType = (typeof ENTRY_TYPES)[number];
+
+/** Folder (inside the world) holding each entry type, and its display label. */
+export const TYPE_FOLDERS: Record<EntryType, string> = {
+  character: 'characters',
+  place: 'places',
+  faction: 'factions',
+  item: 'items',
+  event: 'events',
+  note: 'notes',
+};
+export const TYPE_LABELS: Record<EntryType, string> = {
+  character: 'Characters',
+  place: 'Places',
+  faction: 'Factions',
+  item: 'Items',
+  event: 'Events',
+  note: 'Notes',
+};
+
+/**
+ * A date as written in the files: `[~]YEAR[-MM[-DD]] [ERA]` or `unknown`.
+ * `~` means approximate. Examples: "1800", "~1800", "1920-03-12", "312 OK", "unknown".
+ */
+export type DateText = string;
+
+export interface Era {
+  /** Short code used in dates, e.g. "AS". */
+  id: string;
+  name: string;
+  /** Absolute year on the world's single axis that this era's year 1 maps to. */
+  start: number;
+}
+
+export interface Month {
+  name: string;
+  days: number;
+}
+
+export interface Calendar {
+  eras: Era[];
+  /** Era used when a date has no era code. */
+  defaultEra: string;
+  /** Months of the year. Defaults to 12 months of 30 days. */
+  months?: Month[];
+  /** How many years `~` widens a date in each direction. Default 5. */
+  approxYears?: number;
+}
+
+export type Severity = 'error' | 'warning' | 'info';
+export type RuleSetting = Severity | 'off';
+
+export interface WorldManifest {
+  schemaVersion: number;
+  id: string;
+  name: string;
+  description?: string;
+  calendar: Calendar;
+  /** Per-rule severity overrides, e.g. { "duplicate-name": "off" }. */
+  rules?: Record<string, RuleSetting>;
+}
+
+export interface Relation {
+  /** parent-of, child-of, member-of, leader-of, ally-of, enemy-of, rules, owns, killed, spouse-of, sibling-of, ... */
+  type: string;
+  target: string;
+  /** Optional dates. A relation with `from` counts as something the entry did at that time. */
+  from?: DateText;
+  to?: DateText;
+  note?: string;
+}
+
+export interface LocationSpan {
+  place: string;
+  from?: DateText;
+  to?: DateText;
+  note?: string;
+}
+
+export const IMAGE_VIEWS = ['a-pose', 'front', 'back', 'left', 'right', 'three-quarter', 'concept'] as const;
+export type ImageView = (typeof IMAGE_VIEWS)[number];
+
+export interface Provenance {
+  tool?: string;
+  prompt?: string;
+  /** Real-world ISO date the image was made, e.g. 2026-10-30. */
+  date?: string;
+  /** Source files or URLs the image was derived from. */
+  sources?: string[];
+  rights?: string;
+}
+
+export interface RefImage {
+  /** Path relative to the world folder, e.g. images/char-orsan/front.png */
+  file: string;
+  view: ImageView;
+  provenance?: Provenance;
+}
+
+export interface Participant {
+  id: string;
+  role?: string;
+}
+
+export interface Action {
+  actor: string;
+  /** Past-tense verb, e.g. killed, crowned, betrayed, founded. */
+  verb: string;
+  target?: string;
+}
+
+interface EntryBase {
+  id: string;
+  name: string;
+  aliases?: string[];
+  tags?: string[];
+  summary?: string;
+  relations?: Relation[];
+  /** Markdown body. May reference entries as [[id]], [[Name]], [[id|label]] or @id. */
+  body: string;
+  /** Front-matter keys Lore-Forge does not know. Kept as-is when the file is saved. */
+  extra?: Record<string, unknown>;
+}
+
+export interface Character extends EntryBase {
+  type: 'character';
+  born?: DateText;
+  died?: DateText;
+  status?: 'alive' | 'dead' | 'unknown';
+  locations?: LocationSpan[];
+  images?: RefImage[];
+}
+export interface Place extends EntryBase {
+  type: 'place';
+  founded?: DateText;
+  destroyed?: DateText;
+  /** Id of the larger place/region this one is inside. */
+  partOf?: string;
+}
+export interface Faction extends EntryBase {
+  type: 'faction';
+  founded?: DateText;
+  dissolved?: DateText;
+}
+export interface Item extends EntryBase {
+  type: 'item';
+  created?: DateText;
+  destroyed?: DateText;
+}
+export interface LoreEvent extends EntryBase {
+  type: 'event';
+  date?: DateText;
+  end?: DateText;
+  place?: string;
+  participants?: Participant[];
+  actions?: Action[];
+}
+export interface Note extends EntryBase {
+  type: 'note';
+}
+
+export type Entry = Character | Place | Faction | Item | LoreEvent | Note;
+
+export interface IntendedMark {
+  warningId: string;
+  note?: string;
+  /** Real-world ISO date the mark was made. */
+  markedAt?: string;
+}
+
+/** Everything in one world folder, after parsing. */
+export interface World {
+  manifest: WorldManifest;
+  entries: Entry[];
+  intended: IntendedMark[];
+  /** Entry id -> path of its file relative to the world folder. */
+  files: Record<string, string>;
+  /** Files that could not be read cleanly. Reported by the file-error rule. */
+  issues: LoadIssue[];
+}
+
+export interface LoadIssue {
+  /** Path relative to the world folder. */
+  file: string;
+  message: string;
+}
+
+/** Points at one fact in the world. */
+export interface FactRef {
+  entryId: string;
+  /** Field inside the entry, e.g. "died", "actions[0]", "body". */
+  field: string;
+  /** Human-readable source, e.g. "Characters/Orsan the Grey". */
+  source: string;
+}
+
+export interface Warning {
+  /** Stable id, used to mark a warning as intended. */
+  id: string;
+  ruleId: string;
+  severity: Severity;
+  message: string;
+  /** The fact that breaks canon. */
+  offending: FactRef;
+  /** The canon fact it conflicts with, when there is one. */
+  conflicting?: FactRef;
+  /** Present when the author marked this warning as intended. */
+  intended?: IntendedMark;
+}

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lore-forge.local/schemas/v1/entry.schema.json",
+  "title": "Lore-Forge entry front matter, schema version 1",
+  "description": "YAML front matter of one entry file (<typeFolder>/<id>.md). The Markdown body follows the closing ---. Unknown keys are allowed and preserved.",
+  "type": "object",
+  "required": ["id", "type", "name"],
+  "$defs": {
+    "date": {
+      "type": "string",
+      "description": "[~]YEAR[-MM[-DD]] [ERA], or unknown / ?. ~ = approximate.",
+      "pattern": "^(unknown|\\?|~?\\s*-?\\d+(-\\d{1,2}(-\\d{1,2})?)?(\\s+[A-Za-z]\\w*)?)$"
+    },
+    "ref": { "type": "string", "minLength": 1, "description": "Entry id (preferred) or exact name/alias." },
+    "relation": {
+      "type": "object",
+      "required": ["type", "target"],
+      "properties": {
+        "type": { "type": "string", "examples": ["parent-of", "child-of", "member-of", "leader-of", "ally-of", "enemy-of", "rules", "owns", "killed", "spouse-of", "sibling-of"] },
+        "target": { "$ref": "#/$defs/ref" },
+        "from": { "$ref": "#/$defs/date" },
+        "to": { "$ref": "#/$defs/date" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][\\w-]*$" },
+    "type": { "enum": ["character", "place", "faction", "item", "event", "note"] },
+    "name": { "type": "string", "minLength": 1 },
+    "aliases": { "type": "array", "items": { "type": "string" } },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string" },
+    "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } },
+    "born": { "$ref": "#/$defs/date" },
+    "died": { "$ref": "#/$defs/date" },
+    "status": { "enum": ["alive", "dead", "unknown"] },
+    "locations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["place"],
+        "properties": { "place": { "$ref": "#/$defs/ref" }, "from": { "$ref": "#/$defs/date" }, "to": { "$ref": "#/$defs/date" }, "note": { "type": "string" } },
+        "additionalProperties": false
+      }
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "view"],
+        "properties": {
+          "file": { "type": "string", "description": "Path relative to the world folder, normally images/<entryId>/<file>." },
+          "view": { "enum": ["a-pose", "front", "back", "left", "right", "three-quarter", "concept"] },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "tool": { "type": "string" },
+              "prompt": { "type": "string" },
+              "date": { "type": "string" },
+              "sources": { "type": "array", "items": { "type": "string" } },
+              "rights": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "founded": { "$ref": "#/$defs/date" },
+    "destroyed": { "$ref": "#/$defs/date" },
+    "dissolved": { "$ref": "#/$defs/date" },
+    "created": { "$ref": "#/$defs/date" },
+    "partOf": { "$ref": "#/$defs/ref" },
+    "date": { "$ref": "#/$defs/date" },
+    "end": { "$ref": "#/$defs/date" },
+    "place": { "$ref": "#/$defs/ref" },
+    "participants": {
+      "type": "array",
+      "items": { "type": "object", "required": ["id"], "properties": { "id": { "$ref": "#/$defs/ref" }, "role": { "type": "string" } }, "additionalProperties": false }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["actor", "verb"],
+        "properties": { "actor": { "$ref": "#/$defs/ref" }, "verb": { "type": "string", "description": "Past tense, e.g. killed." }, "target": { "$ref": "#/$defs/ref" } },
+        "additionalProperties": false
+      }
+    }
+  }
+}

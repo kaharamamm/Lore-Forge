@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lore-forge.local/schemas/v1/world-snapshot.schema.json",
+  "title": "Lore-Forge world snapshot (lore export), schema version 1",
+  "type": "object",
+  "required": ["format", "schemaVersion", "generator", "manifest", "entries", "check"],
+  "properties": {
+    "format": { "const": "lore-forge.world-snapshot" },
+    "schemaVersion": { "const": 1 },
+    "generator": { "type": "string" },
+    "manifest": { "$ref": "world-manifest.schema.json" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entry", "file", "dates"],
+        "properties": {
+          "entry": {
+            "allOf": [{ "$ref": "entry.schema.json" }],
+            "required": ["body"],
+            "properties": {
+              "body": { "type": "string", "description": "Markdown body." },
+              "extra": { "type": "object", "description": "Unknown front-matter keys, as written." }
+            }
+          },
+          "file": { "type": "string" },
+          "dates": {
+            "type": "object",
+            "description": "Parsed date fields keyed by field path (e.g. died, relations[0].from). lo/hi are absolute day numbers on the world axis, inclusive.",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["text", "year", "era", "approx", "precision", "lo", "hi"],
+              "properties": {
+                "text": { "type": "string" },
+                "year": { "type": "integer" },
+                "month": { "type": "integer" },
+                "day": { "type": "integer" },
+                "era": { "type": "string" },
+                "approx": { "type": "boolean" },
+                "precision": { "enum": ["year", "month", "day"] },
+                "lo": { "type": "integer" },
+                "hi": { "type": "integer" }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "check": { "$ref": "check-report.schema.json" }
+  },
+  "additionalProperties": false
+}

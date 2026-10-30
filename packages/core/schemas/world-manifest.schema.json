@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lore-forge.local/schemas/v1/world-manifest.schema.json",
+  "title": "Lore-Forge world manifest (world.json), schema version 1",
+  "type": "object",
+  "required": ["schemaVersion", "id", "name", "calendar"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "calendar": {
+      "type": "object",
+      "required": ["eras", "defaultEra"],
+      "properties": {
+        "eras": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "start"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[A-Za-z]\\w*$" },
+              "name": { "type": "string" },
+              "start": { "type": "integer", "description": "Absolute year on the world axis that year 1 of this era maps to." }
+            },
+            "additionalProperties": false
+          }
+        },
+        "defaultEra": { "type": "string" },
+        "months": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "days"],
+            "properties": { "name": { "type": "string" }, "days": { "type": "integer", "minimum": 1 } },
+            "additionalProperties": false
+          }
+        },
+        "approxYears": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": { "enum": ["error", "warning", "info", "off"] }
+    }
+  },
+  "additionalProperties": false
+}
