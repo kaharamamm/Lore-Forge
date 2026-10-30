@@ -1,6 +1,7 @@
 import { useMemo } from 'preact/hooks';
 import { familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, WorldIndex, type Entry, type IconName, type RelationGroup, type World } from '@lore-forge/core';
-import { FamilyTreeSvg, RelationWebSvg } from './graphs.tsx';
+import { FamilyTreeSvg } from './graphs.tsx';
+import { RelationWebFlow } from './web.tsx';
 import { EntryLabel, EntryLink } from './type.tsx';
 import { Icon } from './icon.tsx';
 
@@ -76,8 +77,8 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen }: { 
         ))}
         {mode === 'web' && web && (web.nodes.length > 1 ? (
           <>
-            <p class="muted graph-note">{entry.name} in the middle; arrows read “from → to”. Select a box to open it.</p>
-            <div class="graph-scroll"><RelationWebSvg web={web} onOpen={onOpen} /></div>
+            <p class="muted graph-note">{entry.name} in the middle; arrows read “from → to”. Select a card to open it; drag to pan, Ctrl+scroll to zoom.</p>
+            <RelationWebFlow world={world} web={web} onOpen={onOpen} />
           </>
         ) : (
           <div class="empty-state"><Icon class="empty-icon" name="spider-web" /><p>Nothing is tied to {entry.name} yet. Add allies, enemies, members, rulers or owners in the editor.</p></div>

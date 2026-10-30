@@ -259,6 +259,16 @@ export function App() {
           dom['treeNodes'] = count('.family-tree .node');
           document.querySelector<HTMLButtonElement>('.relations .segmented button:nth-child(2)')?.click();
           await tick();
+          const webSummary = summary['web'] as { nodes: number; edges: number } | null;
+          if (webSummary) {
+            // React Flow measures the cards first, then draws the edges.
+            expect(await until(() => count('.relation-web .web-edge') === webSummary.edges && count('.relation-web .node') === webSummary.nodes), 'relationship web draws every card and edge');
+            expect(count('.relation-web .node .portrait') === webSummary.nodes && !!$('.relation-web .react-flow__minimap') && !!$('.relation-web .react-flow__controls'), 'web has portrait cards, a minimap and zoom controls');
+            const viewport = () => $('.relation-web .react-flow__viewport')?.style.transform ?? '';
+            const before = viewport();
+            $<HTMLButtonElement>('.relation-web .react-flow__controls-zoomin')?.click();
+            expect(await until(() => viewport() !== before), 'web zooms in');
+          }
           dom['webNodes'] = count('.relation-web .node');
           dom['webEdges'] = count('.relation-web .web-edge');
         }

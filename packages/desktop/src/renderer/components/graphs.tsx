@@ -1,5 +1,5 @@
 import { SvgIcon } from './icon.tsx';
-import { LIFECYCLE, relationKind, TREE_LAYOUT, TYPE_ICON, TYPE_SINGULAR, WEB_LAYOUT, type Entry, type FamilyTree, type RelationWeb } from '@lore-forge/core';
+import { LIFECYCLE, TREE_LAYOUT, TYPE_ICON, TYPE_SINGULAR, type Entry, type FamilyTree } from '@lore-forge/core';
 
 const clip = (s: string, n: number) => ([...s].length > n ? `${[...s].slice(0, n - 1).join('')}…` : s);
 
@@ -56,47 +56,6 @@ export function FamilyTreeSvg({ tree, onOpen }: { tree: FamilyTree; onOpen: (id:
         })}
       </g>
       {tree.nodes.map((n) => <Node key={n.id} e={n.entry} x={n.x} y={n.y} w={w} h={h} ended={n.ended} focus={n.focus} sub={n.dates} onOpen={onOpen} />)}
-    </svg>
-  );
-}
-
-export function RelationWebSvg({ web, onOpen }: { web: RelationWeb; onOpen: (id: string) => void }) {
-  const { nodeW: w, nodeH: h } = WEB_LAYOUT;
-  const at = new Map(web.nodes.map((n) => [n.id, n]));
-  // Two relations between the same pair are drawn as separate curves.
-  const seen = new Map<string, number>();
-  return (
-    <svg class="graph relation-web" width={web.width} height={web.height} viewBox={`0 0 ${web.width} ${web.height}`} role="group" aria-label={`Relationship web, ${web.nodes.length - 1} related entries`}>
-      <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0 0 L10 5 L0 10 z" class="arrow-head" />
-        </marker>
-      </defs>
-      <g class="edges" aria-hidden="true">
-        {web.edges.map((ed, i) => {
-          const a = at.get(ed.from)!;
-          const b = at.get(ed.to)!;
-          const pair = [ed.from, ed.to].sort().join('|');
-          const k = seen.get(pair) ?? 0;
-          seen.set(pair, k + 1);
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const len = Math.hypot(dx, dy) || 1;
-          // Stop the line at the box edge so the arrow is visible.
-          const t = Math.min((w / 2) / Math.abs(dx || 1e-9), (h / 2) / Math.abs(dy || 1e-9), 0.45);
-          const x1 = a.x + dx * t, y1 = a.y + dy * t, x2 = b.x - dx * t, y2 = b.y - dy * t;
-          const bend = k * 28;
-          const nx = (-dy / len) * bend, ny = (dx / len) * bend;
-          const mx = (x1 + x2) / 2 + nx, my = (y1 + y2) / 2 + ny;
-          const symmetric = relationKind(ed.type)?.symmetric;
-          return (
-            <g key={i} class={`web-edge g-${ed.group}`}>
-              <path class="edge" d={`M${x1} ${y1} Q${mx} ${my} ${x2} ${y2}`} marker-end={symmetric ? undefined : 'url(#arrow)'} />
-              <text class="edge-label" x={mx} y={my - 4} text-anchor="middle">{ed.label}</text>
-            </g>
-          );
-        })}
-      </g>
-      {web.nodes.map((n) => <Node key={n.id} e={n.entry} x={n.x - w / 2} y={n.y - h / 2} w={w} h={h} ended={n.ended} focus={n.focus} sub={TYPE_SINGULAR[n.entry.type]} onOpen={onOpen} />)}
     </svg>
   );
 }

@@ -322,6 +322,28 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .graph .node-mark { color: var(--muted); }
 .graph .arrow-head { fill: #8b93a7; }
 .graph .edge-label { fill: var(--text); font-size: 12px; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+/* Relationship web on React Flow: theme its canvas, controls and minimap, and draw our own portrait cards. */
+.relation-web.flow { position: relative; height: clamp(18rem, 62vh, 44rem); border-radius: 8px; overflow: hidden; background: var(--bg);
+  --xy-background-color: var(--bg); --xy-background-pattern-color: #2c3240; --xy-minimap-background-color: var(--panel); --xy-minimap-mask-background-color: rgb(20 22 27 / 0.65);
+  --xy-controls-button-background-color: var(--panel-2); --xy-controls-button-background-color-hover: #2f3545; --xy-controls-button-color: var(--text); --xy-controls-button-border-color: var(--border); }
+.flow-defs { position: absolute; }
+.relation-web .react-flow__node { cursor: grab; }
+.relation-web .react-flow__node .node { width: 100%; height: 100%; }
+.web-handle { opacity: 0; pointer-events: none; top: 50% !important; bottom: auto !important; left: 50% !important; transform: translate(-50%, -50%) !important; }
+.web-node { width: 100%; height: 100%; display: flex; align-items: center; gap: 0.55rem; padding: 0 0.6rem; text-align: left; border-radius: 10px; color: var(--text);
+  background: var(--panel-2); border: 1.5px solid var(--tc); box-shadow: inset 4px 0 0 var(--tc); cursor: pointer; }
+.web-node:hover { background: #2b3040; border-width: 2px; }
+.web-node:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.node.is-focus .web-node { background: #2a3148; border-width: 3px; box-shadow: inset 4px 0 0 var(--tc), 0 0 0 4px var(--gold-glow); }
+.node.is-ended .web-node { border-style: dashed; background: #1d2028; }
+.web-node-text { display: flex; flex-direction: column; min-width: 0; }
+.web-node-name { font-weight: 650; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node.is-ended .web-node-name { color: var(--muted); }
+.web-node-sub { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.relation-web .react-flow__minimap { border: 1px solid var(--border); border-radius: 6px; }
+.relation-web .mini { fill: var(--tc, var(--muted)); }
+.relation-web .react-flow__controls { box-shadow: var(--shadow); border-radius: 6px; overflow: hidden; }
+.relation-web .react-flow__controls-button:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
 .web-edge.g-family .edge { stroke: var(--t-character); }
 .web-edge.g-power .edge { stroke: var(--t-faction); stroke-dasharray: 8 3; }
 .web-edge.g-possession .edge { stroke: var(--t-item); stroke-dasharray: 2 3; }

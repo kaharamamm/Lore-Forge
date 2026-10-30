@@ -11,12 +11,15 @@ const configs = [
   // @lore-forge/pdf itself only uses import.meta when `require` is missing, which never happens in CJS.
   { ...common, entryPoints: ['src/main/main.ts'], outfile: 'dist/main.cjs', platform: 'node', format: 'cjs', external: ['electron', 'pdfkit'], logOverride: { 'empty-import-meta': 'silent' } },
   { ...common, entryPoints: ['src/main/preload.ts'], outfile: 'dist/preload.cjs', platform: 'node', format: 'cjs', external: ['electron'] },
-  { ...common, entryPoints: ['src/renderer/main.tsx'], outfile: 'dist/renderer/app.js', platform: 'browser', format: 'iife', jsx: 'automatic', jsxImportSource: 'preact' },
+  // React Flow runs on Preact through preact/compat.
+  { ...common, entryPoints: ['src/renderer/main.tsx'], outfile: 'dist/renderer/app.js', platform: 'browser', format: 'iife', jsx: 'automatic', jsxImportSource: 'preact',
+    alias: { react: 'preact/compat', 'react-dom': 'preact/compat', 'react/jsx-runtime': 'preact/jsx-runtime' }, define: { 'process.env.NODE_ENV': '"production"' } },
 ];
 
 await mkdir('dist/renderer', { recursive: true });
 await cp('src/renderer/index.html', 'dist/renderer/index.html');
 await cp('src/renderer/styles.css', 'dist/renderer/styles.css');
+await cp(createRequire(import.meta.url).resolve('@xyflow/react/dist/style.css'), 'dist/renderer/xyflow.css');
 await bundleFonts();
 
 /** Cinzel (SIL OFL 1.1) headings: the woff2 files and their @font-face rules, from @fontsource/cinzel. */
