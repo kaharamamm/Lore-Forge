@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
-  check, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, parseWorld, relationWeb, serializeEntry, serializeIntended, timelineModel, WorldIndex,
+  check, DEFAULT_STATUS, ENTRY_TYPES, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, parseWorld, relationWeb, serializeEntry, serializeIntended, timelineModel, TYPE_ICON, TYPE_SINGULAR, WorldIndex,
   type Entry, type EntryType, type FactRef, type IconName, type Warning, type World,
 } from '@lore-forge/core';
 import type { PdfKind, PublishOptions } from '../shared/api.ts';
@@ -13,6 +13,8 @@ import { PreviewDialog, previewDoc, sheetsOf } from './components/preview.tsx';
 import { ToastStack, useToasts } from './components/toasts.tsx';
 import { involves, WarningsPanel, type WarningActions } from './components/warnings.tsx';
 import { Icon } from './components/icon.tsx';
+import { CommandPalette, type PaletteItem } from './components/palette.tsx';
+import { AboutDialog } from './components/about.tsx';
 
 type View = 'editor' | 'timeline' | 'relations';
 type SaveState = { kind: 'saved' } | { kind: 'saving' } | { kind: 'failed'; message: string };
@@ -122,6 +124,9 @@ export function App() {
   const [save, setSave] = useState<SaveState>({ kind: 'saved' });
   const [preview, setPreview] = useState<PdfKind | null>(null);
   const [relMode, setRelMode] = useState<RelationMode | null>(null);
+  const [palette, setPalette] = useState(false);
+  const [about, setAbout] = useState(false);
+  const [creating, setCreating] = useState<EntryType | null>(null);
   const history = useHistory({ view, id: selectedId, preview, relMode }, (loc) => {
     setView(loc.view);
     setSelectedId(loc.id);
@@ -224,6 +229,36 @@ export function App() {
           dom['webNodes'] = count('.relation-web .node');
           dom['webEdges'] = count('.relation-web .web-edge');
         }
+        // Command palette: Ctrl+K, type a name, Enter opens it; a name that matches nothing offers to create it; About shows the credits.
+        const key = (target: EventTarget, k: string, init: KeyboardEventInit = {}) => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...init }));
+        const typeInto = (el: HTMLInputElement, text: string) => { el.value = text; el.dispatchEvent(new Event('input', { bubbles: true })); };
+        const target = [...w.entries].reverse().find((e) => w.entries.filter((o) => o.name.startsWith(e.name)).length === 1)!;
+        key(window, 'k', { ctrlKey: true });
+        await tick();
+        const pal = $<HTMLInputElement>('.palette input')!;
+        expect(!!pal && document.activeElement === pal, 'Ctrl+K opens the palette with focus in it');
+        dom['paletteItems'] = count('.palette-item');
+        expect(dom['paletteItems']! >= w.entries.length + 10, 'palette lists commands and every entry');
+        typeInto(pal, target.name);
+        await tick();
+        key(pal, 'Enter');
+        await tick();
+        expect(!$('.palette') && !!$(`[data-entry-id="${CSS.escape(target.id)}"][aria-current="page"]`), `palette Enter opens ${target.name}`);
+        key(window, 'k', { ctrlKey: true });
+        await tick();
+        typeInto($<HTMLInputElement>('.palette input')!, 'Qzxv Wraith');
+        await tick();
+        dom['paletteCreate'] = count('.palette-item');
+        expect(dom['paletteCreate'] === 6 && ($('.palette-item')?.textContent ?? '').includes('Qzxv Wraith'), 'unmatched text offers to create an entry of each type');
+        typeInto($<HTMLInputElement>('.palette input')!, 'about');
+        await tick();
+        key($('.palette input')!, 'Enter');
+        await tick();
+        dom['credits'] = count('.about .credit');
+        expect(!!$('.about') && ($('.about')!.textContent ?? '').includes('CC BY 3.0') && ($('.about')!.textContent ?? '').includes('Open Font License'), 'About lists the icon and font licences');
+        key(window, 'Escape');
+        await tick();
+        expect(!$('.about') && !$('.palette'), 'Escape closes About');
         setView('timeline');
         await tick(150);
         dom['timelineMarks'] = count('.tl-mark');
@@ -350,6 +385,9 @@ export function App() {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        if (world) setPalette((p) => !p);
+      } else if (mod && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
         document.getElementById('search')?.focus();
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -418,6 +456,32 @@ export function App() {
   const openEntry = (id: string) => { setSelectedId(id); setView('editor'); };
 
   const selected = world.entries.find((e) => e.id === selectedId);
+  const closeWorld = () => void flush().then(() => { setWorld(null); setDir(null); document.title = 'Lore-Forge'; });
+  const commands: PaletteItem[] = [
+    { id: 'go-editor', group: 'Go to', label: 'Editor', icon: 'quill-ink', run: () => setView('editor') },
+    { id: 'go-timeline', group: 'Go to', label: 'Timeline', icon: 'hourglass', run: () => setView('timeline') },
+    { id: 'go-tree', group: 'Go to', label: 'Family tree', hint: 'Relationships', icon: 'family-tree', run: () => { setRelMode('tree'); setView('relations'); } },
+    { id: 'go-web', group: 'Go to', label: 'Relationship web', hint: 'Relationships', icon: 'spider-web', run: () => { setRelMode('web'); setView('relations'); } },
+    { id: 'go-back', group: 'Go to', label: 'Back', hint: 'Alt+Left, mouse 4', icon: 'fast-backward-button', run: () => navigate('back') },
+    { id: 'go-forward', group: 'Go to', label: 'Forward', hint: 'Alt+Right, mouse 5', icon: 'fast-forward-button', run: () => navigate('forward') },
+    { id: 'go-filter', group: 'Go to', label: 'Filter entries', hint: 'Ctrl+F', icon: 'magnifying-glass', run: () => setTimeout(() => document.getElementById('search')?.focus(), 0) },
+    { id: 'go-warnings', group: 'Go to', label: 'Warnings', hint: 'Ctrl+Shift+W', icon: 'hazard-sign', run: () => setTimeout(() => document.getElementById('warnings-title')?.focus(), 0) },
+    ...ENTRY_TYPES.map((t): PaletteItem => ({ id: `new-${t}`, group: 'Create', label: `New ${TYPE_SINGULAR[t].toLowerCase()}…`, icon: TYPE_ICON[t], tone: `t-${t}`, run: () => setCreating(t) })),
+    { id: 'pub-codex', group: 'Publish', label: 'World Codex', hint: 'preview, then save as PDF', icon: 'book-cover', run: () => setPreview('codex') },
+    { id: 'pub-book', group: 'Publish', label: 'Story Book', hint: 'preview, then save as PDF', icon: 'open-book', run: () => setPreview('book') },
+    { id: 'w-save', group: 'World', label: 'Save all', hint: 'Ctrl+S', icon: 'check-mark', run: () => void flush().then(() => toasts.push({ tone: 'ok', text: 'All changes saved' })) },
+    { id: 'w-reload', group: 'World', label: 'Reload from disk', icon: 'cycle', run: () => void flush().then(() => open(dir)) },
+    { id: 'w-close', group: 'World', label: 'Close world', icon: 'exit-door', run: closeWorld },
+    { id: 'w-about', group: 'World', label: 'About and credits', icon: 'laurels', run: () => setAbout(true) },
+  ];
+  const entryItems = [...world.entries].sort((a, b) => a.name.localeCompare(b.name)).map((e): PaletteItem => ({
+    id: `e-${e.id}`, group: 'Entries', label: e.name, icon: TYPE_ICON[e.type], tone: `t-${e.type}`,
+    hint: [TYPE_SINGULAR[e.type], e.type === 'character' ? e.race : undefined, ...(e.aliases ?? [])].filter(Boolean).join(' · '),
+    run: () => openEntry(e.id),
+  }));
+  const createNamed = (name: string): PaletteItem[] => ENTRY_TYPES.map((t) => ({
+    id: `create-${t}`, group: 'Create', label: `New ${TYPE_SINGULAR[t].toLowerCase()} “${name}”`, icon: TYPE_ICON[t], tone: `t-${t}`, run: () => createEntry(t, name),
+  }));
   const tabs: [View, IconName, string][] = [['editor', 'quill-ink', 'Editor'], ['timeline', 'hourglass', 'Timeline'], ['relations', 'spider-web', 'Relationships']];
   return (
     <div class="app">
@@ -426,6 +490,7 @@ export function App() {
           <h1>{world.manifest.name}</h1>
           <span class="muted path" title={dir}>{dir}</span>
         </div>
+        <button type="button" class="palette-open" onClick={() => setPalette(true)} title="Jump to an entry or run a command"><Icon name="magnifying-glass" /> <span>Search or run…</span> <kbd>Ctrl+K</kbd></button>
         <nav class="tabs" aria-label="Views">
           {tabs.map(([v, icon, label], i) => (
             <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} title={`Ctrl+${i + 1}`}><Icon name={icon} /> {label}</button>
@@ -440,10 +505,11 @@ export function App() {
             {save.kind === 'saved' ? <><Icon name="check-mark" /> Saved</> : save.kind === 'saving' ? '… Saving' : <><Icon name="cancel" /> Save failed: {save.message}</>}
           </span>
           <button type="button" class="ghost small" onClick={() => void flush().then(() => open(dir))} title="Reload all files from disk">Reload</button>
-          <button type="button" class="ghost small" onClick={() => void flush().then(() => { setWorld(null); setDir(null); document.title = 'Lore-Forge'; })}>Close world</button>
+          <button type="button" class="ghost small" onClick={closeWorld}>Close world</button>
+          <button type="button" class="ghost small icon-only" onClick={() => setAbout(true)} aria-label="About and credits" title="About and credits"><Icon name="laurels" /></button>
         </div>
       </header>
-      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onSelect={(id) => { setSelectedId(id); if (view === 'timeline') setView('editor'); }} onCreate={createEntry} />
+      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onSelect={(id) => { setSelectedId(id); if (view === 'timeline') setView('editor'); }} onCreate={createEntry} creating={creating} onCreating={setCreating} />
       <main class="main" id="main">
         {view === 'editor' &&
           (selected ? (
@@ -459,6 +525,8 @@ export function App() {
       </main>
       <WarningsPanel warnings={warnings} selectedId={selectedId} actions={actions} />
       {preview && <PreviewDialog dir={dir} world={world} kind={preview} onClose={() => setPreview(null)} onSave={savePdf} />}
+      {palette && <CommandPalette items={[...commands, ...entryItems]} extra={createNamed} onClose={() => setPalette(false)} />}
+      {about && <AboutDialog onClose={() => setAbout(false)} />}
       <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>
   );

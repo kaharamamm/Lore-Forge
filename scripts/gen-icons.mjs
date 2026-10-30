@@ -16,6 +16,7 @@ const USED = [
   'quill-ink', 'hourglass', 'sands-of-time', 'spider-web', 'book-cover', 'magnifying-glass', 'hazard-sign', 'cancel', 'check-mark', 'save', 'trash-can',
   'quill', 'photo-camera', 'palette', 'sprout', 'compass', 'pointing', 'laurels', 'magic-swirl', 'treasure-map', 'world', 'return-arrow',
   'info', 'stars-stack', 'scroll-quill', 'locked-chest', 'pencil', 'files', 'book-pile', 'fast-backward-button', 'fast-forward-button',
+  'cycle', 'exit-door', 'house', 'village', 'dragon-head', 'crystal-ball', 'expand', 'contract',
 ];
 
 const require = createRequire(import.meta.url);

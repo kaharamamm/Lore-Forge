@@ -12,18 +12,20 @@ interface Props {
   onQuery: (q: string) => void;
   onSelect: (id: string) => void;
   onCreate: (type: EntryType, name: string) => void;
+  /** Which type's "new entry" form is open; lifted so the command palette can open it. */
+  creating: EntryType | null;
+  onCreating: (type: EntryType | null) => void;
 }
 
-export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelect, onCreate }: Props) {
-  const [creating, setCreating] = useState<EntryType | null>(null);
+export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelect, onCreate, creating, onCreating: setCreating }: Props) {
   const [name, setName] = useState('');
   const q = normalizeName(query);
   const matches = (e: Entry) => !q || [e.name, e.id, ...(e.aliases ?? []), ...(e.tags ?? [])].some((s) => normalizeName(s).includes(q));
   return (
     <nav class="sidebar" aria-label="Entries">
       <div class="search">
-        <label for="search" class="sr-only">Search entries</label>
-        <input id="search" type="search" placeholder="Search (Ctrl+K)" value={query} onInput={(e) => onQuery(e.currentTarget.value)} />
+        <label for="search" class="sr-only">Filter entries</label>
+        <input id="search" type="search" placeholder="Filter entries (Ctrl+F)" value={query} onInput={(e) => onQuery(e.currentTarget.value)} />
       </div>
       {ENTRY_TYPES.map((type) => {
         const list = entries.filter((e) => e.type === type && matches(e)).sort((a, b) => a.name.localeCompare(b.name));

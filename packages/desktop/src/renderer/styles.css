@@ -400,6 +400,43 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slide-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .main > * { animation: fade 180ms ease-out; }
+/* Command palette (Ctrl+K) and the About dialog share one backdrop. */
+.palette-open { display: inline-flex; align-items: center; gap: 0.5rem; min-width: 13rem; color: var(--muted); background: var(--bg); border-radius: 8px; }
+.palette-open span { flex: 1; text-align: left; }
+.palette-backdrop { position: fixed; inset: 0; z-index: 60; background: rgb(5 7 10 / 0.6); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 1rem 1rem; animation: fade var(--ease); }
+.palette { width: min(40rem, 100%); max-height: 70vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--gold-soft); border-radius: var(--radius); box-shadow: var(--shadow), 0 0 0 4px var(--gold-glow); overflow: hidden; animation: rise var(--ease); }
+.palette-input { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border); }
+.palette-input .icon { color: var(--gold); }
+.palette-input input { flex: 1; border: 0; background: transparent; font-size: 1.05rem; padding: 0.2rem 0; }
+.palette-input input:focus-visible { outline: none; }
+.palette-input:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+.palette-list { list-style: none; margin: 0; padding: 0.35rem; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.palette-group { padding: 0.5rem 0.6rem 0.2rem; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+.palette-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.6rem; border-radius: 6px; cursor: pointer; }
+.palette-item[aria-selected='true'] { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+.palette-icon { color: var(--tc, var(--muted)); flex: none; }
+.palette-label { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: 0.85rem; }
+.palette-empty { padding: 0.8rem; }
+.palette-foot { margin: 0; padding: 0.45rem 0.9rem; border-top: 1px solid var(--border); font-size: 0.8rem; }
+.icon-only { padding-inline: 0.45rem; }
+.about { width: min(44rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--gold-soft); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.2rem 1.4rem; animation: rise var(--ease); }
+.about-head { display: flex; gap: 1rem; align-items: center; }
+.about-head > div { flex: 1; }
+.about-head h2 { margin: 0; color: var(--gold); }
+.about-head p { margin: 0.2rem 0 0; }
+.about-mark { width: 2.6rem; height: 2.6rem; color: var(--gold); }
+.about h3 { font-size: 0.95rem; margin: 1.2rem 0 0.4rem; }
+.credits { margin: 0; display: grid; gap: 0.5rem; }
+.credit { display: grid; grid-template-columns: 10rem 1fr; gap: 0.8rem; }
+.credit dt { color: var(--muted); }
+.credit dd { margin: 0; }
+.small-print { font-size: 0.85rem; margin-top: 1rem; }
+.about a { color: var(--accent); }
+.about a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px) scale(0.99); } }
+@media (max-width: 900px) { .palette-open { min-width: 0; } .palette-open span, .palette-open kbd { display: none; } .credit { grid-template-columns: 1fr; gap: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
