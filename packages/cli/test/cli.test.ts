@@ -17,7 +17,7 @@ test('lore check on the example world prints every starter rule and exits 1', ()
   assert.match(r.stdout, /Orsan the Grey can't kill Queen Ilsa in 1920: Orsan the Grey died in 1800 \(source: Characters\/Orsan the Grey\)\./);
   for (const rule of builtinRules) assert.match(r.stdout, new RegExp(`\\[${rule.id}\\]`), `rule ${rule.id} should fire on the example world`);
   assert.match(r.stdout, /INTENDED \[after-death\] Nur the Twice-Born/);
-  assert.match(r.stdout, /10 errors, 3 warnings, 0 info, 1 marked intended/);
+  assert.match(r.stdout, /10 errors, 3 warnings, 1 info, 1 marked intended/);
 });
 
 test('lore check --json prints a versioned report', () => {
@@ -25,7 +25,7 @@ test('lore check --json prints a versioned report', () => {
   assert.equal(r.status, 1);
   const report = JSON.parse(r.stdout);
   assert.equal(report.schemaVersion, 1);
-  assert.deepEqual(report.counts, { error: 10, warning: 3, info: 0, intended: 1 });
+  assert.deepEqual(report.counts, { error: 10, warning: 3, info: 1, intended: 1 });
   assert.equal(new Set(report.warnings.map((w: { ruleId: string }) => w.ruleId)).size, builtinRules.length);
 });
 
@@ -37,7 +37,7 @@ test('lore export writes one deterministic snapshot', () => {
   const snap = JSON.parse(readFileSync(out, 'utf8'));
   assert.equal(snap.format, 'lore-forge.world-snapshot');
   assert.equal(snap.schemaVersion, 1);
-  assert.equal(snap.entries.length, 26);
+  assert.equal(snap.entries.length, 28);
   assert.equal(snap.entries.find((e: { entry: { id: string } }) => e.entry.id === 'char-orsan').dates.died.year, 1800);
   assert.equal(lore('export', example).stdout, readFileSync(out, 'utf8'), 'stdout and file output are identical');
 });

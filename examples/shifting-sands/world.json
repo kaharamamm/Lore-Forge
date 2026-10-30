@@ -19,5 +19,6 @@
     ],
     "approxYears": 5
   },
-  "rules": {}
+  "rules": {},
+  "book": { "title": "Tales of the Shifting Sands", "author": "Ahmet Kadir Zengin", "chapterYears": 50 }
 }

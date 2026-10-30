@@ -2,7 +2,7 @@
 id: evt-council-of-qarim
 type: event
 name: The Council of Qarim
-date: 1920-03-12
+date: "1920-03-12"
 place: place-qarim
 participants:
   - id: char-kadir

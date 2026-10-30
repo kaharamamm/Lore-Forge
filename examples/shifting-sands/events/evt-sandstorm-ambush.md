@@ -2,7 +2,7 @@
 id: evt-sandstorm-ambush
 type: event
 name: The Sandstorm Ambush
-date: 1920-03-12
+date: "1920-03-12"
 place: place-saltmere
 participants:
   - id: char-kadir
