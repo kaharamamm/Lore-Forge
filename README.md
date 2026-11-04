@@ -2,8 +2,6 @@
 
 Lore-Forge is a local-first desktop app for writing the worlds, lore, characters and stories of your games. It keeps every world as a plain folder of text files, checks the canon for contradictions as you write, and turns a world into a printable World Codex and a typeset Story Book. Nothing leaves your machine.
 
-> Orsan the Grey can't kill Queen Ilsa in 1920: Orsan the Grey died in 1800 (source: Characters/Orsan the Grey).
-
 Version 1.0.0 · world format `schemaVersion: 1`.
 
 ---
