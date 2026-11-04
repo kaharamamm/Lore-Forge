@@ -4,15 +4,6 @@ type: character
 name: Pip
 summary: Quick-footed fennec courier of the palace, Mr Camel's young friend and, after the Singing Well, an apprentice Well Warden.
 race: fennec-folk
-gender: female
-occupation: Palace courier, then apprentice Well Warden
-personality: Talks fast, runs faster, hates waiting, loves being right.
-skills: Running, climbing, hearing very small sounds
-affiliations:
-  - fac-dry-hand
-home: place-camelamamm
-possessions:
-  - item-humming-map
 born: "500"
 status: alive
 locations:
@@ -21,9 +12,14 @@ locations:
 relations:
   - type: ally-of
     target: char-mr-camel
-  - type: leader-of
-    target: fac-dry-hand
+  - type: member-of
+    target: fac-well-wardens
     from: "512"
+gender: female
+occupation: Palace courier, then apprentice Well Warden
+personality: Talks fast, runs faster, hates waiting, loves being right.
+skills: Running, climbing, hearing very small sounds
+home: place-camelamamm
 visual:
   appearance: Fennec fox, sandy fur, enormous ears, bright amber eyes.
   build: Small (1.1 m), wiry.

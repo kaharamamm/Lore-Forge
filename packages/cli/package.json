@@ -1,7 +1,8 @@
 {
   "name": "@lore-forge/cli",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Headless Lore-Forge commands: lore check, export, codex, book.",
   "type": "module",
   "bin": {
@@ -11,7 +12,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@lore-forge/core": "0.4.0",
-    "@lore-forge/pdf": "0.4.0"
+    "@lore-forge/core": "1.0.0",
+    "@lore-forge/pdf": "1.0.0"
   }
 }

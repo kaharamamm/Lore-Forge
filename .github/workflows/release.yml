@@ -1,0 +1,78 @@
+name: Release downloads
+
+# When a GitHub release is published, build the downloads on each platform and attach them to that release:
+#   Windows  Lore-Forge-<version>-win-x64.exe          (NSIS installer)
+#   Linux    Lore-Forge-<version>-linux-amd64.deb      (Debian, Ubuntu)
+#            Lore-Forge-<version>-linux-x86_64.AppImage (other distributions)
+#   macOS    Lore-Forge-<version>-mac-arm64.dmg        (Apple Silicon)
+#            Lore-Forge-<version>-mac-x64.dmg          (Intel)
+# The builds are not code-signed (no paid certificates), so Windows and macOS ask once before the first start.
+# "Run workflow" rebuilds the downloads for an existing release tag.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and attach to (for example v1.0.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            target: --win nsis --x64
+          - name: Linux
+            os: ubuntu-latest
+            target: --linux AppImage deb --x64
+          - name: macOS
+            os: macos-latest
+            target: --mac dmg --arm64 --x64
+    runs-on: ${{ matrix.os }}
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        if: runner.os == 'Linux'
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Package
+        working-directory: packages/desktop
+        run: npx electron-builder ${{ matrix.target }} --publish never
+        env:
+          # No signing certificate: never look for one in the runner's keychain (macOS is signed ad hoc instead).
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(packages/desktop/release/*.exe packages/desktop/release/*.deb packages/desktop/release/*.AppImage packages/desktop/release/*.dmg)
+          if [ ${#files[@]} -eq 0 ]; then echo "No packages were built" >&2; exit 1; fi
+          gh release upload "$TAG" "${files[@]}" --clobber

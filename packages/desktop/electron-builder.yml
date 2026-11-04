@@ -3,6 +3,8 @@ productName: Lore-Forge
 directories:
   output: release
   buildResources: build
+# Download names, e.g. Lore-Forge-1.0.0-win-x64.exe, Lore-Forge-1.0.0-linux-x86_64.AppImage, Lore-Forge-1.0.0-mac-arm64.dmg
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 files:
   - dist/**/*
   - package.json
@@ -20,6 +22,9 @@ extraResources:
       - DejaVuSerif-Bold.ttf
       - DejaVuSerif-Italic.ttf
       - DejaVuSansMono.ttf
+  # The DejaVu licence must travel with the font files.
+  - from: ../../node_modules/dejavu-fonts-ttf/LICENSE
+    to: fonts/DejaVu-LICENSE.txt
 win:
   target: nsis
   icon: build/icon.ico
@@ -28,8 +33,23 @@ nsis:
   allowToChangeInstallationDirectory: true
 mac:
   icon: build/icon.icns
+  category: public.app-category.productivity
+  target: dmg
+  # No Apple Developer certificate: sign ad hoc, so the app runs on Apple Silicon. Gatekeeper still asks once.
+  identity: "-"
+  # Ad-hoc signing with the hardened runtime would reject Electron's own pre-signed frameworks at launch.
+  hardenedRuntime: false
 linux:
-  target: AppImage
+  # .deb for Debian and Ubuntu: its installer adds an AppArmor profile on Ubuntu 24+ (or a setuid chrome-sandbox on
+  # systems without user namespaces), so the app keeps Chromium's sandbox. AppImage for every other distribution.
+  target:
+    - AppImage
+    - deb
+  maintainer: Ahmet Kadir Zengin
+  synopsis: Write the worlds, lore and characters of your games
+  description: A local-first app for writing game worlds, lore, characters and stories, with a consistency checker, a World Codex PDF and a print-ready Story Book.
+  # The package name (@lore-forge/desktop) is not a valid file name.
+  executableName: lore-forge
   category: Office
   icon: build/icons
   desktop:

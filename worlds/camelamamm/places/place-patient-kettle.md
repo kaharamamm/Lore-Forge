@@ -3,11 +3,11 @@ id: place-patient-kettle
 type: place
 name: The Patient Kettle
 summary: Mr Camel's tea house, the smallest on the Street of Kettles.
-kind: temple
-features: Seven cushions, one window, a brass kettle that has never gone cold.
 status: standing
 founded: "498"
-partOf: place-glass-dunes
+partOf: place-camelamamm
+kind: Tea house
+features: Seven cushions, one window, a brass kettle that has never gone cold.
 visual:
   architecture: A single domed room with a blue door and a rooftop where the kettle sits in the sun.
   palette: Blue, brass, faded red rugs.

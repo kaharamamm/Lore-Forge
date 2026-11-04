@@ -1,9 +1,13 @@
 {
   "name": "lore-forge",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Local-first desktop app for writing game worlds, lore and characters, with a consistency checker.",
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "author": "Ahmet Kadir Zengin",
+  "homepage": "https://github.com/kaharamamm/Lore-Forge",
+  "repository": { "type": "git", "url": "git+https://github.com/kaharamamm/Lore-Forge.git" },
+  "bugs": { "url": "https://github.com/kaharamamm/Lore-Forge/issues" },
   "type": "module",
   "engines": {
     "node": ">=22.18"
@@ -21,7 +25,8 @@
     "lore": "node --conditions=source packages/cli/src/main.ts",
     "dev": "npm run dev -w @lore-forge/desktop",
     "dist:win": "npm run build && npm run dist:win -w @lore-forge/desktop",
-    "dist:linux": "npm run build && npm run dist:linux -w @lore-forge/desktop"
+    "dist:linux": "npm run build && npm run dist:linux -w @lore-forge/desktop",
+    "dist:mac": "npm run build && npm run dist:mac -w @lore-forge/desktop"
   },
   "devDependencies": {
     "@iconify-json/game-icons": "^1.2.4",

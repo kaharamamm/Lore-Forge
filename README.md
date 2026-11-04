@@ -1,379 +1,376 @@
 # Lore-Forge
 
-A local-first desktop app for writing the worlds, lore and characters of your games, with a consistency
-checker that notices when your canon contradicts itself:
+Lore-Forge is a local-first desktop app for writing the worlds, lore, characters and stories of your games. It keeps every world as a plain folder of text files, checks the canon for contradictions as you write, and turns a world into a printable World Codex and a typeset Story Book. Nothing leaves your machine.
 
 > Orsan the Grey can't kill Queen Ilsa in 1920: Orsan the Grey died in 1800 (source: Characters/Orsan the Grey).
 
-A world is a plain folder of text files (`world.json` plus one Markdown file per entry). You can keep it in
-git, diff it, and read it from other tools. Nothing leaves your machine.
+Version 1.0.0 · world format `schemaVersion: 1`.
 
-Version 0.4.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged).
+---
 
-## What's new in v0.4.6
+## Table of Contents
 
-- **Popups fit every window.** New book, the Book cover editor, World settings with its eras, About, the colour,
-  font and icon pickers, dropdowns, the story chip and add menu, the right-click menu, the relationship dialog,
-  the export preview and every confirm stay inside the window from 1024x640 to 2560x1440. Titles and Save/Cancel
-  stay put while the body scrolls, wide dialogs go to one column when narrow, and menus flip or shift to stay on
-  screen. Toasts move to the bottom-left while a dialog is open.
-- **Camelamamm.** A finished sample world: *Mr Camel* in six chapters (about 5,900 words) with 23 entries, a
-  cover, two eras and no problems in `check`. It is the world a new install opens with.
-- **Any number of books.** The shelf wraps into as many rows as it needs and scrolls; covers load as they come
-  into view, and the hovered row tilts in place. Recent worlds are no longer capped.
-- **Search books.** A search box above the shelf matches titles first, then subtitles and authors, then
-  descriptions, ignoring accents and Turkish dotted/dotless i. Ctrl+F or / focuses it, Esc clears it, and Enter
-  opens the book when only one matches.
+- [Overview](#overview)
+- [Download](#download)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [The App](#the-app)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [World Format](#world-format)
+- [Dates and Calendars](#dates-and-calendars)
+- [Consistency Rules](#consistency-rules)
+- [World Codex and Story Book](#world-codex-and-story-book)
+- [Command-Line Interface](#command-line-interface)
+- [Integration with Other Tools](#integration-with-other-tools)
+- [App Settings and Storage](#app-settings-and-storage)
+- [Development](#development)
+- [Build, Packaging, and Releases](#build-packaging-and-releases)
+- [Troubleshooting](#troubleshooting)
+- [Tech Stack](#tech-stack)
+- [Credits and Licences](#credits-and-licences)
+- [License](#license)
 
-## What's new in v0.4.5
+---
 
-- **New book.** *Show title on cover* and *Show emblem on cover* are in the create dialog too, with or without a
-  picture, so a plain cover is possible. The title always stays on the spine, shown beside the preview.
-- **Shelf.** Moving the mouse off a book always returns it to rest, whether it was waiting to open, turning,
-  fully open, or you moved straight onto the next book. The stats panel hides with it.
-- **Book cover editor.** Edits are a draft with a live preview until **Save cover**; **Cancel** or Esc reverts,
-  closing with unsaved changes asks first, and a short *Cover saved* note confirms. The buttons stay in view on
-  small windows.
-- **Title.** The three title styles are gone; **Title font** sits at the top of the Title section. Font lists and
-  other dropdowns scroll with the wheel, touch and keyboard again, with the search box pinned on top.
+## Overview
 
-## What's new in v0.4.4
+Lore-Forge is for writers and game designers who keep a world's canon: who was born when, who killed whom, which city stood where, what each faction wants. A world is a folder with a `world.json` and one Markdown file per entry, so it can live in git, be diffed, and be read by other tools. The desktop app edits those files; a command-line tool checks and exports the same folders.
 
-- **Top bar.** Back sits top left, then the world's cover and title (one button) that opens world Home. The
-  laurel icon is replaced by **World settings**, which also holds **About**. Mouse buttons 4 and 5 (and
-  Alt+Left/Right) go back and forward, including between the library and a world.
-- **Delete dialog.** A themed dialog with the book's cover, *Keep it* focused, a focus trap, and Esc or a click
-  outside to keep the book.
-- **Shelf.** A book now opens like a book, hinged on its spine edge, in place. The books beside it slide aside so
-  they stay in frame and slide back afterwards. A book at the right edge opens to the left inside the shelf.
-  Hover waits a moment, so spamming the mouse across the shelf no longer leaves books half open. Thickness grows
-  with content but stays in a modest range.
-- **Story.** Detection finds places, items, weapons, events and factions as well as characters. Select words or
-  right-click a name to add it with the type guessed, pick another type, link it to an existing card or search
-  the world. Ctrl+Shift+A adds the selection straight away.
-- **Landing page.** A light shaft with dust, drifting runes and candles that follow the mouse a little. It pauses
-  while the window is hidden and stays still under reduced motion.
-- **New book.** Choose the emblem (icon picker) and the cover colour yourself. Random is only the starting
-  value, and **Shuffle** rolls a new one.
-- **Cover switches.** *Show title on cover* and *Show emblem on cover* (on by default). The title always stays on
-  the spine. With a picture, the spine takes its colour from the picture's left edge and picks a readable
-  title colour. You can set both yourself in the new **Spine** group, and *Automatic* resets them.
-- **Cover fonts.** A searchable font picker grouped into *Bundled* (16 open-licence fonts, Liberation
-  Serif/Sans among them) and *System* (every font installed on your computer). Each name is shown in its own
-  font, and the list works from the keyboard. The choice is saved as `cover.font` in world.json. If a font is
-  missing, the cover falls back to the style's font and says so. The PDF embeds the font, or uses DejaVu with
-  a note when the font lacks the title's letters.
-- **Recent cover pictures.** *No picture* keeps the file. Small thumbnails under the picture buttons show the
-  world's images and your recent uploads, so you can pick one again without uploading it.
+Key capabilities:
 
-## What's new in v0.4.3
+- A library that shows every world as a book on a shelf, with search, new books and delete to the system trash
+- Six entry types: characters, places, factions, items, events and notes, each with structured fields and a Markdown body
+- Dates on your own calendar (custom eras and months), with partial, approximate and unknown dates
+- A consistency engine with 16 rules that runs live and points at the exact field that breaks canon
+- Names that link themselves in any text, with hover cards and Ctrl/⌘+click to open
+- A timeline, a family tree and a relationship web, all pan-and-zoom, editable by dragging
+- A story manuscript written chapter by chapter, which proposes entries from what you write and warns when the story contradicts the world
+- Reference images with provenance, and visual description fields for artists and 3D tools
+- A World Codex PDF (with art briefs and image prompts) and a print-ready Story Book (PDF, Word and Markdown)
+- Book covers and entry pictures from 100+ drawn game icons, colours, bundled title fonts or your own images
+- A dark, gold-accented interface; every type and severity is an icon plus a word, never colour alone
 
-- **No command palette.** Ctrl+K is gone. Everything it offered has a button: the view tabs (Home, Editor,
-  Timeline, Relationships with the family tree and web, Story), **World settings** next to the tabs (and on
-  Home), **New chapter** in the Story chapter list, **+ New** in the sidebar, **World Codex** and **Story Book**
-  in the top bar, **About** in the top bar and **Reload from disk** on world Home.
-- **Sidebar search** reads just *Search...* and still searches names and text (Ctrl+F).
-- **Icon search.** The icon picker (card pictures and cover emblems) has a search box: type a name or a word
-  such as *sword*, *tower*, *kale* or *kılıç*. It shows how many icons match, says so when none do, and works
-  from the keyboard (Down into the grid, arrows inside it, Enter picks the first match).
-- **Colour picker without Done.** Changes apply as you pick; click outside or press Esc to close it.
-- **Books on the shelf are real 3D boxes.** Spine, front cover, back cover, top and page block. Hover or focus
-  pulls the book towards you and turns it in your hand until the cover faces you; it turns back and slides in
-  when you leave. With reduced motion the spine simply crossfades to the cover.
+Lore-Forge owns:
 
-## What's new in v0.4.1
+- the world folder format and its JSON Schemas
+- the rule engine, the starter rules and the story checks
+- the desktop app (library, editor, views, story, exports)
+- the World Codex and Story Book document model and their PDF, Word and Markdown renderers
+- the `lore` command-line tool
 
-- **Story extraction reads more sentence shapes.** "Keller the grand magus created the scepter. he was a very
-  good wizard." proposes a Keller character (title Grand Magus, occupation magus, male) and a Scepter item he
-  made. Sentences with no new names propose nothing.
-- **A real library.** Wooden bookcase with a soft magic glow and slowly drifting motes (off with reduced
-  motion). Books stand spine out with their title; hover or focus pulls one off the shelf and turns it to show
-  the cover and its entry counts, and it springs back when you leave. Click or Enter opens it. Many worlds wrap
-  onto more shelves. The delete button sits on the cover's top-right corner (hover or keyboard focus) and still
-  asks first; the shelf and recent worlds update straight after the trash.
-- **`worlds/` instead of `examples/`.** The sample world lives in `worlds/shifting-sands`, and new books are
-  created next to it in development.
-- **Cover editor.** Click the cover on world Home to set a gradient or plain colour, a picture (upload, the
-  world's own, or none), an emblem and its colour, and the title lettering and colour. It is stored under
-  `cover` in `world.json` and used on the shelf, the small top-bar cover, Home, the previews and the PDF covers
-  (World Codex and the printed Story Book; the Word export has no cover page).
-- **Colour picker.** One picker everywhere colours are chosen: hue ring around a saturation/brightness square,
-  hex (with optional alpha, `#rrggbbaa`) and RGB fields, an opacity slider on a checkerboard, theme swatches and
-  your recent colours. Keyboard: arrow keys on the ring and square, Shift for bigger steps.
-- **Sharper portraits.** Pictures smaller than 128 px (such as placeholders) show the entry icon instead of
-  a blurry upscale.
+Other tools (an AI assistant, a game engine importer) read the same folders through the schemas and the integration guide in [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
-## What's new in v0.4
+---
 
-- **Story (Ctrl+4).** A manuscript space for the whole story, written chapter by chapter. The editor fills
-  the window and scrolls on its own; the chapter list (new, reorder, delete) replaces the sidebar while you
-  write, with a word count per chapter and for the whole story. Chapters save automatically to
-  `story/NN-slug.md` (a short YAML header with `title`, `order` and an optional `date`, then plain prose).
-  Names you type link themselves as in the entry editor: highlights, hover cards, **Ctrl/⌘+click** to open,
-  and Back/Forward to return.
-- **Proposals, never automatic.** As you write, Lore-Forge reads the text and proposes what it found:
-  *King Camel was born in 1998.* proposes a character **Camel**, born 1998, title King. Battles, deaths,
-  marriages, parents, places and named items are recognised too. Each proposal shows its fields and the
-  sentence it came from, with **Add**, **Edit…** (change type, name, dates or relations first),
-  **Merge…** (fold it into an entry you already have, adding the name as an alias) and **Ignore** (saved in
-  `story-ignored.json`), plus **Ignore all**. Names that already match an entry are listed as
-  *Already exists: Kadir Humpback (character)* instead of being proposed again; when the story says
-  something new about one (a birth year it lacked), that shows as an **Update** you can apply.
-- **Live warnings while you write.** The same rules as the rest of the world run on what the story says,
-  a moment after you stop typing. A sentence that breaks canon is underlined in the editor and listed in the
-  warnings panel, where **Go to** selects the sentence. A new rule, `story-contradiction`, flags the story
-  disagreeing with an entry (*The story says Orsan the Grey was born in 1745, but Characters/Orsan the Grey
-  says 1740.*). Mark intended works as everywhere else.
-- **The Story Book is your story.** When a world has chapters, the Story Book prints them as the book
-  (*Chapter 1. The Salt Road*), with the chronicle of events and notes as an appendix (a preview checkbox
-  turns it off). Worlds without a story print as before.
-- The extractor is deterministic and runs offline. An AI tool (AI-HQ) can plug in its own extractor and get
-  the same duplicate checks; see [docs/INTEGRATION.md](docs/INTEGRATION.md#story).
-- Worlds from 0.1–0.3.1 open unchanged; the `story/` folder is optional. The sample world (`worlds/shifting-sands`) has one chapter.
+## Download
 
-### Also in v0.4: the library, editing tools and a print-ready book
+Ready-made builds are on the [Releases](https://github.com/kaharamamm/Lore-Forge/releases/latest) page. No Node.js or build tools are needed.
 
-- **A library to start from.** The start screen is a bookshelf: each world is a book with its cover colour
-  (or picture) and name; no folder paths. **New world** is the empty book at the end of the shelf. New
-  worlds go into the app's `worlds/` folder by default (the project's `worlds/` in development, the app's
-  user-data folder when installed); **Change…** picks another folder and is remembered. **Delete** on a
-  book asks first, then moves the folder to the system trash (nothing is deleted outright).
-- **Back to the library:** the small cover next to the world title returns to the shelf. Reload and Close
-  are gone from the top bar (**Reload from disk** is on world Home),
-  and so are the top-bar search box, the folder path and the permanent *Saved* label (the save status only
-  shows for a moment after a save, or when saving fails).
-- **Sidebar:** wider by default and resizable (drag its edge, or arrow keys on the handle; double-click
-  resets). The width is remembered. **Warnings** are grouped into Errors, Warnings, Info and Marked
-  intended, each with its count, collapsible, and the open/closed state is remembered.
-- **Cards** of the same kind are all the same size. Bigger text fields, especially the long ones.
-- **Pictures:** each card's picture can be changed: pick an icon, its colour and the background, or one of
-  the entry's images (stored as `picture` in the entry). Without a choice the default fits the entry: a
-  female or male figure from the gender, title or first name, a castle, palace, hut or house from a place's
-  kind or name, a crown, ring, scroll or axe for items, and so on.
-- **Race or kind** is a row of chips with icons: type to add (with suggestions), × to remove. Several races
-  are allowed.
-- **More detail, all optional:** characters have gender, title, occupation, languages, personality, goals,
-  skills, affiliations, home and possessions; places kind, population, ruler and features; factions kind,
-  leader, headquarters, ideology, allies and enemies; items kind, origin, location, owners and powers;
-  events kind, causes, outcome and consequences. Empty means unknown and is never written to the file.
-  Reference fields (home, ruler, leader, ...) count as relationships in the rules and the graphs.
-- **Tags** were free keywords used only by the sidebar filter. The editor no longer shows them; tags in
-  existing files are kept and still match the filter.
-- **Relationships you can edit in place.** Drag an entry from the sidebar onto the family tree or the
-  relationship web, drag from a node's handle to another node to connect them, click a line to change or
-  delete the relationship. Every change is written to both entries' files at once and shows in the editor;
-  **Ctrl+Z** undoes the last change.
-- **Print-ready Story Book.** The PDF is laid out like a printed book: 6 × 9 in trim by default (also
-  5.5 × 8.5 in and A5), the world's cover with the title, subtitle and author, mirrored margins with a wider
-  inside edge for the binding, title page, copyright page, optional dedication and epigraph, contents, each
-  chapter starting at the top of a new page with a drop cap, running heads (book title on left pages,
-  chapter on right pages), page numbers from the first chapter (none on chapter openings), a serif text
-  face, justified and hyphenated text, and no single lines left at the top or bottom of a page. There are
-  no blank pages; for a printed copy, **Start chapters on right-hand pages** (in the preview's Print
-  options, saved as `book.rightHandChapters`) opens the front pages and every chapter on a right-hand page. **Save Word (.docx)…** writes the same book for Word
-  (Word fills in the contents page numbers when it opens the file). The preview shows the trim, the front
-  pages and the openings; the book details (title, author, publisher, dedication, epigraph, copyright text)
-  are edited there and saved in `world.json`.
-- **App icon:** an open book on an anvil with a gold spark, used for the window, the installers and a
-  Linux launcher (`packages/desktop/build/lore-forge.desktop`).
-- The app opens at 1920 × 1080 (or the screen size if smaller) and is checked at 1280 × 720, 1920 × 1080
-  and 2560 × 1440.
+| System | File | Install |
+| --- | --- | --- |
+| Windows 10/11 | `Lore-Forge-<version>-win-x64.exe` | Run the installer. |
+| macOS (Apple Silicon) | `Lore-Forge-<version>-mac-arm64.dmg` | Open the disk image and drag Lore-Forge to Applications. |
+| macOS (Intel) | `Lore-Forge-<version>-mac-x64.dmg` | The same. |
+| Ubuntu, Debian | `Lore-Forge-<version>-linux-amd64.deb` | `sudo apt install ./Lore-Forge-<version>-linux-amd64.deb` |
+| Other Linux | `Lore-Forge-<version>-linux-x86_64.AppImage` | `chmod +x Lore-Forge-*.AppImage`, then run it. |
 
-## What's new in v0.3.1
+The builds are not code-signed (signing needs paid certificates), so the first start asks once:
 
-- **A new look.** Dark, quiet panels with gold accents and Cinzel headings. Every type, status and action
-  uses a drawn icon from [game-icons.net](https://game-icons.net) (no emoji, so no empty boxes on systems
-  without an emoji font). **About** in the top bar lists the credits and licences.
-- **Ctrl+F** focuses the sidebar search.
-- **Book-cover start screen and a world home page.** Recent worlds and the sample world show as covers (the first
-  place, event, item or character image in the world, or a generated cover). Opening a world lands on **Home (Ctrl+H)**: overview, counts and image
-  cards for every entry. Entries show their portrait (the first image in the entry, or a generated
-  emblem) in the sidebar, on hover cards, in the family tree and in the relationship web.
-- **Pan and zoom.** The relationship web is a zoomable map with a minimap; the family tree and the timeline
-  zoom too. Everywhere: drag to pan, **Ctrl/⌘+scroll** or pinch to zoom, **Fit** to see everything. A plain
-  scroll wheel still scrolls the page (on the timeline, **Shift+scroll** moves along time).
-- **Back and forward.** Mouse buttons 4/5 or **Alt+←/→** go through the entries and views you visited.
-- **Status always has one value** (default *unknown*), the dead get a tombstone, and characters have a
-  **race/kind** field (human, ghoul, vampire, …). Dates accept partial `DD.MM.YYYY` input.
-- **World Codex** replaces "World Bible" everywhere (`lore bible` still works as an alias).
-- Calm motion: lists and views animate briefly, and all of it turns off with the system's *reduce motion*
-  setting.
+- **Windows:** SmartScreen says "Windows protected your PC". Choose **More info**, then **Run anyway**.
+- **macOS:** the app "cannot be opened because Apple cannot check it". Open **System Settings → Privacy & Security** and choose **Open Anyway** (or right-click the app and choose **Open**).
+- **Linux AppImage:** see [Troubleshooting](#appimage-does-not-start-on-linux) if it does not start; the `.deb` is the simplest choice on Ubuntu and Debian.
 
-## What's new in v0.3
+The app opens on the library with the sample world, **Camelamamm**. Your worlds are kept wherever Library settings points (see [App Settings and Storage](#app-settings-and-storage)).
 
-- **A clearer look.** Every type has an icon, a word and a color (character, place, faction, item, event,
-  note). They appear the same way in the sidebar, chips, links, the timeline and the trees. Ended entries
-  carry a mark plus a word (dead, destroyed, dissolved) and are shown muted. Empty views explain what to do next, and saving or exporting shows a toast.
-- **Status first.** Characters, places, factions and items start with a status (alive/dead,
-  standing/destroyed, active/dissolved, intact/destroyed/lost). An ongoing status hides the death or
-  destruction date. A hidden date stays in the file, the editor says so, and `dead-marked-alive` still
-  catches it (now also for standing places, active factions and intact items).
-- **Names link themselves.** Names and aliases typed in the text are highlighted in their type color
-  (case-sensitive, whole words, longest name first, Turkish letters count as word letters). Hover one for a
-  card with its type, dates and status. **Ctrl/⌘+click** or **Ctrl/⌘+Enter** opens it, and a picker appears
-  when a name is shared. The chips under the text do the same from the keyboard. The checker and exports
-  count these as references (they never cause `dangling-reference`).
-- **Relationship types that make sense.** A table in core (`RELATION_KINDS`) says which types go from
-  which entry type to which. The editor's relation dropdown and target picker only offer what fits, and the
-  new `relation-kind` rule warns about nonsense like an item being `parent-of` a character. Custom types are
-  still allowed.
-- **Relationships view:** a family tree (generations top-down, spouses side by side, the dead marked and
-  faded) and a relationship web around the selected entry. Every box opens its entry.
-- **Timeline:** era bands with labels, lifespans as bars, events as points, warning markers, hover details,
-  zoom (−/Fit/+ or Ctrl+scroll) and type filters. Click a name or bar to open it.
-- **Export preview:** **World Codex** and **Story Book** in the top bar open an in-app preview built
-  from the same document the PDF uses. Pick the entry types, art briefs and warnings appendix for the
-  Codex, or chapters by era, by year ranges or as one chapter for the Book, then **Save PDF…**.
+---
 
+## Quick Start
 
-- **Reference images for every entry type**, with the same storage (`images/<entryId>/`) and provenance
-  record. Each type suggests its own views: characters A-pose, front, back, left, right, three-quarter,
-  concept; places establishing shot, map, interior, exterior, mood, concept; items front, back, side, top,
-  detail, concept; events scene, establishing shot, map, mood, concept. Any other view label is allowed and
-  only gets an info note (`image-view`).
-- **Visual description fields** (optional, free text): characters appearance, height & build, clothing,
-  colour palette, distinguishing features, props; places architecture, climate, palette, scale; items
-  material, size, details; events scene description, mood; factions emblem, attire, palette.
-- **World Codex PDF** (`lore codex`, or **World Codex PDF…** in the app): cover, contents, world overview
-  and calendar, every entry by type with facts, relationships, visual description, text and reference
-  images with provenance, an **art brief** per character, place, item and event (image prompt, plus a 3D
-  turnaround brief for characters and items), a timeline, a relationship summary, a glossary of names and
-  aliases, and an appendix of open consistency warnings. A `.md` copy with the same content is written next
-  to the PDF for AI tools.
-- **Story Book PDF** (`lore book`, or **Story Book PDF…**): your events and notes in in-world date order,
-  in chapters by era (or by year ranges with `book.chapterYears` in `world.json`), with links resolved to
-  names and event or place images as illustrations. A page's `chapter` field puts it in a named chapter and
-  `bookOrder` reorders pages inside a chapter. Undated pages go to *Lore & Legends* at the end.
-  **The Story Book assembles what you wrote. It does not write, rewrite or summarise prose;** an event with
-  no text shows its summary, or a "no text yet" line.
-
-## What's in v0.1
-
-- **Entries:** characters, places, factions, items, events and notes. Each has a name, aliases, a summary,
-  tags, relations, a Markdown body with `[[links]]` and `@mentions`, and type-specific fields such as
-  born/died, founded/destroyed, an event date, place, participants and actions ("A killed B").
-- **Dates on your own calendar:** custom eras and months. Dates are typed as `DD.MM.YYYY` with as much
-  as you know: `1920`, `03.1920`, `12.03.1920`, or `12.03` when the year is unknown. Also approximate (`~1800`),
-  in another era (`450 OK`), or unknown (`?`). The older `1920-03-12` form still works. Rules only warn when
-  the known parts prove a conflict (died "1800" and acted "12.03.1800" is fine).
-- **Consistency engine:** 14 starter rules (listed below). Warnings show the severity as an icon plus a word,
-  the offending fact, and the canon fact it conflicts with, including that fact's source. Warnings never block
-  saving. You can mark one as *intended* (for example, a resurrection) and add a note. The mark is stored in
-  `intended.json` inside the world.
-- **Desktop app:** a sidebar grouped by type with search, a structured entry editor, a live warnings panel
-  that jumps to the offending field, a timeline, a relationship view, and reference images with provenance
-  (tool, prompt, date, sources, rights).
-- **CLI:** `lore check`, `lore export`, `lore codex`, `lore book`.
-- **JSON Schemas and an integration guide** so other tools can read worlds. See
-  [docs/INTEGRATION.md](docs/INTEGRATION.md).
-- **Sample world:** `worlds/camelamamm`, a finished story with no problems in `check`.
-- **Test world:** `packages/core/test/fixtures/shifting-sands` triggers every rule on purpose. Its README maps
-  each rule to the entry that triggers it. It is a test fixture, so it does not show on the shelf.
-
-## Install and run (Linux, Ubuntu-like)
-
-You need Node.js 22.18 or newer. Node 24 is recommended (see `.nvmrc`), and git.
+You need Node.js 22.18 or newer (Node 24 is recommended, see `.nvmrc`) and git.
 
 ```bash
-# Node 24 via nvm (skip if you already have it)
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-source ~/.nvm/nvm.sh
-nvm install 24 && nvm use 24
-
-cd Lore-Forge
 npm install          # also downloads the Electron binary
-npm test             # unit tests, rule tests, schema tests, CLI test
-npm run typecheck
-npm run lore -- check packages/core/test/fixtures/shifting-sands   # exits 1: the test world has errors on purpose
 npm run dev          # build and start the desktop app
 ```
 
-npm 11 asks you to approve install scripts. The approved ones (`esbuild`, `electron`,
-`electron-winstaller`) are listed in `allowScripts` in `package.json`. If `npx electron --version` reports a
-missing binary, run `npm rebuild electron`.
+The app opens on the library with the sample world, **Camelamamm**: a six-chapter story with 23 entries, a cover, two eras and no problems in `check`.
 
-**Ubuntu 23.10+ / 24.04 sandbox error.** AppArmor blocks Chromium's user-namespace sandbox, and
-`node_modules/electron/dist/chrome-sandbox` is not a root setuid helper, so unpackaged Electron aborts.
-`npm run dev` detects that and passes `--no-sandbox` for the development process. Packaged builds (the
-AppImage or the Windows installer) are unchanged. To keep the sandbox on during development, fix the helper
-once (this is lost after `npm install`):
+To open a world folder directly:
 
 ```bash
-sudo chown root:root node_modules/electron/dist/chrome-sandbox
-sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+LORE_FORGE_OPEN=/path/to/world npm run dev
 ```
 
-To open a world directly: `LORE_FORGE_OPEN=/path/to/world npm run dev`.
+For tests, the CLI and packaging, see [Development](#development).
 
-## Build the Windows installer (not published)
+---
 
-```bash
-npm run dist:win
+## Architecture
+
+```text
+packages/core  (@lore-forge/core)      types, dates, parser and serializer, rule engine, rules,
+    │                                  story extraction and checks, document model, schemas
+    │
+    ├── packages/pdf  (@lore-forge/pdf)   PDF (pdfkit) and Word (docx) rendering of the documents
+    │
+    ├── packages/cli  (@lore-forge/cli)   lore check / export / codex / book
+    │
+    └── packages/desktop  (@lore-forge/desktop)
+            ├── main process (Electron)   files, dialogs, exports, settings, recent worlds
+            ├── preload                   window.lore: the only bridge between the two
+            └── renderer (Preact)         library, editor, views, story, previews
 ```
 
-This produces an NSIS installer at `packages/desktop/release/Lore-Forge Setup 0.1.0.exe`. Run it on Windows
-for the most reliable result. On Linux it needs `wine` installed. `--publish never` is set, so nothing is
-uploaded. The sample world is bundled as a read-only resource and shows on the shelf; copy its folder if you
-want to edit it. (In development every world in `worlds/` can be edited and deleted.)
+Core has one runtime dependency (`yaml`) and runs anywhere Node runs. The same `check` the CLI prints is what the desktop app shows live; the same document the PDF is drawn from is what the in-app preview shows, so the preview and the file never disagree.
 
-On Linux, `npm run dist:linux` builds an AppImage into the same `release/` folder.
+The desktop renderer runs sandboxed with context isolation and a strict content security policy (`default-src 'self'`). It reads and writes nothing itself: every file operation goes through `window.lore` (defined in `packages/desktop/src/shared/api.ts`) to the main process, which refuses any path outside the open world's folder.
 
-## Using the app
+Edits save automatically, a moment after you stop typing, to the entry's own file. A save writes only the files that changed and keeps any fields it does not know.
 
-1. **Library:** pick a book from the shelf, open a world folder from elsewhere, or create a new one (a name
-   and a cover colour; it goes into the worlds folder shown under the shelf, which you can change).
-2. **Home and sidebar:** the world home shows every entry as a card. The sidebar groups entries by type
-   (icon and color), each with a portrait, an error or warning count badge and an ended mark. Press
-   **Ctrl+F** to search names and text (*Search...*). Use **+ New** to create an entry in a group.
-3. **Editor:** status and dates first, then the other structured fields and the body (names in it link
-   themselves). Changes save automatically to the entry's file
-   (the top bar shows *Saving…*, then *Saved* for a moment, then nothing; **Ctrl+S** saves now). Date fields show how the date was
-   understood, and reference fields show what they resolve to.
-4. **Warnings panel:** updates live. Use **Go to** to jump to the offending field, or the canon link to open
-   the conflicting entry. Use **Mark intended** to keep a contradiction on purpose. Intended warnings stay
-   visible in their own group.
-5. **Timeline (Ctrl+2):** era bands, lifespans and existence spans by type, events as points and warning
-   markers. Open-ended spans fade out. Drag or Shift+scroll to move along time, Ctrl+scroll or −/Fit/+ to
-   zoom. **Relationships (Ctrl+3):** family tree or relationship web, then the
-   selected entry's outgoing and incoming relations, grouped, plus the events it appears in.
-6. **Story (Ctrl+4):** the manuscript, the chapter list and the Proposals panel (see *What's new in
-   v0.4*). Nothing is added to the world until you click **Add**, **Apply** or **Merge**.
-7. **PDFs:** **World Codex** and **Story Book** in the top bar open a preview with options. **Save PDF…**
-   saves pending edits, asks where to save, writes the PDF plus its `.md` copy, and offers *Show in folder*.
-   The Story Book also has a trim size, the book details and **Save Word (.docx)…**. The editor's *Visual description* and
-   *Reference images* sections feed the World Codex's art briefs; *Story Book* (chapter, order) appears on
-   events and notes.
+---
 
-Keyboard: **Ctrl+H** and **Ctrl+1/2/3/4** switch views, **Alt+←/→**
-(or mouse buttons 4/5) go back and forward, **Ctrl/⌘+Enter** opens the name at the cursor in the text, **Esc**
-closes the preview, **Alt+↑/↓** move to the previous or next entry, **Ctrl+Shift+W**
-focuses the warnings panel, and Tab or Shift+Tab reach every control. The layout reflows down to a single
-column, so it stays usable at 200% zoom. Text contrast is at least 4.5:1, and severity is always shown as an
-icon plus a word, and entry types as an icon plus a word, never by color alone
-(`npm run contrast -w @lore-forge/desktop` checks the palette).
+## Project Structure
 
-## CLI
-
-```bash
-npm run lore -- check <worldDir>            # human-readable; exit 0 = no errors, 1 = errors, 2 = unreadable/usage
-npm run lore -- check <worldDir> --json     # machine-readable check report
-npm run lore -- export <worldDir> --out world.snapshot.json   # versioned JSON snapshot
-npm run lore -- codex <worldDir> -o codex.pdf   # World Codex PDF + codex.md (default name <world-id>-codex.pdf)
-npm run lore -- book <worldDir> -o book.pdf     # Story Book PDF + book.md
-npm run lore -- book <worldDir> -o book.docx    # the same book for Word
-npm run lore -- book <worldDir> --trim a5       # trim: 6x9 (default, or book.trim), 5.5x8.5, a5
+```text
+packages/
+  core/
+    src/
+      types.ts                 world, entry, calendar and book types
+      dates.ts                 date parsing and comparison on custom calendars
+      parse.ts                 Markdown + YAML front matter to entries and back
+      world-index.ts           ids, names, aliases and links across a world
+      engine.ts, rules/        rule engine; one file per rule family, builtinRules in rules/index.ts
+      story.ts, extract.ts     story chapters and the proposal extractor
+      story-check.ts           live checks of what the story says
+      relation-kinds.ts        which relation types fit which entry types
+      entry-icons.ts           default pictures, race icons, suggestion icons
+      views/                   timeline, family tree and relationship web layouts
+      publish/                 World Codex and Story Book document model, Markdown output
+      icons.ts                 game-icons path data (generated by scripts/gen-icons.mjs)
+    schemas/                   *.schema.json (JSON Schema draft 2020-12)
+    test/                      node:test tests; test/fixtures/shifting-sands is the rule test world
+  pdf/
+    src/index.ts               PDF layout: cover, front matter, chapters, running heads, page numbers
+    src/docx.ts                the same book for Word
+    src/fonts.ts               bundled and system cover fonts
+    fonts/                     Liberation fonts for covers
+  cli/
+    src/main.ts                lore check / export / codex / book
+  desktop/
+    src/main/main.ts           Electron main process and IPC handlers
+    src/shared/api.ts          the window.lore API shared by main, preload and renderer
+    src/renderer/
+      app.tsx                  world app shell, navigation, autosave, headless smoke test
+      components/              library, editor, views, story, dialogs, pickers
+      styles.css               the whole theme
+    build.mjs                  esbuild bundling, fonts and assets
+    electron-builder.yml       installers
+worlds/
+  camelamamm/                  the sample world, shipped with the app
+scripts/
+  gen-icons.mjs                writes core/src/icons.ts from @iconify-json/game-icons
+docs/
+  INTEGRATION.md               how other tools read and write worlds
 ```
 
-PDFs are made with [pdfkit](https://pdfkit.org) and embedded DejaVu fonts, so Turkish (ş ğ İ ı) and other
-Latin Extended, Greek and Cyrillic text renders. No browser is needed. PNG and JPEG images are embedded;
-WebP or GIF images are listed by file name instead.
+---
 
-After `npm run build`, the compiled CLI is available at `packages/cli/dist/main.js` (bin name `lore`).
+## The App
 
-## The starter rules
+### Library
+
+The start screen is a bookcase. Every world is a book: a 3D spine with its title and emblem on the shelf; point at a book (or focus it with the keyboard) and it comes off the shelf and turns to show its cover and entry counts. Click or press Enter to open it.
+
+- **New book** is the blank book at the end of the shelf: a name, a cover colour or picture, an emblem, and the folder it goes into.
+- **Search books** above the shelf matches titles first, then subtitles and authors, then descriptions, ignoring accents and the Turkish dotted and dotless i. Ctrl+F or `/` focuses it, Esc clears it, Enter opens the only match.
+- **Delete** sits on a book's cover, asks first, and moves the folder to the system trash. Nothing is deleted outright.
+- **Open a world folder…** opens a world from anywhere on disk; it then stays on the shelf.
+- **Library settings** chooses the folder new books go to.
+- **About** lists the credits and licences.
+
+Behind the shelf is a quiet animated scene (light through a window, dust, runes, candles and embers). It pauses while the window is hidden and stays still with the system's reduced-motion setting.
+
+### World Home
+
+Opening a world lands on Home: the book's cover (click it to edit the cover), counts of entries, eras and warnings, links to the timeline, family tree, relationship web and the two exports, and a card for every entry with its picture. The paint button on a card changes that entry's picture: an icon with its colours, or one of its images.
+
+The **Book cover** editor sets the background (gradient or plain colour), a picture, the emblem and its colour, the title font and colour, and the spine colours. The title can be hidden on the cover; it always stays on the spine.
+
+### Sidebar
+
+Entries grouped by type, each with its picture, a warning count and an "ended" mark for the dead, destroyed and dissolved. Search (Ctrl+F) matches names and text. **+ New** creates an entry in a group. Entries can be dragged onto the family tree or the relationship web. The sidebar's width is adjustable and remembered.
+
+### Editor (Ctrl+1)
+
+A structured form per entry type, in collapsible sections, then the body text.
+
+- **Status and dates first:** alive or dead, standing or destroyed, active or dissolved, intact or lost, with the matching dates. An ongoing status hides the end date (it stays in the file, and the rules still see it).
+- **Details:** characters have race or kind, gender, title, occupation, languages, personality, goals, skills, affiliations, home and possessions; places kind, population, ruler and features; factions kind, leader, headquarters, ideology, allies and enemies; items kind, origin, location, owners and powers; events kind, date, place, participants, actions ("A killed B"), causes, outcome and consequences. Empty means unknown and is never written to the file.
+- **Entry fields** (Part of, Target, Ruler, Home, …) show the chosen entry as a chip with its picture icon; click it to open that entry, × to clear it. Fields that hold several entries (affiliations, possessions) are rows of chips.
+- **Suggestion lists** (race, gender, kind, relation types, verbs) are themed lists with an icon for every word; the chosen value shows its icon too.
+- **Relationships:** typed and dated relations to other entries. The type list only offers types that fit the two entry types; custom types are still allowed.
+- **Visual description and reference images** for artists and 3D tools (see [Images](#images)).
+- **Body:** Markdown with `[[links]]` and `@mentions`. Names and aliases typed in any text link themselves: they are highlighted in their type colour, show a hover card, and open with Ctrl/⌘+click.
+
+### Warnings Panel
+
+Updates live while you type. Warnings are grouped into Errors, Warnings, Info and Marked intended. Each one says what is wrong, the canon fact it conflicts with and where that fact comes from. **Go to** jumps to the offending field; **Mark intended** keeps a contradiction on purpose (a resurrection, an unreliable narrator) with a note. Warnings never block saving.
+
+### Timeline (Ctrl+2)
+
+Era bands, lifespans and existence spans as bars, events as points, and warning markers, filterable by type. Drag or Shift+scroll moves along time; Ctrl+scroll or −/Fit/+ zooms. Click a bar or name to open it.
+
+### Relationships (Ctrl+3)
+
+- **Family tree:** generations top-down, spouses side by side, the dead marked and faded.
+- **Relationship web:** the selected entry in the middle and everything it relates to around it, with a minimap. Links between the same two entries curve apart, each label on its own side.
+
+Both are pan-and-zoom maps (drag to pan, Ctrl/⌘+scroll or pinch to zoom, Fit to see all). Drag an entry from the sidebar onto them, drag from a card's gold dot onto another card to link them, or click a line to change or delete the link. A change is written to both entries' files at once; Ctrl+Z undoes it. Under the map, the entry's relations are listed by group, with the events it appears in.
+
+### Story (Ctrl+4)
+
+A manuscript space for the whole story, written chapter by chapter, with a word count per chapter and in total. Chapters are saved as `story/NN-slug.md`.
+
+As you write, Lore-Forge reads the text and **proposes** what it finds, never adding anything by itself: *King Camel was born in 1998.* proposes a character Camel, born 1998, with the title King. Each proposal shows the sentence it came from, with **Add**, **Edit…**, **Merge…** (fold it into an existing entry as an alias) and **Ignore**. Names that already exist are listed instead of proposed again, and new facts about them show as **Update**.
+
+The same rules check what the story says: a sentence that breaks canon is underlined, and the `story-contradiction` rule flags the story disagreeing with an entry. Select words, or right-click a name, to add it to the world with its type guessed.
+
+### World Settings
+
+The gear in the top bar: the default era (dates without an era abbreviation count in it), the eras (name, abbreviation, start and end, colour, and how many dates use each), and the months with their lengths. Saved in `world.json`.
+
+### Navigation
+
+The arrow at the top left always returns to the library. Alt+←/→ and mouse buttons 4/5 step back and forward through the entries and views you visited, including between the library and a world. The cover and title next to the arrow open world Home.
+
+---
+
+## Keyboard Shortcuts
+
+| Keys | Action |
+| --- | --- |
+| Ctrl+H | World Home |
+| Ctrl+1 / 2 / 3 / 4 | Editor, Timeline, Relationships, Story |
+| Ctrl+F | Search (the sidebar in a world, the shelf in the library; `/` also works there) |
+| Ctrl+S | Save now (saving is automatic) |
+| Alt+← / Alt+→ | Back and forward (also mouse buttons 4 and 5) |
+| Alt+↑ / Alt+↓ | Previous or next entry |
+| Ctrl+Shift+W | Focus the warnings panel |
+| Ctrl/⌘+click, Ctrl/⌘+Enter | Open the name under the pointer or cursor |
+| Ctrl+Shift+A | Story: add the selected words to the world |
+| Ctrl+Z | Undo the last relationship change on a graph |
+| Esc | Close a dialog, list or preview |
+
+Every control is reachable with Tab and Shift+Tab; dialogs keep focus inside them. The layout reflows down to one column, so it stays usable at 200% zoom. Text contrast is at least 4.5:1 (`npm run contrast -w @lore-forge/desktop` checks the palette).
+
+---
+
+## World Format
+
+A world is a folder. Lore-Forge reads and writes these files and nothing else.
+
+```text
+my-world/
+  world.json                   name, calendar, rules, book details, cover
+  characters/char-*.md         one Markdown file per entry, by type
+  places/place-*.md
+  factions/fac-*.md
+  items/item-*.md
+  events/evt-*.md
+  notes/note-*.md
+  story/01-the-first-chapter.md   story chapters (optional)
+  images/<entry-id>/<view>.png    reference images (optional)
+  intended.json                warnings marked intended (optional)
+  story-ignored.json           ignored story proposals (optional)
+```
+
+### world.json
+
+| Key | Holds |
+| --- | --- |
+| `schemaVersion`, `id`, `name`, `description` | identity |
+| `calendar` | `eras` (id, name, start, optional end and colour), `defaultEra`, `months` (name, days), `approxYears` |
+| `rules` | per-rule severity overrides, e.g. `{ "duplicate-name": "info", "two-places-at-once": "off" }` |
+| `book` | Story Book details: `title`, `author`, `publisher`, `dedication`, `epigraph`, `epigraphSource`, `copyright`, `trim`, `rightHandChapters`, `chapterYears` |
+| `cover` | cover colours, picture, emblem, title font and colour, show title or emblem, spine colours |
+
+### Entries
+
+Each entry is Markdown with YAML front matter: the structured fields on top, the body text below.
+
+```markdown
+---
+id: char-mr-camel
+type: character
+name: Mr Camel
+aliases:
+  - Barnaby Camel
+summary: Patient camel-folk tea merchant of Camelamamm, who wakes the Singing Well.
+race: camel-folk
+born: "471"
+status: alive
+relations:
+  - type: owns
+    target: item-humming-map
+    from: "498"
+---
+
+Mr Camel keeps the smallest tea house on the Street of Kettles…
+```
+
+References use entry ids (`target: item-humming-map`) or names. Unknown keys are kept as they are. Reference fields such as `home`, `ruler` and `leader` count as relationships in the rules and the graphs.
+
+### Story chapters
+
+`story/NN-slug.md` with a short header and plain prose:
+
+```markdown
+---
+title: The Morning the Well Went Quiet
+order: 1
+date: 10.03.512
+---
+
+Every morning in Camelamamm began with a song…
+```
+
+### Images
+
+Reference images are copied into `images/<entry-id>/` and listed on the entry with their view and provenance (tool, prompt, date, sources, rights note). Each type suggests its own views: characters A-pose, front, back, left, right, three-quarter and concept; places establishing shot, map, interior, exterior, mood and concept; items front, back, side, top, detail and concept; events scene, establishing shot, map, mood and concept. Other view names are allowed. In the editor they show as a gallery with one tile per view.
+
+### Intended marks and ignored proposals
+
+`intended.json` keeps the warnings you marked intended, with your note and the date. `story-ignored.json` keeps the story proposals you ignored, so they are not proposed again.
+
+The full format, field by field, is in [docs/INTEGRATION.md](docs/INTEGRATION.md), and the JSON Schemas are in `packages/core/schemas/`.
+
+---
+
+## Dates and Calendars
+
+Every world has its own calendar: eras with their own year numbering on one shared timeline, and months with their own lengths (12 months of 30 days when none are set).
+
+Dates are typed as `DD.MM.YYYY` with as much as you know:
+
+| Input | Meaning |
+| --- | --- |
+| `1920` | the year |
+| `03.1920` | a month |
+| `12.03.1920` | a day |
+| `12.03` | a day in an unknown year |
+| `~1800` | about 1800 (widened by `calendar.approxYears`) |
+| `450 OK` | year 450 of the era `OK` |
+| `?` | unknown |
+
+The older `1920-03-12` form still works. Each date field shows how it was understood. Rules only warn when the known parts prove a conflict: died "1800" and acted "12.03.1800" is fine.
+
+---
+
+## Consistency Rules
 
 | Rule id | Default | Fires when |
-|---|---|---|
+| --- | --- | --- |
 | `after-death` | error | someone acts, takes part, stays somewhere or has a dated relation after they died |
 | `before-birth` | error | the same, before they were born |
 | `participant-not-existing` | error | a faction or item takes part in an event outside its existence |
@@ -381,59 +378,271 @@ After `npm run build`, the compiled CLI is available at `packages/cli/dist/main.
 | `two-places-at-once` | warning | the same entity is at two different places at the same time (nested places are fine) |
 | `dangling-reference` | warning | a field, `[[link]]` or `@mention` points at nothing |
 | `duplicate-name` | warning | two entries share a name or alias (case-insensitive) |
-| `parent-cycle` | error | parent relations form a loop (A parent of B parent of A, including self) |
+| `parent-cycle` | error | parent relations form a loop |
 | `parent-born-after-child` | error | a parent was born after their child |
-| `dead-marked-alive` | error | status is `alive` (or `standing`, `active`, `intact`), but an end date or a killing says otherwise |
+| `dead-marked-alive` | error | the status is alive (or standing, active, intact) but an end date or a killing says otherwise |
 | `invalid-date` | error | a date can't be parsed or uses an unknown era |
-| `date-order` | error | an end comes before its start (died before born, destroyed before founded, ...) |
+| `date-order` | error | an end comes before its start (died before born, destroyed before founded) |
 | `file-error` | error | a file can't be read as an entry (the rest of the world still loads) |
-| `relation-kind` | warning | a relation type doesn't fit the two entry types (an item `parent-of` a character); custom types are skipped |
-| `image-view` | info | an image's view label is not one of the usual views for its entry type |
-| `story-contradiction` | warning | a story chapter says something different from an entry (another birth year, title, ...) |
+| `relation-kind` | warning | a relation type doesn't fit the two entry types (an item `parent-of` a character) |
+| `image-view` | info | an image's view is not one of the usual views for its entry type |
+| `story-contradiction` | warning | a story chapter says something different from an entry |
 
-Story sentences are also checked with the timeline rules above (`after-death`, `before-birth`, ...), as if
-the proposals were already added.
+Story sentences are also checked with the timeline rules, as if their proposals were already added. A rule's severity can be changed or the rule turned off in `world.json` under `rules`. The rule library and custom rules are described in [docs/INTEGRATION.md](docs/INTEGRATION.md#custom-rules-library).
 
-Vague dates never cause false alarms: a rule only fires when one date is *definitely* before the other,
-with approximate dates widened by `calendar.approxYears`. In `world.json`, `"rules": { "duplicate-name":
-"info", "two-places-at-once": "off" }` changes a rule's severity or turns it off.
+---
 
-## Folder layout
+## World Codex and Story Book
 
+**World Codex** and **Story Book** in the top bar open an in-app preview built from the same document the files are drawn from. Saving writes the PDF and a Markdown copy next to it (for AI tools), and offers *Show in folder*.
+
+### World Codex
+
+A reference book of the whole world: a cover, contents, the world overview and calendar, every entry by type with its facts, relationships, visual description, text and reference images with provenance, an **art brief** per character, place, item and event (an image prompt, plus a 3D turnaround brief for characters and items), a timeline, a relationship summary, a glossary of names and aliases, and an appendix of open warnings. The preview chooses the entry types and turns the art briefs and the warnings appendix on or off.
+
+### Story Book
+
+When a world has story chapters, the Story Book is the story: each chapter in order, then the chronicle of events and notes as an appendix (which the preview can turn off). A world without chapters becomes a chronicle of its events and notes in in-world date order, in chapters by era or by year ranges; a page's own `chapter` field and `bookOrder` override that.
+
+The book is laid out like a printed book:
+
+1. The cover: the world's cover art with the book title, subtitle and author.
+2. The title page, the copyright page, the dedication and the epigraph (each when set).
+3. The contents, with page numbers.
+4. Each chapter starting at the top of a new page, with its label, title and a drop cap.
+
+Text is set in a serif face, justified and hyphenated, with no single line left at the top or bottom of a page. Margins are mirrored with a wider inside edge for the binding; running heads show the book title on left pages and the chapter on right pages; pages are numbered from the first chapter, with no number on chapter openings. There are no blank pages; for a printed copy, **Start chapters on right-hand pages** opens the title page and every chapter on a right-hand page.
+
+Trim sizes: 6 × 9 in (default), 5.5 × 8.5 in and A5. The book details (title, author, publisher, dedication, epigraph, copyright text) are edited in the preview and saved in `world.json`. **Save Word (.docx)…** writes the same book for Word.
+
+The Story Book assembles what you wrote. It never writes, rewrites or summarises prose.
+
+### Fonts
+
+PDFs embed DejaVu fonts, so Turkish (ş ğ İ ı) and other Latin Extended, Greek and Cyrillic text renders, and characters the fonts lack (such as emoji) are dropped rather than printed as empty boxes. Cover titles can use one of 16 bundled fonts (Cinzel Decorative, Uncial Antiqua, IM Fell English, EB Garamond, Pirata One and others) or an installed system TrueType/OpenType font; a font that cannot draw the title falls back to DejaVu with a note. PNG and JPEG images are embedded; WebP and GIF images are listed by file name.
+
+---
+
+## Command-Line Interface
+
+```bash
+npm run lore -- check <worldDir>             # human-readable; exit 0 = no errors, 1 = errors, 2 = unreadable or bad usage
+npm run lore -- check <worldDir> --json      # machine-readable check report
+npm run lore -- export <worldDir> --out world.snapshot.json   # versioned JSON snapshot of the world
+npm run lore -- codex <worldDir> -o codex.pdf   # World Codex PDF + codex.md (alias: lore bible)
+npm run lore -- book <worldDir> -o book.pdf     # Story Book PDF + book.md
+npm run lore -- book <worldDir> -o book.docx    # the same book for Word
+npm run lore -- book <worldDir> --trim a5       # trim: 6x9 (default, or book.trim), 5.5x8.5, a5
 ```
-packages/core      @lore-forge/core: types, date math, parser/serializer, rule engine, rules, snapshot, JSON Schemas
-  src/rules/       one file per rule family; builtinRules in index.ts
-  schemas/         *.schema.json (draft 2020-12)
-  test/            node:test behaviour tests
-  src/publish/      World Codex / Story Book document model, art briefs, Markdown output
-  src/story.ts, src/extract.ts, src/story-check.ts   story chapters, the proposal extractor, live story checks
-packages/pdf       @lore-forge/pdf: renders those documents to PDF (pdfkit + DejaVu fonts)
-packages/cli       lore check / export / codex (alias bible) / book
-packages/desktop   Electron main + preload, Preact renderer, electron-builder config
-worlds/                   the worlds folder; new books go here when running from the source checkout
-worlds/camelamamm         the sample world (a six-chapter story), the one a new install opens with
-packages/core/test/fixtures/shifting-sands   test world that triggers every rule (and has one story chapter)
-docs/INTEGRATION.md       how other tools (AI-HQ, Game-Forge) read worlds
+
+After `npm run build`, the compiled CLI is `packages/cli/dist/main.js` (bin name `lore`). No browser or display is needed.
+
+---
+
+## Integration with Other Tools
+
+Worlds are meant to be read by other tools. [docs/INTEGRATION.md](docs/INTEGRATION.md) covers:
+
+- the JSON Schemas in `packages/core/schemas/` (world manifest, entries, story chapters, intended marks, story ignores, check reports, snapshots)
+- the world folder field by field: statuses, races, relation types, plain-name mentions and dates
+- the check report and warning format
+- custom rules on top of the built-in library
+- story chapters and the extractor plug-in point, so an AI assistant can supply its own proposals and get the same duplicate checks
+- how the World Codex and Story Book are built
+- what is stable across versions
+
+`lore check --json` and `lore export` produce versioned JSON for scripts and pipelines.
+
+---
+
+## App Settings and Storage
+
+| Where | What |
+| --- | --- |
+| The world folder | everything about a world (see [World Format](#world-format)) |
+| `<user data>/settings.json` | the folder new worlds go to |
+| `<user data>/recent-worlds.json` | worlds opened from outside the worlds folder |
+| `<user data>/recent-cover-uploads.json` | pictures uploaded for covers, offered again |
+| `localStorage` | sidebar width, open or closed editor and warning sections, recent colours |
+
+`<user data>` is the app's user-data folder: `~/.config/Lore-Forge` on Linux, `%APPDATA%\Lore-Forge` on Windows and `~/Library/Application Support/Lore-Forge` on macOS.
+
+New worlds go to the project's `worlds/` folder when running from source and to `<user data>/worlds` in an installed app, unless Library settings chooses another folder. The installed app ships Camelamamm as a read-only world; copy its folder to edit it.
+
+---
+
+## Development
+
+### Prerequisites
+
+- Node.js 22.18 or newer (Node 24 recommended, see `.nvmrc`)
+- npm 11 (it asks to approve install scripts; the approved ones, `esbuild`, `electron` and `electron-winstaller`, are listed under `allowScripts` in `package.json`)
+- git
+
+```bash
+# Node 24 via nvm (skip if you already have it)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+source ~/.nvm/nvm.sh
+nvm install 24 && nvm use 24
 ```
 
-## Development notes
+### Commands
 
-- Tests use Node's built-in runner with native TypeScript type stripping. There is no test framework and no
-  build step. `--conditions=source` resolves workspace packages to their `.ts` sources.
-- The desktop app is bundled by esbuild (`packages/desktop/build.mjs`). `npm run watch -w
-  @lore-forge/desktop` rebuilds on change.
-- Runtime dependencies: `yaml` (core), `pdfkit`, `dejavu-fonts-ttf`, `hyphen` (en-US patterns),
-  `docx` and `fflate` (pdf), `preact` (desktop).
-- App icon: `src/renderer/icon.svg` is the source; `npm run icons -w @lore-forge/desktop` (Electron, so it
-  needs a display or `xvfb-run -a`) renders `build/icon.png`, `build/icons/*.png`, `build/icon.ico` and
-  `build/icon.icns`.
-- Headless smoke test: `LORE_FORGE_SMOKE=1 LORE_FORGE_OPEN=$PWD/packages/core/test/fixtures/shifting-sands xvfb-run -a -s
-  "-screen 0 2600x1500x24" npx electron packages/desktop --no-sandbox` prints `SMOKE OK {...}` and exits 0
-  once the world has loaded and rendered, the views have been exercised at 1280 × 720, 1920 × 1080 and
-  2560 × 1440 (the screen must be a little larger than the biggest size), and it has exported the PDFs and a
-  `.docx` (set `LORE_FORGE_SMOKE_OUT=<dir>` to keep them). It works on a temporary copy of the world and
-  exits 1 on a renderer error, a crash or a failed export.
+```bash
+npm install                 # dependencies and the Electron binary
+npm run dev                 # build and start the desktop app
+npm test                    # all unit, rule, schema, PDF and CLI tests
+npm run typecheck           # TypeScript across all packages and the tests
+npm run build               # build every package
+npm run lore -- check packages/core/test/fixtures/shifting-sands   # exits 1: the test world breaks canon on purpose
+npm run watch -w @lore-forge/desktop                               # rebuild the desktop app on change
+```
+
+In watch mode, Ctrl+R in the app reloads renderer changes; restart for main-process changes.
+
+### Tests
+
+Tests use Node's built-in test runner with native TypeScript type stripping: no test framework and no build step. `--conditions=source` resolves the workspace packages to their `.ts` sources.
+
+- `packages/core/test/` covers dates, parsing, every rule, the story extractor and checks, layouts, schemas and the document model.
+- `packages/pdf/test/` renders real PDFs and Word files and checks their page order, running heads, page numbers and fonts (page text checks use `pdftotext` when it is installed).
+- `packages/cli/test/` runs the real `lore` commands.
+
+`packages/core/test/fixtures/shifting-sands` is the rule test world. It breaks canon on purpose so every rule fires once, and its README maps each rule to the entry that triggers it. It is a test fixture and does not show on the shelf.
+
+### Headless smoke test
+
+The desktop app has a built-in end-to-end run that loads a world, exercises every view, dialog and preview at 1280 × 720, 1920 × 1080 and 2560 × 1440, and exports the PDFs and a `.docx`:
+
+```bash
+LORE_FORGE_SMOKE=1 LORE_FORGE_OPEN=$PWD/packages/core/test/fixtures/shifting-sands \
+  xvfb-run -a -s "-screen 0 2600x1500x24" npx electron packages/desktop --no-sandbox
+```
+
+It prints `SMOKE OK {...}` and exits 0, or exits 1 on a failed check, a renderer error, a crash or a failed export. It works on a temporary copy of the world and a throwaway library, so nothing real is touched. The virtual screen must be a little larger than the biggest size checked. Set `LORE_FORGE_SMOKE_OUT=<dir>` to keep the exported files.
+
+### Icons
+
+Icons come from [game-icons.net](https://game-icons.net). Only the icons the app uses are kept, as SVG path data in `packages/core/src/icons.ts`; add a name to `scripts/gen-icons.mjs` and run `node scripts/gen-icons.mjs` to regenerate it. The app icon's source is `packages/desktop/src/renderer/icon.svg`; `npm run icons -w @lore-forge/desktop` renders the installer icons into `packages/desktop/build/` (it runs Electron, so it needs a display or `xvfb-run -a`).
+
+---
+
+## Build, Packaging, and Releases
+
+### Local builds
+
+```bash
+npm run dist:linux     # AppImage and .deb
+npm run dist:win       # NSIS installer (best run on Windows; on Linux it needs wine)
+npm run dist:mac       # disk image (needs macOS)
+```
+
+Each builds every package first, then runs electron-builder with `--publish never`, so nothing is uploaded. The files go to `packages/desktop/release/`.
+
+| Setting | Value |
+| --- | --- |
+| App id | `dev.kaharamamm.loreforge` |
+| Product name | Lore-Forge |
+| File names | `Lore-Forge-<version>-<os>-<arch>.<ext>` |
+| Windows | NSIS installer, with a choice of install folder |
+| macOS | disk image, signed ad hoc (no Apple Developer certificate), hardened runtime off |
+| Linux | `.deb` (its installer adds an AppArmor profile on Ubuntu 24+, so the sandbox stays on) and AppImage (category Office, with a desktop entry, executable `lore-forge`) |
+| Bundled resources | the sample world `worlds/camelamamm` (read-only), the DejaVu fonts and their licence |
+| Electron | pinned to an exact version (`45.1.0`), which electron-builder requires |
+
+Only the sample world is packaged; other folders in `worlds/` stay private.
+
+### Releases
+
+`.github/workflows/release.yml` builds the downloads on GitHub's own Windows, Linux and macOS machines and attaches them to the release:
+
+1. Bump the version in every `package.json` and in `GENERATOR` (`packages/core/src/snapshot.ts`), then commit and push.
+2. Create and publish a release for the tag (for example `gh release create v1.0.0 --title "Lore-Forge 1.0.0" --notes-file notes.md`, or **Draft a new release** on GitHub).
+3. The workflow runs the tests, builds the Windows installer, the `.deb` and AppImage, and the two macOS disk images, and uploads all five to that release (about 10 to 15 minutes).
+
+**Actions → Release downloads → Run workflow** rebuilds the downloads for an existing tag. All packages share one version (`1.0.0`), set in each `package.json` and in `GENERATOR`.
+
+---
+
+## Troubleshooting
+
+### Electron aborts on Ubuntu 23.10+ / 24.04
+
+AppArmor blocks Chromium's user-namespace sandbox, and `node_modules/electron/dist/chrome-sandbox` is not a root setuid helper, so unpackaged Electron aborts. `npm run dev` detects this and passes `--no-sandbox` to the development process only; packaged builds are unchanged. To keep the sandbox on during development, fix the helper once (it is reset by `npm install`):
+
+```bash
+sudo chown root:root node_modules/electron/dist/chrome-sandbox
+sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+```
+
+`LORE_FORGE_NO_SANDBOX=1` forces `--no-sandbox`.
+
+### AppImage does not start on Linux
+
+- *"AppImages require FUSE to run"*: Ubuntu 22.04 and later no longer install FUSE 2. Install it (`sudo apt install libfuse2t64` on Ubuntu 24.04, `libfuse2` on 22.04), or use the `.deb`.
+- *"GPU process isn't usable. Goodbye."* right after start: Ubuntu 23.10 and later block the sandbox Chromium uses unless the app has an AppArmor profile, which the `.deb` installs and an AppImage cannot. Use the `.deb`, or start the AppImage with `--no-sandbox` (this turns Chromium's sandbox off for Lore-Forge).
+
+### Windows or macOS refuses to open the app
+
+The builds are not code-signed. On Windows choose **More info → Run anyway**; on macOS use **System Settings → Privacy & Security → Open Anyway**. See [Download](#download).
+
+### The Electron binary is missing
+
+If `npx electron --version` reports a missing binary, run `npm rebuild electron`.
+
+### Running Electron from a VS Code terminal
+
+VS Code's integrated tools can set `ELECTRON_RUN_AS_NODE=1`, which makes Electron behave as plain Node and reject its own options (`bad option: --no-sandbox`). Unset it first: `env -u ELECTRON_RUN_AS_NODE npm run dev`.
+
+### A cover font shows as DejaVu in the PDF
+
+The chosen font is not bundled and not installed as a TrueType or OpenType file, or it has no letters for some of the title. The export says so in a note. Pick a bundled font or install the font file.
+
+### An image is missing from a PDF
+
+PDFs embed PNG and JPEG only. WebP and GIF images are listed by file name; convert them to embed them.
+
+### A world does not show on the shelf
+
+The shelf lists the worlds folder (Library settings), the worlds you opened from elsewhere, and the sample world. A folder without a valid `world.json` is not a world; **Open a world folder…** says why.
+
+---
+
+## Tech Stack
+
+| Category | Library |
+| --- | --- |
+| Desktop shell | Electron 45 |
+| UI | Preact 10, TypeScript 5.9 |
+| Build | esbuild 0.28, electron-builder 26 |
+| Relationship web | React Flow (`@xyflow/react` 12) through `preact/compat` |
+| Pan and zoom | d3-zoom and d3-selection 3 |
+| Motion | `@formkit/auto-animate`, CSS transitions and View Transitions |
+| World files | `yaml` 2 |
+| PDF | PDFKit 0.20, DejaVu fonts, `hyphen` (en-US patterns) |
+| Word | `docx` 9, `fflate` |
+| Fonts | Cinzel (headings), 16 bundled cover fonts from Fontsource and Liberation |
+| Icons | game-icons.net via `@iconify-json/game-icons` |
+| Tests | `node:test` with native TypeScript type stripping, ajv for the schemas |
+
+---
+
+## Credits and Licences
+
+- Icons: [game-icons.net](https://game-icons.net) by Lorc, Delapouite and contributors, CC BY 3.0. Used unchanged except for colour and size.
+- Heading font: Cinzel by Natanael Gama and the Cinzel Project Authors, SIL Open Font License 1.1.
+- Cover fonts: the Fontsource packages listed in `packages/pdf/package.json`, each under the SIL Open Font License 1.1; Liberation Sans and Serif, SIL Open Font License 1.1.
+- PDF fonts: DejaVu Sans, Serif and Mono, Bitstream Vera / DejaVu licence.
+- React Flow (MIT), d3 (ISC), Preact (MIT), PDFKit (MIT), auto-animate (MIT).
+
+The app lists the same credits under **About** in the library.
+
+---
 
 ## License
 
-Not chosen yet. Add a LICENSE file before publishing.
+Lore-Forge is released under the [MIT License](LICENSE). Copyright (c) 2026 Ahmet Kadir Zengin.
+
+The bundled icons and fonts keep their own licences (see [Credits and Licences](#credits-and-licences)): the game-icons.net icons are CC BY 3.0, the Cinzel, cover and Liberation fonts are SIL Open Font License 1.1, and the DejaVu fonts use the Bitstream Vera / DejaVu licence. Their licence texts ship with the app.
+
+The sample world Camelamamm is part of this repository and under the same licence. Worlds you create with Lore-Forge are yours; the licence covers Lore-Forge itself, not what you write with it.

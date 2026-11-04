@@ -29,7 +29,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           <Icon name="laurels" class="about-mark" />
           <div>
             <h2 id="about-title">Lore-Forge</h2>
-            <p class="muted">{GENERATOR}. Your worlds stay plain Markdown files on your disk.</p>
+            <p class="muted">{GENERATOR}, open source under the MIT licence. Your worlds stay plain Markdown files on your disk.</p>
           </div>
           <button ref={close} type="button" class="ghost small" onClick={onClose}>Close</button>
         </header>
