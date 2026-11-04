@@ -5,7 +5,9 @@ import { artBrief, bookChapters, LORE_AND_LEGENDS, resolveLinks, storyBook, toMa
 import { loadWorld } from '@lore-forge/core/node';
 import { world } from './helpers.ts';
 
-const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
+/** The test world that breaks canon on purpose (every rule fires once); see its README. Not on the app's shelf. */
+const example = join(import.meta.dirname, '..', '..', '..', 'packages', 'core', 'test', 'fixtures', 'shifting-sands');
+const camelamamm = join(import.meta.dirname, '..', '..', '..', 'worlds', 'camelamamm');
 
 test('links in text resolve to display names; labels win; unknown refs keep their text', () => {
   const ix = new WorldIndex(world([{ id: 'char-a', type: 'character', name: 'Ayşe' }]));
@@ -77,12 +79,15 @@ test('world codex of the example world: sections, art briefs, glossary and open 
 });
 
 test('story book of the example world resolves links and uses the place image for an event without one', async () => {
-  const doc = storyBook(await loadWorld(example));
+  const w = await loadWorld(camelamamm);
+  // The sample world has no pictures; give the Singing Well one, so its events (which have none) borrow it.
+  const well = { file: 'images/place-singing-well/establishing.png', view: 'establishing' };
+  const doc = storyBook({ ...w, entries: w.entries.map((e) => (e.id === 'place-singing-well' ? { ...e, images: [well] } : e)) });
   const md = toMarkdown(doc);
-  assert.match(md, /^# Tales of the Shifting Sands$/m);
-  assert.match(md, /The old vizier opened the salt gate himself\. The Dune Guard poured through/);
+  assert.match(md, /^# Mr Camel and the Singing Well$/m);
+  assert.match(md, /Mr Camel did not fight Malquor\. He sat down in front of the old gate with the Warden Key/);
   assert.doesNotMatch(md, /\[\[|@place-/);
-  assert.ok(doc.blocks.some((b) => b.kind === 'image' && b.file === 'images/evt-fall-of-saltmere/scene.png'));
+  assert.ok(doc.blocks.some((b) => b.kind === 'image' && b.file === well.file));
 });
 
 test('codex headings carry default entry pictures (Leyla: female), and a tombstone for the dead', async () => {

@@ -133,6 +133,28 @@ export function guessGender(e: Entry): 'female' | 'male' | undefined {
   return undefined;
 }
 
+/** Icons for the verbs an event's actions suggest ("killed", "crowned", ...). */
+const VERB_ICONS: Record<string, IconName> = {
+  killed: 'death-skull', betrayed: 'broken-shield', crowned: 'crown', married: 'diamond-ring', met: 'shaking-hands',
+  founded: 'flying-flag', destroyed: 'tower-fall', rescued: 'angel-wings', exiled: 'exit-door', stole: 'two-coins',
+};
+
+/**
+ * Icon for a word offered in a suggestion list, by what the field holds: a gender (female, male, or a neutral
+ * figure), a kind of the entry's type (the same keyword tables as the default pictures, else the type's icon), or
+ * an action verb. Undefined for fields whose words have no picture.
+ */
+export function suggestionIcon(type: Entry['type'], field: string, value: string): IconName | undefined {
+  const v = lower(value).trim();
+  if (field === 'gender') return /^(f|female|woman|girl|kadın|kadin|kız|feminine)$/.test(v) ? 'female' : /^(m|male|man|boy|erkek|masculine)$/.test(v) ? 'male' : 'person';
+  if (field === 'kind') {
+    for (const [re, icon] of TABLES[type] ?? []) if (re.test(v)) return icon;
+    return TYPE_ICON[type];
+  }
+  if (field === 'verb') return VERB_ICONS[v];
+  return undefined;
+}
+
 /** Races to suggest: the ones already used in the world first, then common defaults. */
 export const DEFAULT_RACES = ['human', 'elf', 'dwarf', 'orc', 'camel-folk', 'ghoul', 'zombie', 'vampire', 'undead', 'spirit', 'djinn', 'giant', 'dragon'];
 
@@ -141,7 +163,7 @@ const RACE_ICONS: Record<string, IconName> = {
   orc: 'orc-head', goblin: 'goblin-head', troll: 'troll', ogre: 'ogre', giant: 'giant', 'camel-folk': 'camel-head', camel: 'camel-head',
   ghoul: 'daemon-skull', zombie: 'shambling-zombie', vampire: 'vampire-dracula', undead: 'death-skull', skeleton: 'skeleton', lich: 'death-skull',
   spirit: 'spectre', ghost: 'spectre', djinn: 'djinn', jinn: 'djinn', cin: 'djinn', demon: 'imp-laugh', fairy: 'fairy', fae: 'fairy', angel: 'angel-wings',
-  dragon: 'dragon-head', werewolf: 'wolf-howl', 'wolf-folk': 'wolf-head', mermaid: 'mermaid', merfolk: 'mermaid', centaur: 'centaur', minotaur: 'minotaur', cyclops: 'cyclops',
+  dragon: 'dragon-head', werewolf: 'wolf-howl', 'wolf-folk': 'wolf-head', fox: 'fox-head', fennec: 'fox-head', vulpine: 'fox-head', mermaid: 'mermaid', merfolk: 'mermaid', centaur: 'centaur', minotaur: 'minotaur', cyclops: 'cyclops',
 };
 
 /** Icon for a race or kind: a known one by its word (singular, lower-case), "...-folk" as beast-folk, otherwise a hooded figure. */
@@ -158,10 +180,26 @@ export function racesOf(e: Entry): string[] {
   return e.type === 'character' && e.race ? e.race.split(',').map((r) => r.trim()).filter(Boolean) : [];
 }
 
+/**
+ * Races to suggest, each written with a capital first letter, once whatever its case ("human" and "Human" are
+ * one race): the ones already used in the world first, then common defaults.
+ */
 export function raceSuggestions(entries: readonly Entry[]): string[] {
-  const used = entries.flatMap(racesOf);
-  return [...new Set([...used.sort((a, b) => a.localeCompare(b)), ...DEFAULT_RACES])];
+  const used = entries.flatMap(racesOf).sort((a, b) => a.localeCompare(b));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of [...used, ...DEFAULT_RACES]) {
+    const key = r.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); out.push(upperFirst(r)); }
+  }
+  return out;
 }
+
+/** A word as a label: its first letter upper-case, the rest as written ("camel-folk" -> "Camel-folk"). */
+export const upperFirst = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+/** A character's races for display: an entry it names shows that entry's name, a plain word gets a capital. */
+export const raceLabel = (race: string, nameOf?: (r: string) => string | undefined): string => nameOf?.(race) ?? upperFirst(race);
 
 const TABLES: Partial<Record<Entry['type'], Table>> = { place: PLACE, item: ITEM, faction: FACTION, event: EVENT, note: NOTE };
 

@@ -1,6 +1,6 @@
 import { useMemo } from 'preact/hooks';
-import { Background, ConnectionMode, Controls, Handle, MiniMap, Position, ReactFlow, type Connection, type Edge, type EdgeProps, type Node, type NodeProps } from '@xyflow/react';
-import { LIFECYCLE, relationKind, TYPE_SINGULAR, WEB_LAYOUT, WorldIndex, type Entry, type RelationWeb, type WebEdge as CoreWebEdge, type World } from '@lore-forge/core';
+import { Background, ConnectionMode, Controls, Handle, MiniMap, Position, ReactFlow, type Connection, type Edge, type EdgeProps, type FitViewOptions, type Node, type NodeProps } from '@xyflow/react';
+import { LIFECYCLE, raceLabel, relationKind, TYPE_SINGULAR, WEB_LAYOUT, WorldIndex, type Entry, type RelationWeb, type WebEdge as CoreWebEdge, type World } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
 import { Portrait } from './cover.tsx';
 
@@ -35,24 +35,44 @@ function EntryNodeView({ data }: NodeProps<EntryNode>) {
   );
 }
 
-/** Centre-to-centre curve, cut at both boxes so the arrow stays visible; repeated pairs bend apart. */
+/** How far apart (px) the curves of links between the same two cards bow, per step. */
+const BEND = 46;
+
+/**
+ * Centre-to-centre curve, cut at both boxes so the arrow stays visible. Links between the same two cards bow out to
+ * both sides (bend -0.5 and +0.5 for two). The label sits on the curve's middle; on a bowed curve it is set beside
+ * the curve, on the outside, so the labels of a pair never land on each other.
+ */
 function WebEdgeView({ id, sourceX, sourceY, targetX, targetY, data }: EdgeProps<WebEdge>) {
   const dx = targetX - sourceX, dy = targetY - sourceY;
   const len = Math.hypot(dx, dy) || 1;
   const t = Math.min((W / 2 + 4) / Math.abs(dx || 1e-9), (H / 2 + 4) / Math.abs(dy || 1e-9), 0.45);
   const x1 = sourceX + dx * t, y1 = sourceY + dy * t, x2 = targetX - dx * t, y2 = targetY - dy * t;
-  const bend = (data?.bend ?? 0) * 28;
-  const mx = (x1 + x2) / 2 + (-dy / len) * bend, my = (y1 + y2) / 2 + (dx / len) * bend;
+  const bend = (data?.bend ?? 0) * BEND * 2;
+  // px, py: the unit normal the curve bows along; (cx, cy) the control point; (lx, ly) the curve's middle.
+  const px = -dy / len, py = dx / len;
+  const cx = (x1 + x2) / 2 + px * bend, cy = (y1 + y2) / 2 + py * bend;
+  const lx = (x1 + 2 * cx + x2) / 4, ly = (y1 + 2 * cy + y2) / 4;
+  const side = Math.sign(bend);
+  const ox = px * side, oy = py * side;
+  const anchor = !side || Math.abs(ox) < 0.4 ? 'middle' : ox > 0 ? 'start' : 'end';
+  const tx = lx + ox * 6, ty = !side ? ly - 5 : ly + oy * 8 + (Math.abs(ox) < 0.4 ? (oy > 0 ? 9 : -2) : 4);
   return (
     <g class={`web-edge g-${data?.group ?? 'other'}`}>
-      <path id={id} class="edge" d={`M${x1} ${y1} Q${mx} ${my} ${x2} ${y2}`} marker-end={data?.arrow ? 'url(#web-arrow)' : undefined} />
-      <path class="edge-hit" d={`M${x1} ${y1} Q${mx} ${my} ${x2} ${y2}`}><title>Click to edit or delete this link</title></path>
-      <text class="edge-label" x={mx} y={my - 4} text-anchor="middle">{data?.label}</text>
+      <path id={id} class="edge" d={`M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`} marker-end={data?.arrow ? 'url(#web-arrow)' : undefined} />
+      <path class="edge-hit" d={`M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`}><title>Click to edit or delete this link</title></path>
+      <text class="edge-label" x={tx} y={ty} text-anchor={anchor}>{data?.label}</text>
     </g>
   );
 }
 
 const nodeTypes = { entry: EntryNodeView };
+/**
+ * Fitting the web leaves the right side free for the zoom buttons (top right) and the minimap (bottom right), so no
+ * card sits under them, and never zooms in past 100%, so labels keep their size. The canvas is usually wider than
+ * the web needs, so the room comes off the side.
+ */
+const FIT: FitViewOptions = { padding: { top: '28px', bottom: '28px', left: '28px', right: '190px' }, maxZoom: 1 };
 const edgeTypes = { web: WebEdgeView };
 
 /**
@@ -65,14 +85,20 @@ export function RelationWebFlow({ world, web, onOpen, onConnect, onHide, onEdit 
   const ix = useMemo(() => new WorldIndex(world), [world]);
   const nodes = useMemo((): EntryNode[] => web.nodes.map((n) => ({
     id: n.id, type: 'entry', position: { x: n.x - W / 2, y: n.y - H / 2 }, width: W, height: H,
-    data: { entry: n.entry, ended: n.ended, focus: n.focus, onOpen, editable: !!onConnect, ...(onHide ? { onHide } : {}), ...(n.entry.type === 'character' && n.entry.race ? { raceName: n.entry.race.split(',').map((r) => ix.nameOf(r.trim())).join(', ') } : {}) },
+    data: { entry: n.entry, ended: n.ended, focus: n.focus, onOpen, editable: !!onConnect, ...(onHide ? { onHide } : {}), ...(n.entry.type === 'character' && n.entry.race ? { raceName: n.entry.race.split(',').map((r) => raceLabel(r.trim(), (x) => ix.resolve(x)?.name)).join(', ') } : {}) },
   })), [web, ix, onOpen, onHide, onConnect]);
   const edges = useMemo((): WebEdge[] => {
+    // Links between the same two cards spread evenly to both sides of the straight line. The side is taken along
+    // the pair in a fixed order, so "A ally of B" and "B enemy of A" bow apart rather than onto each other.
+    const pairOf = (ed: CoreWebEdge) => [ed.from, ed.to].sort().join('|');
+    const total = new Map<string, number>();
+    for (const ed of web.edges) total.set(pairOf(ed), (total.get(pairOf(ed)) ?? 0) + 1);
     const seen = new Map<string, number>();
     return web.edges.map((ed, i) => {
-      const pair = [ed.from, ed.to].sort().join('|');
-      const bend = seen.get(pair) ?? 0;
-      seen.set(pair, bend + 1);
+      const pair = pairOf(ed);
+      const k = seen.get(pair) ?? 0;
+      seen.set(pair, k + 1);
+      const bend = (k - ((total.get(pair) ?? 1) - 1) / 2) * (ed.from < ed.to ? 1 : -1);
       return { id: `e${i}`, source: ed.from, target: ed.to, type: 'web', data: { label: ed.label, group: ed.group, bend, arrow: !relationKind(ed.type)?.symmetric, edge: ed } };
     });
   }, [web]);
@@ -86,7 +112,7 @@ export function RelationWebFlow({ world, web, onOpen, onConnect, onHide, onEdit 
         </defs>
       </svg>
       <ReactFlow<EntryNode, WebEdge> defaultNodes={nodes} defaultEdges={edges} key={`${web.nodes.map((n) => n.id).join(',')}|${web.edges.map((e) => `${e.holder}:${e.index ?? e.field}:${e.type}`).join(',')}`} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-        colorMode="dark" fitView fitViewOptions={{ padding: 0.15, maxZoom: 1.2 }} minZoom={0.2} maxZoom={2.5}
+        colorMode="dark" fitView fitViewOptions={FIT} minZoom={0.2} maxZoom={2.5}
         nodesConnectable={!!onConnect} connectionMode={ConnectionMode.Loose} connectionRadius={80}
         onConnect={(c: Connection) => c.source && c.target && onConnect?.(c.source, c.target)}
         onEdgeClick={(_ev, edge) => edge.data && onEdit?.(edge.data.edge)}
@@ -94,8 +120,8 @@ export function RelationWebFlow({ world, web, onOpen, onConnect, onHide, onEdit 
         zoomOnScroll={false} zoomActivationKeyCode={['Control', 'Meta']} preventScrolling={false} zoomOnDoubleClick
         proOptions={{ hideAttribution: true }}>
         <Background gap={24} size={1} />
-        <MiniMap pannable zoomable ariaLabel="Overview of the web" nodeClassName={(n) => `mini t-${(n.data as EntryNodeData).entry.type}`} nodeBorderRadius={8} />
-        <Controls showInteractive={false} position="top-right" />
+        <MiniMap pannable zoomable ariaLabel="Overview of the web" style={{ width: 150, height: 100 }} nodeClassName={(n) => `mini t-${(n.data as EntryNodeData).entry.type}`} nodeBorderRadius={8} />
+        <Controls showInteractive={false} position="top-right" fitViewOptions={FIT} />
       </ReactFlow>
     </div>
   );

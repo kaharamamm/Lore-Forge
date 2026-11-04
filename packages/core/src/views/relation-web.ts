@@ -4,7 +4,8 @@ import { RELATION_GROUPS, relationKind, relationLabel, type RelationGroup } from
 import type { Entry, World } from '../types.ts';
 import { WorldIndex } from '../world-index.ts';
 
-export const WEB_LAYOUT = { nodeW: 168, nodeH: 52, margin: 24 } as const;
+/** labelGap: the least room between two related cards, so the edge between them has space for its label. */
+export const WEB_LAYOUT = { nodeW: 168, nodeH: 52, margin: 24, labelGap: 132 } as const;
 
 export interface WebNode {
   id: string;
@@ -80,12 +81,13 @@ export function relationWeb(world: World, focusId: string, opts: WebOptions = {}
     .filter((id) => !hide.has(id))
     .map((id) => ix.byIdOf(id)!)
     .sort((a, b) => firstGroup.get(a.id)! - firstGroup.get(b.id)! || a.name.localeCompare(b.name));
-  const { nodeW, nodeH, margin } = WEB_LAYOUT;
+  const { nodeW, nodeH, margin, labelGap } = WEB_LAYOUT;
   const n = around.length;
-  // Radius big enough that neighbouring boxes on the circle do not overlap.
-  const radius = n <= 1 ? nodeW : Math.max(nodeW, (nodeW + 24) / (2 * Math.sin(Math.PI / n)));
-  const rx = radius;
-  const ry = Math.max(nodeH * 2, radius * 0.7);
+  // An ellipse wide enough that every edge has room for its label: between the middle card and each card around it,
+  // and between neighbouring cards on the ring.
+  const ring = n <= 1 ? 0 : (nodeW + labelGap) / (2 * Math.sin(Math.PI / n));
+  const rx = Math.max(nodeW + labelGap, ring);
+  const ry = Math.max(nodeH + labelGap, rx * 0.72);
   const cx = margin + nodeW / 2 + rx;
   const cy = margin + nodeH / 2 + ry;
   const nodes: WebNode[] = [{ id: focus.id, entry: focus, x: cx, y: cy, ended: isEnded(focus), focus: true }];

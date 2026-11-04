@@ -57,6 +57,7 @@ const DETAILS: [DetailKey, string, string, boolean][] = [
 ];
 
 const anchorId = (b: Extract<Block, { kind: 'heading' }>, i: number) => `pv-${b.anchor ?? `h-${i}`}`;
+const TITLE_PARTS = ['title', 'sub', 'author', 'publisher'];
 
 /** The first page: the world's cover art with the title, as the PDF draws it. */
 function CoverSheet({ doc, dir }: { doc: Doc; dir: string }) {
@@ -78,7 +79,7 @@ function CoverSheet({ doc, dir }: { doc: Doc; dir: string }) {
       <div class="sheet-cover-text">
         {c.art.showTitle && <p class={`sheet-title title-${c.art.titleStyle}${c.art.font ? ' has-font' : ''}`} style={{ color: c.art.titleColor, ...titleFont(c.art) }}>{c.title}</p>}
         <p class="sheet-sub">{c.subtitle}</p>
-        {c.lines.map((l, i) => <p key={i} class="doc-small">{l.replace(/\*\*/g, '')}</p>)}
+        {c.lines.map((l, i) => <p key={i} class="sheet-cover-line">{l.replace(/\*\*/g, '')}</p>)}
       </div>
     </section>
   );
@@ -96,9 +97,10 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
     }
     case 'para': return <p class={`doc-p${b.style ? ` doc-${b.style}` : ''}${b.dropCap ? ' doc-dropcap' : ''}`}><Inline text={b.text} /></p>;
     case 'front':
+      // Title page lines are title, subtitle, author, publisher (empty when unset); each part has its place on the page.
       return (
         <div class={`doc-front doc-front-${b.role}`}>
-          {b.lines.filter((l) => l !== '').map((l, j) => <p key={j}>{l}</p>)}
+          {b.lines.map((l, j) => l !== '' && <p key={j} class={b.role === 'title' ? `ft-${TITLE_PARTS[j] ?? 'line'}` : undefined}>{l}</p>)}
         </div>
       );
     case 'facts':
@@ -169,6 +171,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
   const [chapterYears, setChapterYears] = useState(manifestYears ?? 100);
   const [appendix, setAppendix] = useState(true);
   const [trim, setTrim] = useState<TrimSize>(world.manifest.book?.trim ?? DEFAULT_TRIM);
+  const [rightHand, setRightHand] = useState(world.manifest.book?.rightHandChapters ?? false);
   const [book, setBook] = useState<BookSettings>(world.manifest.book ?? {});
   const bookWorld = useMemo(() => (kind === 'book' ? { ...world, manifest: { ...world.manifest, book: { ...world.manifest.book, ...book } } } : world), [world, kind, book]);
   const editBook = (k: DetailKey, v: string) => setBook((b) => ({ ...b, [k]: v }));
@@ -182,10 +185,12 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
 
   const options: PublishOptions = kind === 'codex'
     ? { types: ALL_TYPES.filter((t) => types.includes(t)), warnings, artBriefs }
-    : { grouping, ...(grouping === 'years' ? { chapterYears } : {}), ...(hasStory && !appendix ? { appendix: false } : {}), trim };
+    : { grouping, ...(grouping === 'years' ? { chapterYears } : {}), ...(hasStory && !appendix ? { appendix: false } : {}), trim, rightHandChapters: rightHand };
   const key = JSON.stringify(options);
   const doc = useMemo(() => previewDoc(bookWorld, kind, options), [bookWorld, kind, key]);
   const sheets = useMemo(() => sheetsOf(doc.blocks), [doc]);
+  const hasCover = !doc.print || !!doc.cover.art;
+  const sheetCount = sheets.length + (hasCover ? 1 : 0);
 
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
@@ -215,7 +220,9 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
       <div class="preview" role="dialog" aria-modal="true" aria-labelledby="preview-title" ref={dialog}>
         <header class="preview-head">
           <h2 id="preview-title" tabIndex={-1}><Icon name={TITLE_ICON[kind]} /> {TITLE[kind]} <span class="muted">preview</span></h2>
-          <p class="muted">{doc.print ? `${TRIM_LABEL[doc.print.trim]}, print layout. ${sheets.length} sheets here; the PDF paginates further, adds running heads and page numbers, and starts each chapter on a right-hand page.` : `${sheets.length + 1} sheets here; the PDF paginates further. This is the same content the PDF gets.`}</p>
+          <p class="muted">{doc.print
+            ? `${TRIM_LABEL[doc.print.trim]}, print layout. ${sheetCount} sheets here; the PDF paginates further${doc.print.rightHand ? ', adds running heads and page numbers, and starts each chapter on a right-hand page.' : ' and adds running heads and page numbers.'}`
+            : `${sheetCount} sheets here; the PDF paginates further. This is the same content the PDF gets.`}</p>
           <div class="preview-actions">
             <button type="button" class="primary" disabled={busy || (kind === 'codex' && types.length === 0)} onClick={() => void save()}>
               <Icon name="save" /> {busy ? 'Saving…' : 'Save PDF…'}
@@ -258,6 +265,11 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
                   <Select class="trim-select" value={trim} onChange={(v) => { const t = v as TrimSize; setTrim(t); persist({ trim: t }); }} options={(Object.keys(TRIMS) as TrimSize[]).map((t) => ({ value: t, label: TRIM_LABEL[t] }))} />
                 </label>
                 <p class="hint">Margins are mirrored with a wider inside edge for the binding.</p>
+                <label class="check right-hand">
+                  <input type="checkbox" name="right-hand-chapters" checked={rightHand} onChange={() => { const v = !rightHand; setRightHand(v); persist({ rightHandChapters: v || undefined }); }} />
+                  <Icon name="open-book" /> Start chapters on right-hand pages
+                </label>
+                <p class="hint">{rightHand ? 'For a printed book: blank pages are added so each chapter opens on the right.' : 'Off: every chapter starts on the next page, with no blank pages.'}</p>
               </fieldset>
               <fieldset class="book-details">
                 <legend>Book details</legend>
@@ -301,7 +313,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
             )}
           </aside>
           <div class="preview-pages" tabIndex={0} aria-label="Preview pages">
-            {(!doc.print || doc.cover.art) && <CoverSheet doc={doc} dir={dir} />}
+            {hasCover && <CoverSheet doc={doc} dir={dir} />}
             {sheets.map((s, i) => (
               <section class={doc.print ? `sheet is-print trim-${doc.print.trim.replace('.', '-')}${s[0]?.kind === 'front' ? ' is-front' : ''}` : 'sheet'} key={i}>
                 {s.map((b, j) => <BlockView key={j} b={b} dir={dir} doc={doc} i={doc.blocks.indexOf(b)} />)}

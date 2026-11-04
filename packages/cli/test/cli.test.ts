@@ -8,7 +8,10 @@ import { createWorld } from '@lore-forge/core/node';
 import { builtinRules } from '@lore-forge/core';
 
 const main = join(import.meta.dirname, '..', 'src', 'main.ts');
-const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
+/** The test world that breaks canon on purpose (every rule fires once); see its README. Not on the app's shelf. */
+const example = join(import.meta.dirname, '..', '..', '..', 'packages', 'core', 'test', 'fixtures', 'shifting-sands');
+/** The sample world that ships in worlds/: a written story with a chronicle appendix. */
+const camelamamm = join(import.meta.dirname, '..', '..', '..', 'worlds', 'camelamamm');
 const lore = (...args: string[]) => spawnSync(process.execPath, ['--conditions=source', main, ...args], { encoding: 'utf8' });
 
 test('lore check on the example world prints every starter rule and exits 1', () => {
@@ -17,7 +20,7 @@ test('lore check on the example world prints every starter rule and exits 1', ()
   assert.match(r.stdout, /Orsan the Grey can't kill Queen Ilsa in 1920: Orsan the Grey died in 1800 \(source: Characters\/Orsan the Grey\)\./);
   for (const rule of builtinRules) assert.match(r.stdout, new RegExp(`\\[${rule.id}\\]`), `rule ${rule.id} should fire on the example world`);
   assert.match(r.stdout, /INTENDED \[after-death\] Nur the Twice-Born/);
-  assert.match(r.stdout, /11 errors, 5 warnings, 1 info, 1 marked intended/);
+  assert.match(r.stdout, /10 errors, 5 warnings, 1 info, 1 marked intended/);
   assert.match(r.stdout, /\[story-contradiction\] The story says Orsan the Grey was born in 1745, but Characters\/Orsan the Grey says 1740\.\n\s+at Story\/The Salt Road \(story\/01-the-salt-road\.md\): "Orsan the Grey was born in 1745/);
 });
 
@@ -26,7 +29,7 @@ test('lore check --json prints a versioned report', () => {
   assert.equal(r.status, 1);
   const report = JSON.parse(r.stdout);
   assert.equal(report.schemaVersion, 1);
-  assert.deepEqual(report.counts, { error: 11, warning: 5, info: 1, intended: 1 });
+  assert.deepEqual(report.counts, { error: 10, warning: 5, info: 1, intended: 1 });
   // Every starter rule fires once in the example, plus the story check (story/01-the-salt-road.md).
   assert.equal(new Set(report.warnings.map((w: { ruleId: string }) => w.ruleId)).size, builtinRules.length + 1);
 });
@@ -46,19 +49,19 @@ test('lore export writes one deterministic snapshot', () => {
 
 test('lore codex and lore book write a PDF and a Markdown sidecar', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lore-'));
-  const codex = lore('codex', example, '-o', join(dir, 'codex.pdf'));
+  const codex = lore('codex', camelamamm, '-o', join(dir, 'codex.pdf'));
   assert.equal(codex.status, 0, codex.stdout + codex.stderr);
   assert.match(codex.stdout, /codex\.pdf \(\d+ pages\)\nWrote .*codex\.md/);
-  const alias = lore('bible', example, '-o', join(dir, 'old-name.pdf'));
+  const alias = lore('bible', camelamamm, '-o', join(dir, 'old-name.pdf'));
   assert.equal(alias.status, 0, 'lore bible still works');
   assert.match(readFileSync(join(dir, 'old-name.md'), 'utf8'), /World Codex/);
   assert.equal(readFileSync(join(dir, 'codex.pdf')).subarray(0, 5).toString(), '%PDF-');
   assert.match(readFileSync(join(dir, 'codex.md'), 'utf8'), /3D turnaround brief/);
-  const book = lore('book', example, '--out', join(dir, 'book.pdf'));
+  const book = lore('book', camelamamm, '--out', join(dir, 'book.pdf'));
   assert.equal(book.status, 0, book.stdout + book.stderr);
   assert.ok(existsSync(join(dir, 'book.pdf')));
-  assert.match(readFileSync(join(dir, 'book.md'), 'utf8'), /## Chapter 1\. The Salt Road[\s\S]*## Appendix: Chronicle[\s\S]*#### The Fall of Saltmere/);
-  assert.equal(lore('book', example, '-o').status, 2);
+  assert.match(readFileSync(join(dir, 'book.md'), 'utf8'), /## Chapter 1\. The Morning the Well Went Quiet[\s\S]*## Appendix: Chronicle[\s\S]*#### The Passing of Ozra/);
+  assert.equal(lore('book', camelamamm, '-o').status, 2);
 });
 
 test('a clean new world exits 0; bad usage and non-worlds exit 2', async () => {

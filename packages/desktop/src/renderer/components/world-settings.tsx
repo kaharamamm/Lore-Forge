@@ -26,7 +26,7 @@ const num = (s: string) => (s.trim() === '' ? NaN : Number(s));
  * The world's calendar, from world.json: its eras (what "312 OK" means) and months. Eras still used by dates
  * keep their abbreviation; other problems (overlaps, missing names) block Save until fixed.
  */
-export function WorldSettings({ world, onSave, onClose, onAbout }: { world: World; onSave: (cal: Calendar) => Promise<boolean>; onClose: () => void; onAbout?: () => void }) {
+export function WorldSettings({ world, onSave, onClose }: { world: World; onSave: (cal: Calendar) => Promise<boolean>; onClose: () => void }) {
   const cal = world.manifest.calendar;
   const seq = useRef(0);
   const [eras, setEras] = useState<EraRow[]>(() => cal.eras.map((e) => ({ key: seq.current++, orig: e.id, id: e.id, name: e.name, start: String(e.start), end: e.end === undefined ? '' : String(e.end), color: e.color ?? '' })));
@@ -74,13 +74,23 @@ export function WorldSettings({ world, onSave, onClose, onAbout }: { world: Worl
   return (
     <div class="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section class="world-settings" role="dialog" aria-modal="true" aria-labelledby="ws-title">
-        <header class="about-head">
+        <header class="about-head dialog-head">
           <Icon name="calendar" class="about-mark" />
           <div>
             <h2 id="ws-title">World settings</h2>
             <p class="muted">The calendar of {world.manifest.name}, saved in world.json.</p>
           </div>
         </header>
+
+        <div class="dialog-body">
+        <div class="ws-default-row">
+          <label class="ws-default">
+            <span class="field-label">Default era</span>
+            <Select id="ws-default" value={defaultEra} onChange={setDefaultEra} placeholder="Pick an era…"
+              options={draft.eras.filter((e) => e.id).map((e) => ({ value: e.id, label: `${e.name || e.id} (${e.id})`, ...(e.color ? { swatch: e.color } : {}) }))} />
+          </label>
+          <p class="muted small">Dates written without an era abbreviation, like “312”, count in this era.</p>
+        </div>
 
         <h3 id="ws-eras">Eras</h3>
         <p class="muted small ws-explain">
@@ -116,11 +126,6 @@ export function WorldSettings({ world, onSave, onClose, onAbout }: { world: Worl
         </div>
         <div class="ws-row">
           <button type="button" class="ghost small ws-add-era" onClick={addEra}>+ Add era</button>
-          <label class="ws-default">
-            <span class="field-label">Default era</span>
-            <Select id="ws-default" value={defaultEra} onChange={setDefaultEra} placeholder="Pick an era…"
-              options={draft.eras.filter((e) => e.id).map((e) => ({ value: e.id, label: `${e.name || e.id} (${e.id})` }))} />
-          </label>
         </div>
 
         <h3 id="ws-months">Months</h3>
@@ -143,8 +148,8 @@ export function WorldSettings({ world, onSave, onClose, onAbout }: { world: Worl
             <ul>{problems.map((p) => <li key={p}><Icon name="hazard-sign" /> {p}</li>)}</ul>
           )}
         </div>
+        </div>
         <div class="dialog-actions">
-          {onAbout && <button type="button" class="ghost small ws-about" onClick={onAbout} title="About Lore-Forge, credits and licences"><Icon name="laurels" /> About</button>}
           <span class="muted small spacer">Changing a start year moves every date in that era on the timeline.</span>
           <button type="button" class="ghost ws-cancel" onClick={onClose}>Cancel</button>
           <button type="button" class="primary ws-save" disabled={problems.length > 0 || saving} onClick={() => void save()}><Icon name="check-mark" /> Save calendar</button>

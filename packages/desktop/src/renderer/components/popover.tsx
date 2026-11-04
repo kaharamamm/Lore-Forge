@@ -2,14 +2,19 @@ import type { ComponentChildren, RefObject } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 
+/** Why a popover closes: a click outside it, Escape inside it, or the page (or a panel) scrolling under it. */
+export type PopoverClose = 'outside' | 'escape' | 'scroll';
+
 /**
  * A floating panel in its own layer: rendered into <body> (so no panel can clip it or be pushed by it), placed under
- * its anchor or above it when there is more room there, kept inside the window, and repositioned on scroll and
- * resize. A click outside the anchor and the panel, or Escape inside it, calls onClose.
+ * its anchor or above it when there is more room there, kept inside the window, and repositioned on resize. A click
+ * outside the anchor and the panel, Escape inside it, or scrolling the page or a panel behind it calls onClose, like
+ * a native menu: a list left floating while its field scrolls away reads as broken. Scrolling a list inside the
+ * panel is fine.
  */
-export function Popover({ anchor, onClose, children, class: cls, matchWidth, ...rest }: {
+export function Popover({ anchor, onClose, children, class: cls, matchWidth, onPointerDown, ...rest }: {
   anchor: RefObject<HTMLElement>;
-  onClose: (why: 'outside' | 'escape') => void;
+  onClose: (why: PopoverClose) => void;
   children: ComponentChildren;
   class?: string;
   /** At least as wide as the anchor (list boxes). */
@@ -17,6 +22,8 @@ export function Popover({ anchor, onClose, children, class: cls, matchWidth, ...
   id?: string;
   role?: 'dialog' | 'listbox' | 'menu';
   'aria-label'?: string;
+  /** A suggestion list keeps the focus in its text box: it cancels pointer downs on itself (its scrollbar too). */
+  onPointerDown?: (e: PointerEvent) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
@@ -54,9 +61,15 @@ export function Popover({ anchor, onClose, children, class: cls, matchWidth, ...
     ro.observe(el);
     // The window's own size too: a resize event can come before the new height is in place.
     ro.observe(document.documentElement);
-    // Follow the anchor when the page or a panel scrolls, but not when a list inside this panel does: placing then
-    // reset that list's scroll position, so the font list could not be scrolled at all.
-    const onScroll = (e: Event) => { if (!(e.target instanceof Node && el.contains(e.target))) place(); };
+    // The page or a panel scrolling closes the popover; a list inside this panel scrolling does not (placing then
+    // reset that list's scroll position, so the font list could not be scrolled at all). Scrolls in the first moment
+    // after opening (a field scrolled into view as it takes the focus) only move the panel along.
+    const opened = performance.now();
+    const onScroll = (e: Event) => {
+      if (e.target instanceof Node && el.contains(e.target)) return;
+      if (performance.now() - opened < 200) place();
+      else close.current('scroll');
+    };
     window.addEventListener('scroll', onScroll, true);
     const onResize = () => { place(); cancelAnimationFrame(frame); frame = requestAnimationFrame(place); };
     window.addEventListener('resize', onResize);
@@ -71,7 +84,7 @@ export function Popover({ anchor, onClose, children, class: cls, matchWidth, ...
     return () => document.removeEventListener('pointerdown', outside, true);
   }, []);
   return createPortal(
-    <div ref={box} class={`popover${cls ? ` ${cls}` : ''}`} {...rest}
+    <div ref={box} class={`popover${cls ? ` ${cls}` : ''}`} {...rest} onPointerDown={onPointerDown}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close.current('escape'); } }}>
       {children}
     </div>,

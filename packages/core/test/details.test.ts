@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  ageAtDeathText, check, detailRelations, ENTRY_ICON_NAMES, entryIcon, familyTree, guessGender, ICONS, parseEntry, raceIcon, racesOf, relationWeb, references, serializeEntry, worldCodex, type Entry,
+  ageAtDeathText, check, detailRelations, ENTRY_ICON_NAMES, entryIcon, familyTree, guessGender, ICONS, parseEntry, raceIcon, racesOf, relationWeb, suggestionIcon, TYPE_ICON, references, serializeEntry, worldCodex, type Entry,
 } from '@lore-forge/core';
 import { manifest, world } from './helpers.ts';
 
@@ -80,5 +80,15 @@ test('default pictures come from gender, names, titles and keywords', () => {
   assert.equal(entryIcon(e({ type: 'faction', id: 'x', name: 'Nothing Here' })), 'checked-shield');
   assert.equal(raceIcon('Undead'), 'death-skull');
   assert.equal(raceIcon('lizard-folk'), 'wolf-head');
+  assert.equal(raceIcon('fennec-folk'), 'fox-head');
+  // Suggestion lists show a picture per word: genders, kinds by entry type (the default-picture tables), verbs.
+  assert.equal(suggestionIcon('character', 'gender', 'female'), 'female');
+  assert.equal(suggestionIcon('character', 'gender', 'non-binary'), 'person');
+  assert.equal(suggestionIcon('place', 'kind', 'port'), 'anchor');
+  assert.equal(suggestionIcon('item', 'kind', 'potion'), 'round-potion');
+  assert.equal(suggestionIcon('faction', 'kind', 'guild'), 'two-coins');
+  assert.equal(suggestionIcon('place', 'kind', 'region'), TYPE_ICON.place);
+  assert.equal(suggestionIcon('event', 'verb', 'crowned'), 'crown');
+  assert.equal(suggestionIcon('character', 'occupation', 'smith'), undefined);
   for (const i of ENTRY_ICON_NAMES) assert.ok(ICONS[i], i);
 });

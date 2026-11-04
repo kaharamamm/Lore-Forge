@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'preact/hooks';
-import { ENTRY_TYPES, isEnded, LIFECYCLE, searchEntries, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, type Entry, type EntryType, type Warning } from '@lore-forge/core';
+import { ENTRY_TYPES, isEnded, LIFECYCLE, raceLabel, racesOf, searchEntries, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, type Entry, type EntryType, type Warning } from '@lore-forge/core';
 import { CountBadge } from './severity.tsx';
 import { involves } from './warnings.tsx';
 import { ENTRY_DRAG } from './link-edit.tsx';
@@ -33,7 +33,7 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
         draggable onDragStart={(ev) => { ev.dataTransfer?.setData(ENTRY_DRAG, e.id); ev.dataTransfer?.setData('text/plain', e.name); if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'copy'; }}>
         <Portrait entry={e} size="xs" />
         <span class="entry-name" title={e.name}>{e.name}{ended && lc && <span class="ended-mark" title={lc.endedWord}> <Icon name={lc.endedIcon} /><span class="sr-only">({lc.endedWord})</span></span>}</span>
-        {e.type === 'character' && e.race && <span class="entry-sub">{e.race}</span>}
+        {e.type === 'character' && e.race && <span class="entry-sub">{racesOf(e).map((r) => raceLabel(r, (x) => entries.find((o) => o.id === x)?.name)).join(', ')}</span>}
         <CountBadge warnings={warnings.filter((w) => involves(w, e.id))} />
         {snippet}
       </button>

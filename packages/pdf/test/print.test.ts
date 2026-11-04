@@ -5,11 +5,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strFromU8, unzipSync } from 'fflate';
-import { storyBook, type World } from '@lore-forge/core';
+import { docSheets, storyBook, type Doc, type World } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 import { hyphenate, renderDocx, renderPdf } from '@lore-forge/pdf';
 
-const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
+const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'camelamamm');
 const hasPdftotext = (() => {
   try {
     execFileSync('pdftotext', ['-v'], { stdio: 'ignore' });
@@ -19,25 +19,35 @@ const hasPdftotext = (() => {
   }
 })();
 
-const withFront = (w: World): World => ({
-  ...w,
-  manifest: { ...w.manifest, book: { ...w.manifest.book, dedication: 'For the caravans.', epigraph: 'The sand remembers.', epigraphSource: 'Desert saying' } },
-});
+const withBook = (w: World, book: NonNullable<World['manifest']['book']>): World => ({ ...w, manifest: { ...w.manifest, book: { ...w.manifest.book, ...book } } });
 
-test('the Story Book has front matter, chapter openers with a drop cap, and a print trim', async () => {
-  const world = withFront(await loadWorld(example));
+test('the Story Book has a cover, front matter without a half-title, chapter openers with a drop cap, and a print trim', async () => {
+  const world = await loadWorld(example);
   const doc = storyBook(world, { year: 2026 });
+  // The cover: title, subtitle and author only; the stats and the credit are not on it.
+  assert.equal(doc.cover.title, 'Mr Camel and the Singing Well');
+  assert.equal(doc.cover.subtitle, 'A story of Camelamamm');
+  assert.deepEqual(doc.cover.lines, ['by Ahmet Kadir Zengin']);
+  assert.ok(doc.cover.art);
   const kinds = doc.blocks.slice(0, 6).map((b) => (b.kind === 'front' ? b.role : b.kind));
-  assert.deepEqual(kinds, ['half-title', 'title', 'copyright', 'dedication', 'epigraph', 'toc']);
-  const copyright = doc.blocks[2];
+  assert.deepEqual(kinds, ['title', 'copyright', 'dedication', 'epigraph', 'toc', 'heading']);
+  const copyright = doc.blocks[1];
   assert.ok(copyright?.kind === 'front' && copyright.lines[0]?.startsWith('Copyright © 2026'));
+  assert.ok(copyright.lines.some((l) => /^Assembled by /.test(l)), 'the credit is on the copyright page');
   const opener = doc.blocks.find((b) => b.kind === 'heading' && b.opener);
-  assert.ok(opener && opener.kind === 'heading' && /The Salt Road/.test(opener.text));
+  assert.ok(opener && opener.kind === 'heading' && opener.text === 'Chapter 1. The Morning the Well Went Quiet');
   assert.ok(doc.blocks.some((b) => b.kind === 'para' && b.dropCap));
   assert.deepEqual(doc.print, { trim: '6x9' });
   assert.deepEqual(storyBook(world, { trim: 'a5' }).print, { trim: 'a5' });
-  const fromWorld = { ...world, manifest: { ...world.manifest, book: { trim: '5.5x8.5' as const } } };
-  assert.deepEqual(storyBook(fromWorld).print, { trim: '5.5x8.5' });
+  assert.deepEqual(storyBook(world, { rightHandChapters: true }).print, { trim: '6x9', rightHand: true });
+  const fromWorld = withBook(world, { trim: '5.5x8.5', rightHandChapters: true });
+  assert.deepEqual(storyBook(fromWorld).print, { trim: '5.5x8.5', rightHand: true });
+  assert.deepEqual(storyBook(fromWorld, { rightHandChapters: false }).print, { trim: '5.5x8.5' }, 'the option wins over world.json');
+  // Preview sheets: each front page, the contents and every chapter on a sheet of its own, the chapter heading first.
+  const sheets = docSheets(doc.blocks);
+  assert.deepEqual(sheets.slice(0, 5).map((s) => s.length), [1, 1, 1, 1, 1]);
+  const chapters = sheets.filter((s) => s[0]?.kind === 'heading' && s[0].opener);
+  assert.equal(chapters.length, doc.blocks.filter((b) => b.kind === 'heading' && b.opener).length);
 });
 
 test('hyphenation adds soft hyphens to long words only', () => {
@@ -46,45 +56,82 @@ test('hyphenation adds soft hyphens to long words only', () => {
   assert.equal(out.replace(/\u00AD/g, ''), 'The caravan crossed extraordinary distances.');
 });
 
-test('print PDF: trim size, right-hand chapter openers without page numbers, running heads', async () => {
-  const world = await loadWorld(example);
-  const { pdf, pages } = await renderPdf(storyBook(world), { worldDir: example });
-  assert.match(pdf.toString('latin1'), /\/MediaBox \[0 0 432 648\]/);
-  if (!hasPdftotext) return;
+/** Text of every page of a rendered PDF, via pdftotext. */
+async function pageTexts(doc: Doc): Promise<string[]> {
+  const { pdf, pages } = await renderPdf(doc, { worldDir: example });
   const dir = await mkdtemp(join(tmpdir(), 'lore-print-'));
   try {
     const file = join(dir, 'book.pdf');
     await writeFile(file, pdf);
-    const page = (n: number) => execFileSync('pdftotext', ['-f', String(n), '-l', String(n), '-layout', file, '-'], { encoding: 'utf8' });
-    const all = Array.from({ length: pages }, (_, i) => page(i + 1));
-    const opener = all.findIndex((t) => /CHAPTER 1/.test(t)) + 1;
-    assert.equal(opener % 2, 1, 'chapter 1 opens on a right-hand page');
-    assert.doesNotMatch(all[opener - 1]!, /^\s*\d+\s*$/m, 'no page number on the opener');
-    const folio = (t: string) => /^\s*(\d+)\s*$/m.exec(t)?.[1];
-    const numbered = all.map((t, i) => ({ n: i + 1, folio: folio(t), text: t })).filter((p) => p.folio);
-    assert.ok(numbered.length > 0);
-    for (const p of numbered) assert.equal(Number(p.folio), p.n - opener + 1, `page ${p.n} is numbered from the first chapter`);
-    const verso = numbered.find((p) => p.n % 2 === 0);
-    assert.match(verso!.text.replace(/(\S) (?=\S)/g, '$1'), /TALESOFTHESHIFTINGSANDS/, 'left-hand running head is the book title');
-    assert.ok(all.every((t) => !/CHAPTER 1/.test(t) || !folio(t)));
-    assert.doesNotMatch(all.join(''), /\u00AD/, 'soft hyphens never print');
+    return Array.from({ length: pages }, (_, i) => execFileSync('pdftotext', ['-f', String(i + 1), '-l', String(i + 1), '-layout', file, '-'], { encoding: 'utf8' }));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+const squash = (t: string) => t.replace(/\s+/g, '');
+
+test('print PDF: cover, front matter and chapters each on a new page with no blank pages, page numbers, running heads', async () => {
+  const world = await loadWorld(example);
+  const { pdf } = await renderPdf(storyBook(world), { worldDir: example });
+  assert.match(pdf.toString('latin1'), /\/MediaBox \[0 0 432 648\]/);
+  if (!hasPdftotext) return;
+  const all = await pageTexts(storyBook(world, { year: 2026 }));
+  assert.match(squash(all[0]!), /MRCAMELANDTHESINGINGWELL/i, 'the cover has the title');
+  assert.match(squash(all[0]!), /byAhmetKadirZengin/);
+  assert.doesNotMatch(all[0]!, /Assembled by|words/, 'no credit or stats on the cover');
+  assert.match(squash(all[1]!), /MrCamelandtheSingingWell.*AstoryofCamelamamm.*byAhmetKadirZengin/s, 'page 2 is the title page');
+  assert.match(all[2]!, /Copyright © 2026/);
+  assert.match(all[3]!, /waited for the kettle/);
+  assert.match(all[4]!, /Water remembers the way home/);
+  assert.match(all[5]!, /Contents/);
+  assert.match(all[6]!, /CHAPTER 1/);
+  assert.match(squash(all[6]!), /TheMorningtheWellWentQuiet/);
+  assert.equal(all.filter((t) => /MrCamelandtheSingingWell/.test(squash(t))).length, 1, 'the title page is not repeated (no half-title)');
+  assert.ok(all.every((t, i) => t.trim() !== '' || i === 0), 'no blank pages');
+  const opener = 7;
+  assert.doesNotMatch(all[opener - 1]!, /^\s*\d+\s*$/m, 'no page number on the opener');
+  const folio = (t: string) => /^\s*(\d+)\s*$/m.exec(t)?.[1];
+  const numbered = all.map((t, i) => ({ n: i + 1, folio: folio(t), text: t })).filter((p) => p.folio);
+  assert.ok(numbered.length > 0);
+  for (const p of numbered) assert.equal(Number(p.folio), p.n - opener + 1, `page ${p.n} is numbered from the first chapter`);
+  const verso = numbered.find((p) => p.n % 2 === 0);
+  assert.match(squash(verso!.text), /MRCAMELANDTHESINGINGWELL/, 'left-hand running head is the book title');
+  // Every chapter starts at the top of a new page: its label is the page's first line.
+  const openers = all.flatMap((t, i) => (/CHAPTER \d+/.test(t) ? [i] : []));
+  assert.equal(openers.length, 6);
+  for (const i of openers) assert.match(all[i]!.trimStart(), /^CHAPTER \d+/, `page ${i + 1} opens with its chapter label`);
+  assert.ok(openers.some((i) => (i + 1) % 2 === 0), 'chapters are not forced onto right-hand pages');
+  assert.doesNotMatch(all.join(''), /\u00AD/, 'soft hyphens never print');
 });
 
-test('Word export has the same book structure: mirrored margins, odd-page chapters, headers, drop cap', async () => {
-  const world = withFront(await loadWorld(example));
+test('print PDF with right-hand chapters: copyright on the back of the title page, every chapter on an odd page', async () => {
+  if (!hasPdftotext) return;
+  const all = await pageTexts(storyBook(withBook(await loadWorld(example), { rightHandChapters: true })));
+  // Page numbers here are 1-based; the cover (page 1) also has the subtitle, so the title page is looked for after it.
+  const first = (re: RegExp) => all.findIndex((t, i) => i > 0 && re.test(t)) + 1;
+  assert.equal(first(/A story of Camelamamm/), 3, 'the title page is page 3');
+  assert.equal(first(/Copyright ©/), 4, 'the copyright page is on its back');
+  assert.equal(first(/CHAPTER 1/) % 2, 1, 'chapter 1 opens on a right-hand page');
+  const openers = all.flatMap((t, i) => (/CHAPTER \d+/.test(t) ? [i + 1] : []));
+  assert.ok(openers.length === 6 && openers.every((n) => n % 2 === 1), `chapters on odd pages: ${openers.join(', ')}`);
+  assert.ok(all.some((t) => t.trim() === ''), 'blank pages pad the book');
+});
+
+test('Word export has the same book structure: mirrored margins, chapters on new pages, headers, drop cap', async () => {
+  const world = await loadWorld(example);
   const files = unzipSync(new Uint8Array(await renderDocx(storyBook(world, { trim: 'a5' }), example)));
   const settings = strFromU8(files['word/settings.xml']!);
   const body = strFromU8(files['word/document.xml']!);
   for (const tag of ['<w:mirrorMargins/>', '<w:evenAndOddHeaders/>', '<w:autoHyphenation/>', '<w:updateFields/>']) assert.ok(settings.includes(tag), tag);
   assert.match(body, /<w:pgSz w:w="8391" w:h="11906"/);
   assert.match(body, /w:gutter="340"/);
-  assert.match(body, /<w:type w:val="oddPage"\/>/);
+  assert.match(body, /<w:type w:val="nextPage"\/>/);
+  assert.doesNotMatch(body, /<w:type w:val="oddPage"\/>/, 'no blank pages by default');
   assert.match(body, /<w:pgNumType w:start="1"\/>/);
   assert.match(body, /<w:titlePg\/>/);
   assert.match(body, /w:dropCap="drop" w:lines="3"/);
-  assert.match(body, /For the caravans\./);
+  assert.match(body, /For everyone who has ever waited for the kettle to sing\./);
   assert.match(body, /TOC \\h \\o/);
+  const printed = strFromU8(unzipSync(new Uint8Array(await renderDocx(storyBook(world, { rightHandChapters: true }), example)))['word/document.xml']!);
+  assert.match(printed, /<w:type w:val="oddPage"\/>/, 'right-hand chapters start on odd pages');
 });

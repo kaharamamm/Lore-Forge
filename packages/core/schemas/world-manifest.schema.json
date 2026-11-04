@@ -51,6 +51,7 @@
         "author": { "type": "string" },
         "chapterYears": { "type": "integer", "minimum": 1, "description": "Split each era into chapters of this many years; default one chapter per era." },
         "trim": { "enum": ["6x9", "5.5x8.5", "a5"], "description": "Print trim size of the Story Book. Default 6x9 (inches)." },
+        "rightHandChapters": { "type": "boolean", "description": "For printed books: start every chapter (and the title page, dedication, epigraph and contents) on a right-hand page, adding blank pages. Default false." },
         "dedication": { "type": "string", "description": "Optional dedication page text." },
         "epigraph": { "type": "string", "description": "Optional epigraph (opening quotation)." },
         "epigraphSource": { "type": "string", "description": "Who the epigraph is by." },

@@ -11,11 +11,14 @@ export function liberationDir(): string {
   return join(dirname(req().resolve('@lore-forge/pdf/package.json')), 'fonts');
 }
 
-/** File name of a bundled font's face: the @fontsource latin woff2, or the Liberation TTF. */
+/**
+ * File name of a bundled font's face: the @fontsource latin .woff, or the Liberation TTF. Not the .woff2 the app
+ * uses on screen: pdfkit embeds WOFF2 faces with empty glyphs, so the cover title would print as nothing.
+ */
 export function bundledFontFile(font: BundledFont, bold: boolean): string {
   const weight = bold && font.weights.includes(700) ? 700 : font.weights[0]!;
   if (font.source === 'liberation') return `${font.family.replace(/\s+/g, '')}-${weight === 700 ? 'Bold' : 'Regular'}.ttf`;
-  return `${font.source}-latin-${weight}-normal.woff2`;
+  return `${font.source}-latin-${weight}-normal.woff`;
 }
 
 /**
@@ -94,8 +97,11 @@ export async function systemFontFamilies(): Promise<string[]> {
   return [...new Set((await systemFonts()).map((f) => f.family))].sort((a, b) => a.localeCompare(b));
 }
 
-/** pdfkit embeds TrueType and OpenType files (collections need a face name, so they are skipped). */
-const EMBEDDABLE = ['.ttf', '.otf', '.woff', '.woff2'];
+/**
+ * pdfkit embeds TrueType, OpenType and WOFF files (collections need a face name, so they are skipped). WOFF2 is left
+ * out: pdfkit embeds it with empty glyphs, and DejaVu with a note is better than an invisible title.
+ */
+const EMBEDDABLE = ['.ttf', '.otf', '.woff'];
 
 /** The file of a system font's upright face, bold when asked and there is one. */
 export async function systemFontFile(family: string, bold: boolean): Promise<string | undefined> {

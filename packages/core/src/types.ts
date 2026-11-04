@@ -136,6 +136,11 @@ export interface BookSettings {
   chapterYears?: number;
   /** Print trim size. Default 6x9 inches. */
   trim?: TrimSize;
+  /**
+   * For printed books: start the title page, dedication, epigraph, contents and every chapter on a right-hand page,
+   * with the copyright page on the back of the title page. Adds blank pages. Default false (no blank pages).
+   */
+  rightHandChapters?: boolean;
   dedication?: string;
   epigraph?: string;
   epigraphSource?: string;

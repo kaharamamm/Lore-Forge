@@ -164,11 +164,13 @@ Version 0.4.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged
   delete the relationship. Every change is written to both entries' files at once and shows in the editor;
   **Ctrl+Z** undoes the last change.
 - **Print-ready Story Book.** The PDF is laid out like a printed book: 6 × 9 in trim by default (also
-  5.5 × 8.5 in and A5), mirrored margins with a wider inside edge for the binding, half-title, title page,
-  copyright page, optional dedication and epigraph, contents, each chapter starting on a right-hand page
-  with a drop cap, running heads (book title on left pages, chapter on right pages), page numbers from the
-  first chapter (none on chapter openings), a serif text face, justified and hyphenated text, and no
-  single lines left at the top or bottom of a page. **Save Word (.docx)…** writes the same book for Word
+  5.5 × 8.5 in and A5), the world's cover with the title, subtitle and author, mirrored margins with a wider
+  inside edge for the binding, title page, copyright page, optional dedication and epigraph, contents, each
+  chapter starting at the top of a new page with a drop cap, running heads (book title on left pages,
+  chapter on right pages), page numbers from the first chapter (none on chapter openings), a serif text
+  face, justified and hyphenated text, and no single lines left at the top or bottom of a page. There are
+  no blank pages; for a printed copy, **Start chapters on right-hand pages** (in the preview's Print
+  options, saved as `book.rightHandChapters`) opens the front pages and every chapter on a right-hand page. **Save Word (.docx)…** writes the same book for Word
   (Word fills in the contents page numbers when it opens the file). The preview shows the trim, the front
   pages and the openings; the book details (title, author, publisher, dedication, epigraph, copyright text)
   are edited there and saved in `world.json`.
@@ -264,8 +266,9 @@ Version 0.4.0 · world format `schemaVersion: 1` (worlds from 0.1 open unchanged
 - **CLI:** `lore check`, `lore export`, `lore codex`, `lore book`.
 - **JSON Schemas and an integration guide** so other tools can read worlds. See
   [docs/INTEGRATION.md](docs/INTEGRATION.md).
-- **Sample world:** `worlds/shifting-sands` triggers every rule on purpose. Its README maps each rule
-  to the entry that triggers it.
+- **Sample world:** `worlds/camelamamm`, a finished story with no problems in `check`.
+- **Test world:** `packages/core/test/fixtures/shifting-sands` triggers every rule on purpose. Its README maps
+  each rule to the entry that triggers it. It is a test fixture, so it does not show on the shelf.
 
 ## Install and run (Linux, Ubuntu-like)
 
@@ -281,7 +284,7 @@ cd Lore-Forge
 npm install          # also downloads the Electron binary
 npm test             # unit tests, rule tests, schema tests, CLI test
 npm run typecheck
-npm run lore -- check worlds/shifting-sands       # exits 1: the sample world has errors on purpose
+npm run lore -- check packages/core/test/fixtures/shifting-sands   # exits 1: the test world has errors on purpose
 npm run dev          # build and start the desktop app
 ```
 
@@ -408,7 +411,8 @@ packages/pdf       @lore-forge/pdf: renders those documents to PDF (pdfkit + Dej
 packages/cli       lore check / export / codex (alias bible) / book
 packages/desktop   Electron main + preload, Preact renderer, electron-builder config
 worlds/                   the worlds folder; new books go here when running from the source checkout
-worlds/shifting-sands     sample world that triggers every rule (and has one story chapter)
+worlds/camelamamm         the sample world (a six-chapter story), the one a new install opens with
+packages/core/test/fixtures/shifting-sands   test world that triggers every rule (and has one story chapter)
 docs/INTEGRATION.md       how other tools (AI-HQ, Game-Forge) read worlds
 ```
 
@@ -423,7 +427,7 @@ docs/INTEGRATION.md       how other tools (AI-HQ, Game-Forge) read worlds
 - App icon: `src/renderer/icon.svg` is the source; `npm run icons -w @lore-forge/desktop` (Electron, so it
   needs a display or `xvfb-run -a`) renders `build/icon.png`, `build/icons/*.png`, `build/icon.ico` and
   `build/icon.icns`.
-- Headless smoke test: `LORE_FORGE_SMOKE=1 LORE_FORGE_OPEN=$PWD/worlds/shifting-sands xvfb-run -a -s
+- Headless smoke test: `LORE_FORGE_SMOKE=1 LORE_FORGE_OPEN=$PWD/packages/core/test/fixtures/shifting-sands xvfb-run -a -s
   "-screen 0 2600x1500x24" npx electron packages/desktop --no-sandbox` prints `SMOKE OK {...}` and exits 0
   once the world has loaded and rendered, the views have been exercised at 1280 × 720, 1920 × 1080 and
   2560 × 1440 (the screen must be a little larger than the biggest size), and it has exported the PDFs and a

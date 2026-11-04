@@ -5,17 +5,45 @@
   "description": "An oasis city of tea houses and camel-folk, and the patient Mr Camel who wakes its silent well.",
   "calendar": {
     "eras": [
-      { "id": "BW", "name": "Before the Wells", "start": -600, "color": "#8a6a3d" },
-      { "id": "CR", "name": "Camelamamm Reckoning", "start": 1, "color": "#c9822f" }
+      {
+        "id": "BW",
+        "name": "Before the Wells",
+        "start": -600,
+        "color": "#8a6a3d"
+      },
+      {
+        "id": "CR",
+        "name": "Camelamamm Reckoning",
+        "start": 1,
+        "color": "#c9822f"
+      }
     ],
     "defaultEra": "CR",
     "months": [
-      { "name": "Dawnwind", "days": 60 },
-      { "name": "Saltsun", "days": 60 },
-      { "name": "Highheat", "days": 60 },
-      { "name": "Palmfall", "days": 60 },
-      { "name": "Duskwind", "days": 60 },
-      { "name": "Starfrost", "days": 60 }
+      {
+        "name": "Dawnwind",
+        "days": 60
+      },
+      {
+        "name": "Saltsun",
+        "days": 60
+      },
+      {
+        "name": "Highheat",
+        "days": 60
+      },
+      {
+        "name": "Palmfall",
+        "days": 60
+      },
+      {
+        "name": "Duskwind",
+        "days": 60
+      },
+      {
+        "name": "Starfrost",
+        "days": 60
+      }
     ],
     "approxYears": 5
   },

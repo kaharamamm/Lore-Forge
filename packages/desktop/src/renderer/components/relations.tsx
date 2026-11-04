@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { detailField, detailRelations, familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, TYPE_SINGULAR, WorldIndex, type Entry, type IconName, type RelationGroup, type World } from '@lore-forge/core';
+import { detailField, detailRelations, entryIcon, familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, TYPE_SINGULAR, WorldIndex, type Entry, type IconName, type RelationGroup, type World } from '@lore-forge/core';
 import { ENTRY_DRAG, LinkDialog, type GraphLink, type LinkDraft } from './link-edit.tsx';
 import { FamilyTreeSvg } from './graphs.tsx';
 import { RelationWebFlow } from './web.tsx';
@@ -174,7 +174,7 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
         <div class="graph-tools">
           <form class="connect-form" onSubmit={(e) => { e.preventDefault(); if (target) connect(entry.id, target); }}>
             <label for="connect-target">Connect {entry.name} to</label>
-            <Select id="connect-target" value={target} onChange={setTarget} placeholder="Pick an entry…" options={[...world.entries].filter((e) => e.id !== entry.id && (mode === 'web' || e.type === 'character')).sort((a, b) => a.name.localeCompare(b.name)).map((e) => ({ value: e.id, label: `${e.name} · ${TYPE_SINGULAR[e.type].toLowerCase()}` }))} />
+            <Select id="connect-target" value={target} onChange={setTarget} placeholder="Pick an entry…" options={[...world.entries].filter((e) => e.id !== entry.id && (mode === 'web' || e.type === 'character')).sort((a, b) => a.name.localeCompare(b.name)).map((e) => ({ value: e.id, label: `${e.name} · ${TYPE_SINGULAR[e.type].toLowerCase()}`, icon: entryIcon(e), tone: `t-${e.type}` }))} />
             <button type="submit" class="ghost small" disabled={!target}><Icon name="spider-web" /> Connect…</button>
           </form>
           <button type="button" class="ghost small undo-btn" disabled={!undo.length} onClick={undoLast} title={undo.length ? `Undo: ${undo[undo.length - 1]!.what}` : 'Nothing to undo'}><Icon name="fast-backward-button" /> Undo</button>

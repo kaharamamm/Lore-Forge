@@ -2,7 +2,7 @@ import type { ParsedDate } from '../dates.ts';
 import { GENERATOR } from '../snapshot.ts';
 import type { Entry, LoreEvent, Note, RefImage, StoryChapter, TrimSize, World } from '../types.ts';
 import { WorldIndex } from '../world-index.ts';
-import { chapterDate, wordCount } from '../story.ts';
+import { chapterDate } from '../story.ts';
 import { imageBlock } from './codex.ts';
 import { worldCoverArt } from '../cover.ts';
 import { anchorOf, bodyBlocks, dateWithEra, DEFAULT_TRIM, markDropCaps, TRIMS, type Block, type Doc } from './doc.ts';
@@ -36,6 +36,11 @@ export interface BookOptions {
   appendix?: boolean;
   /** Print trim size; default book.trim in world.json, else 6x9. */
   trim?: TrimSize;
+  /**
+   * For printed books: the title page, dedication, epigraph, contents and chapters start on right-hand pages (blank
+   * pages are added), the copyright page sits on the back of the title page. Default book.rightHandChapters, else off.
+   */
+  rightHandChapters?: boolean;
   /** Year on the copyright page; default the current year. */
   year?: number;
 }
@@ -135,8 +140,6 @@ export function storyBook(world: World, opts: BookOptions = {}): Doc {
   const chapters = bookChapters(world, opts);
   const written = writtenChapters(world);
   const blocks: Block[] = [];
-  const pages = chapters.reduce((n, c) => n + c.pages.length, 0);
-  let summary: string;
   let credit: string;
   if (written.length) {
     written.forEach((ch, n) => {
@@ -151,32 +154,35 @@ export function storyBook(world: World, opts: BookOptions = {}): Doc {
       blocks.push({ kind: 'para', text: 'The events and lore pages of the world, in story order.', style: 'muted' });
       blocks.push(...chronicleBlocks(chapters, ix, 2, false));
     }
-    const words = written.reduce((n, c) => n + wordCount(c.body), 0);
-    summary = `${written.length} chapter${written.length === 1 ? '' : 's'} · ${words.toLocaleString('en-US')} words${appendix ? ` · chronicle of ${pages} pages` : ''}`;
     credit = `Assembled by ${GENERATOR} from the story manuscript${appendix ? ' and the world\'s events and notes' : ''}. The text is the author's own; Lore-Forge only orders and typesets it.`;
   } else {
     blocks.push(...chronicleBlocks(chapters, ix, 1, true));
     if (!chapters.length) blocks.push({ kind: 'para', text: 'This world has no events or notes yet.', style: 'muted' });
-    summary = `${chapters.length} chapters · ${pages} stories from events and lore pages`;
     credit = `Assembled by ${GENERATOR} from the world's events and notes. The text is the author's own; Lore-Forge only orders and typesets it.`;
   }
   const subtitle = m.book?.title ? `A story of ${m.name}` : 'A Story Book';
   const trim = opts.trim ?? m.book?.trim ?? DEFAULT_TRIM;
+  const rightHand = opts.rightHandChapters ?? m.book?.rightHandChapters ?? false;
+  const author = m.book?.author?.trim();
   return {
     kind: 'book',
     title,
+    // A cover carries the title, subtitle and author only, like a bookshop cover; the credit is on the copyright page.
     cover: {
       title,
       subtitle,
-      lines: [...(m.book?.author ? [`by ${m.book.author}`] : []), summary, credit],
+      lines: author ? [`by ${author}`] : [],
       art: worldCoverArt(world),
     },
     blocks: [...frontMatter(world, title, subtitle, credit, opts), { kind: 'toc' }, ...markDropCaps(blocks)],
-    print: { trim: TRIMS[trim] ? trim : DEFAULT_TRIM },
+    print: { trim: TRIMS[trim] ? trim : DEFAULT_TRIM, ...(rightHand ? { rightHand: true } : {}) },
   };
 }
 
-/** Half-title, title page, copyright page, then the dedication and epigraph when world.json has them. */
+/**
+ * Title page, copyright page, then the dedication and epigraph when world.json has them. No half-title: the cover
+ * comes right before, so a page with the title alone only repeated it.
+ */
 function frontMatter(world: World, title: string, subtitle: string, credit: string, opts: BookOptions): Block[] {
   const b = world.manifest.book ?? {};
   const author = b.author?.trim();
@@ -185,7 +191,6 @@ function frontMatter(world: World, title: string, subtitle: string, credit: stri
     ? b.copyright.trim().split(/\n+/)
     : [`Copyright © ${year}${author ? ` ${author}` : ''}. All rights reserved.`];
   const out: Block[] = [
-    { kind: 'front', role: 'half-title', lines: [title] },
     { kind: 'front', role: 'title', lines: [title, subtitle, author ? `by ${author}` : '', b.publisher?.trim() ?? ''] },
     { kind: 'front', role: 'copyright', lines: [...copyright, ...(b.publisher?.trim() ? [`Published by ${b.publisher.trim()}`] : []), credit] },
   ];

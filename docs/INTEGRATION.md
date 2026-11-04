@@ -30,7 +30,7 @@ Every schema is in `packages/core/schemas/`, uses JSON Schema draft 2020-12, and
 | `story-chapter.schema.json` | the YAML header of a `story/*.md` chapter |
 | `story-ignored.schema.json` | `story-ignored.json` |
 
-The test suite validates the sample world (`worlds/shifting-sands`), a real `lore check --json` and a real `lore export` against
+The test suite validates the sample world (`worlds/camelamamm`), a real `lore check --json` and a real `lore export` against
 these schemas with ajv.
 
 ## World folder
@@ -296,12 +296,15 @@ chapterYears?})` picks the chapters: one per era, year ranges inside each era (d
 PDF are built from the same `Doc` with the same options. The CLI uses the defaults.
 
 The Story Book is a print layout (`doc.print.trim`, from `storyBook(world, {trim})`, else `book.trim`, else
-6x9). Its blocks start with `front` pages (`half-title`, `title`, `copyright`, then `dedication` and
-`epigraph` when set) and a `toc`; chapter headings have `opener: true` and the first paragraph of each
-chapter `dropCap: true`. `lore book <worldDir> -o out.docx` (or `renderDocx(doc, worldDir)` /
+6x9). Its cover carries the title, subtitle and author only. Its blocks start with `front` pages (`title`,
+`copyright`, then `dedication` and `epigraph` when set) and a `toc`; chapter headings have `opener: true`
+and the first paragraph of each chapter `dropCap: true`. Every front page and chapter starts a new page,
+with no blank pages; `doc.print.rightHand` (from `storyBook(world, {rightHandChapters})`, else
+`book.rightHandChapters`) starts them on right-hand pages for a printed copy, the copyright page on the back
+of the title page. `lore book <worldDir> -o out.docx` (or `renderDocx(doc, worldDir)` /
 `writeDocx(doc, worldDir, path)` in `@lore-forge/pdf`) writes the same book as a Word file: one section per
-chapter starting on an odd page, different first page, even/odd headers, page numbers from the first
-chapter, mirrored margins with a gutter, widow control and automatic hyphenation. Its table of contents is a
+chapter (starting on an odd page with right-hand chapters), different first page, even/odd headers, page
+numbers from the first chapter, mirrored margins with a gutter, widow control and automatic hyphenation. Its table of contents is a
 Word field that Word updates on opening.
 
 Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral `Doc`; `toMarkdown(doc)` is in

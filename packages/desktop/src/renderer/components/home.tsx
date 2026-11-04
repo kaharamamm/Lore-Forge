@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'preact/hooks';
-import { ENTRY_TYPES, isEnded, LIFECYCLE, racesOf, statusOf, TYPE_ICON, TYPE_LABELS, WorldIndex, type Entry, type IconName, type Warning, type World, type WorldCoverSettings } from '@lore-forge/core';
+import { ENTRY_TYPES, isEnded, LIFECYCLE, raceLabel, racesOf, statusOf, TYPE_ICON, TYPE_LABELS, WorldIndex, type Entry, type IconName, type Warning, type World, type WorldCoverSettings } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
 import { Portrait, WorldBookCover } from './cover.tsx';
 import { PictureEditor } from './picture.tsx';
@@ -26,7 +26,7 @@ interface Props {
 /** One line under a card: race or status for people and places, the summary for the rest. */
 function tagline(ix: WorldIndex, e: Entry): string {
   const status = LIFECYCLE[e.type]?.statuses.find((x) => x.value === statusOf(e));
-  const race = racesOf(e).map((r) => ix.nameOf(r)).join(', ') || undefined;
+  const race = racesOf(e).map((r) => raceLabel(r, (x) => ix.resolve(x)?.name)).join(', ') || undefined;
   return [race, status && status.value !== 'unknown' ? status.label : undefined].filter(Boolean).join(' · ') || e.summary || '';
 }
 

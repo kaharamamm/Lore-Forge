@@ -1,6 +1,7 @@
 import type { Ref } from 'preact';
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
-import { foldSearch } from '@lore-forge/core';
+import { foldSearch, type IconName } from '@lore-forge/core';
+import { Icon } from './icon.tsx';
 import { Popover } from './popover.tsx';
 
 export interface SelectOption {
@@ -9,6 +10,19 @@ export interface SelectOption {
   /** Options with the same group sit under one heading, in the order given. */
   group?: string;
   disabled?: boolean;
+  /** Drawn before the label, in the list and on the closed drop-down. */
+  icon?: IconName;
+  /** A small colour dot before the label (an era's colour). */
+  swatch?: string;
+  /** Colours the icon like an entry type (t-character, t-place, ...). */
+  tone?: string;
+}
+
+/** The icon or colour dot an option shows before its label. */
+function Mark({ o }: { o: SelectOption }) {
+  if (o.icon) return <Icon name={o.icon} class={`select-icon${o.tone ? ` ${o.tone}` : ''}`} />;
+  if (o.swatch) return <span class="select-swatch" style={{ background: o.swatch }} aria-hidden="true" />;
+  return null;
 }
 
 /**
@@ -96,6 +110,7 @@ export function Select({ id, value, options, onChange, class: cls, invalid, auto
         aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-invalid={invalid || undefined}
         aria-activedescendant={open && active >= 0 ? `${listId}-${active}` : undefined} data-value={value} {...aria}
         onClick={() => (open ? setOpen(false) : show())} onKeyDown={onKey}>
+        {current >= 0 && <Mark o={options[current]!} />}
         <span class={`select-value${current < 0 ? ' muted' : ''}`}>{current >= 0 ? options[current]!.label : placeholder}</span>
         <span class="select-chevron" aria-hidden="true" />
       </button>
@@ -111,7 +126,7 @@ export function Select({ id, value, options, onChange, class: cls, invalid, auto
                   <li key={o.value} id={`${listId}-${i}`} role="option" data-value={o.value} aria-selected={i === current} aria-disabled={o.disabled || undefined}
                     class={`select-option${i === active ? ' is-active' : ''}${o.group ? ' in-group' : ''}`}
                     onPointerDown={(e) => e.preventDefault()} onPointerMove={() => i !== active && enabled(i) && setActive(i)} onClick={() => { choose(i); button.current?.focus(); }}>
-                    {o.label}
+                    <Mark o={o} />{o.label}
                   </li>
                 </>
               );

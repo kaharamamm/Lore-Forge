@@ -67,13 +67,16 @@ export function ConfirmDialog({ title, subject, children, confirmLabel, confirmI
     <div class="modal-backdrop confirm-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section ref={box} class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text" onKeyDown={onKey}>
         <div class="confirm-mark" aria-hidden="true"><Icon name="hazard-sign" /></div>
-        <h2 id="confirm-title">{title}</h2>
-        {subject && <div class="confirm-subject">{subject}</div>}
-        <div id="confirm-text" class="confirm-text">{children}</div>
-        {problem && <p class="error-line" role="alert"><Icon name="cancel" /> {problem}</p>}
-        <div class="dialog-actions">
-          <button ref={cancel} type="button" class="ghost confirm-cancel" onClick={onClose}>{cancelLabel}</button>
-          <button type="button" class="danger-solid confirm-go" disabled={busy} onClick={() => void go()}><Icon name={confirmIcon} /> {confirmLabel}</button>
+        {/* The mark stands half above the dialog's top edge, so the dialog does not clip; this body scrolls instead. */}
+        <div class="confirm-scroll">
+          <h2 id="confirm-title">{title}</h2>
+          {subject && <div class="confirm-subject">{subject}</div>}
+          <div id="confirm-text" class="confirm-text">{children}</div>
+          {problem && <p class="error-line" role="alert"><Icon name="cancel" /> {problem}</p>}
+          <div class="dialog-actions">
+            <button ref={cancel} type="button" class="ghost confirm-cancel" onClick={onClose}>{cancelLabel}</button>
+            <button type="button" class="danger-solid confirm-go" disabled={busy} onClick={() => void go()}><Icon name={confirmIcon} /> {confirmLabel}</button>
+          </div>
         </div>
       </section>
     </div>

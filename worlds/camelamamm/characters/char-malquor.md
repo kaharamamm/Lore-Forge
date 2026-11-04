@@ -6,6 +6,11 @@ aliases:
   - Steward Malquor
 summary: Steward of Water of Camelamamm and secret head of the Dry Hand, who dammed the Singing Well to sell its water.
 race: human
+gender: male
+title: Steward of Water
+occupation: Steward of Water, later a prisoner
+personality: Polite, precise, certain that everything has a price.
+goals: To own every drop of water in the Sunsea.
 born: "462"
 status: alive
 locations:
@@ -17,11 +22,6 @@ relations:
     from: "505"
   - type: enemy-of
     target: char-mr-camel
-title: Steward of Water
-gender: male
-occupation: Steward of Water, later a prisoner
-personality: Polite, precise, certain that everything has a price.
-goals: To own every drop of water in the Sunsea.
 visual:
   appearance: Thin, clean-shaven man with silver hair combed flat and pale, careful hands.
   build: Tall and narrow.

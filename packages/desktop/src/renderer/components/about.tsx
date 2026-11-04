@@ -25,7 +25,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
   return (
     <div class="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section class="about" role="dialog" aria-modal="true" aria-labelledby="about-title">
-        <header class="about-head">
+        <header class="about-head dialog-head">
           <Icon name="laurels" class="about-mark" />
           <div>
             <h2 id="about-title">Lore-Forge</h2>
@@ -33,6 +33,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           </div>
           <button ref={close} type="button" class="ghost small" onClick={onClose}>Close</button>
         </header>
+        <div class="dialog-body">
         <h3>Credits and licences</h3>
         <dl class="credits">
           {CREDITS.map(([what, who, license, url]) => (
@@ -43,6 +44,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           ))}
         </dl>
         <p class="muted small-print">Game icons are used unchanged except for colour and size, under {ICON_CREDITS.license} ({ICON_CREDITS.licenseUrl}).</p>
+        </div>
       </section>
     </div>
   );

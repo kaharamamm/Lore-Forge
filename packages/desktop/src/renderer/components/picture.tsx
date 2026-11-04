@@ -1,3 +1,4 @@
+import { createPortal } from 'preact/compat';
 import { useEffect, useRef } from 'preact/hooks';
 import { ENTRY_ICON_NAMES, TYPE_ICON, type Entry, type IconName, type Picture } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
@@ -37,10 +38,11 @@ export function PictureEditor({ dir, entry, onChange, onClose }: { dir: string; 
     onChange({ ...rest, images: [...images, { file, view: 'concept', provenance: { ...prev?.provenance, date: new Date().toISOString().slice(0, 10) } }], picture: { ...pic, image: file } } as Entry);
   };
   const current = entryEmblem(entry);
-  return (
+  // In <body>, like every modal: inside a pane, the side panels next to it could paint over it.
+  return createPortal(
     <div class="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section class={`about picture-editor t-${entry.type}`} role="dialog" aria-modal="true" aria-labelledby="picture-title">
-        <div class="picture-head">
+        <div class="picture-head dialog-head">
           <span class="picture-preview"><Portrait entry={entry} size="lg" /></span>
           <div>
             <h2 id="picture-title">Picture for {entry.name}</h2>
@@ -52,14 +54,17 @@ export function PictureEditor({ dir, entry, onChange, onClose }: { dir: string; 
             </div>
           </div>
         </div>
+        <div class="dialog-body">
         <h3>Icon</h3>
         <IconPicker label="Icon" choices={ICON_CHOICES} value={current} onPick={(name) => name && set({ icon: name })} />
         <div class="grid-2 picture-colours">
           <ColorField label="Background" value={pic.color ?? '#2b2f3a'} swatches={BACKGROUNDS} onChange={(c) => set({ color: c })} />
           <ColorField label="Icon colour" value={pic.accent ?? '#e0bd6a'} swatches={ACCENTS} onChange={(c) => set({ accent: c })} />
         </div>
+        </div>
         <div class="dialog-actions"><button type="button" class="primary" onClick={onClose}>Done</button></div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

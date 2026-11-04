@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "intended": [
+    {
+      "warningId": "after-death:evt-return-of-nur:char-nur",
+      "note": "Resurrection. Nur comes back from the dead on purpose.",
+      "markedAt": "2026-10-30"
+    }
+  ]
+}

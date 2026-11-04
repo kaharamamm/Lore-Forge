@@ -1,7 +1,7 @@
 import { Fragment } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
-  chapterDate, ENTRY_TYPES, guessEntry, sentences, type Guess, relationLabel, TYPE_ICON, TYPE_SINGULAR, wordCount, WorldIndex,
+  chapterDate, ENTRY_TYPES, entryIcon, guessEntry, sentences, type Guess, relationLabel, TYPE_ICON, TYPE_SINGULAR, wordCount, WorldIndex,
   type Entry, type EntryType, type Proposal, type ProposalFields, type SourceSpan, type StoryAnalysis, type StoryChapter, type Warning, type World,
 } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
@@ -374,7 +374,7 @@ function ProposalForm({ p, onSave, onCancel }: { p: Proposal; onSave: (p: Propos
         <div class="row">
           <label class="field">
             <span>Type</span>
-            <Select value={type} onChange={(v) => setType(v as EntryType)} options={ENTRY_TYPES.map((t) => ({ value: t, label: TYPE_SINGULAR[t] }))} />
+            <Select value={type} onChange={(v) => setType(v as EntryType)} options={ENTRY_TYPES.map((t) => ({ value: t, label: TYPE_SINGULAR[t], icon: TYPE_ICON[t], tone: `t-${t}` }))} />
           </label>
           <label class="field">
             <span>Name</span>
@@ -414,7 +414,7 @@ function MergeForm({ p, world, onMerge, onCancel }: { p: Proposal; world: World;
     <form class="proposal-form" onSubmit={(e) => { e.preventDefault(); if (id) onMerge(id); }} onKeyDown={(e) => e.key === 'Escape' && onCancel()}>
       <label class="field">
         <span>Merge “{p.name}” into</span>
-        <Select value={id} onChange={setId} autoFocus options={choices.map((e) => ({ value: e.id, label: `${e.name} (${TYPE_SINGULAR[e.type].toLowerCase()})` }))} />
+        <Select value={id} onChange={setId} autoFocus options={choices.map((e) => ({ value: e.id, label: `${e.name} (${TYPE_SINGULAR[e.type].toLowerCase()})`, icon: entryIcon(e), tone: `t-${e.type}` }))} />
       </label>
       <div class="row">
         <button type="submit" class="primary small" disabled={!id}><Icon name="linked-rings" /> Merge</button>

@@ -1,8 +1,9 @@
 /**
- * Word (.docx) export of a print Story Book. Same structure as the print PDF: half-title, title page,
- * copyright page, optional dedication and epigraph, contents, then each chapter on a right-hand page with a
- * drop cap, running heads (book title left, chapter right), page numbers from the first chapter (none on
- * openers), mirrored margins with a gutter, widow/orphan control and automatic hyphenation.
+ * Word (.docx) export of a print Story Book. Same structure as the print PDF after its cover: title page,
+ * copyright page, optional dedication and epigraph, contents, then each chapter on a new page with a drop cap,
+ * running heads (book title left, chapter right), page numbers from the first chapter (none on openers), mirrored
+ * margins with a gutter, widow/orphan control and automatic hyphenation. With right-hand chapters (doc.print.rightHand)
+ * the front pages and chapters open on right-hand pages, the copyright page on the back of the title page.
  * Word fills in the contents page numbers when it opens the file (it asks to update fields).
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -38,6 +39,8 @@ const LINE = 300; // twips: 15pt leading
 const MUTED = '6B6B6B';
 const ACCENT = '3D2A14';
 const tw = (pt: number) => Math.round(pt * 20);
+/** Space above a chapter opener's label, in points, as in the PDF. */
+const OPENER_SINK = 18;
 
 type Section = { kind: 'front' | 'toc' | 'chapter'; title?: string; children: Paragraph[] };
 
@@ -55,8 +58,6 @@ function frontPage(b: Extract<Block, { kind: 'front' }>, pageH: number): Paragra
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: o.before ?? 0, after: o.after ?? 120 }, children: [new TextRun({ text, size: o.size, bold: o.bold, italics: o.italics, color: o.color, font: FONT })] });
   const [first = '', ...rest] = b.lines.filter((l) => l !== '');
   switch (b.role) {
-    case 'half-title':
-      return [centered(first, { size: 32, before: tw(pageH * 0.28), color: ACCENT })];
     case 'title': {
       const [subtitle, ...tail] = rest;
       return [
@@ -125,8 +126,8 @@ function sections(doc: Doc, worldDir: string, pageH: number, textW: number): Sec
         kind: 'chapter',
         title,
         children: [
-          ...(label ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: tw(pageH * 0.18), after: 120 }, keepNext: true, children: [new TextRun({ text: label.toUpperCase(), size: 19, characterSpacing: 40, color: MUTED })] })] : []),
-          new Paragraph({ heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: label ? 0 : tw(pageH * 0.18) + 400, after: 600 }, children: [new TextRun({ text: title })] }),
+          ...(label ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: tw(OPENER_SINK), after: 120 }, keepNext: true, children: [new TextRun({ text: label.toUpperCase(), size: 19, characterSpacing: 40, color: MUTED })] })] : []),
+          new Paragraph({ heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: label ? 0 : tw(OPENER_SINK), after: 600 }, children: [new TextRun({ text: title })] }),
         ],
       });
       afterPara = false;
@@ -196,13 +197,15 @@ export async function renderDocx(doc: Doc, worldDir: string): Promise<Buffer> {
   const emptyFoot = { default: new Footer({ children: [] }), first: new Footer({ children: [] }), even: new Footer({ children: [] }) };
   const head = (text: string) => new Header({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: text.toUpperCase(), size: 15, characterSpacing: 30, color: MUTED })] })] });
   const folio = () => new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: [PageNumber.CURRENT], size: 18 })] })] });
+  // Every section starts a new page; only a book for a printer starts them on right-hand (odd) pages.
+  const opens = doc.print?.rightHand ? SectionType.ODD_PAGE : SectionType.NEXT_PAGE;
   let firstChapter = true;
   const secs: ISectionOptions[] = sections(doc, worldDir, trim.height, textW).map((s) => {
-    if (s.kind !== 'chapter') return { properties: { type: SectionType.ODD_PAGE, page }, headers: empty, footers: emptyFoot, children: s.children };
+    if (s.kind !== 'chapter') return { properties: { type: opens, page }, headers: empty, footers: emptyFoot, children: s.children };
     const start = firstChapter;
     firstChapter = false;
     return {
-      properties: { type: SectionType.ODD_PAGE, titlePage: true, page: { ...page, ...(start ? { pageNumbers: { start: 1 } } : {}) } },
+      properties: { type: opens, titlePage: true, page: { ...page, ...(start ? { pageNumbers: { start: 1 } } : {}) } },
       headers: { default: head(s.title ?? doc.title), even: head(doc.title), first: new Header({ children: [] }) },
       footers: { default: folio(), even: folio(), first: new Footer({ children: [] }) },
       children: s.children,

@@ -11,7 +11,7 @@ const USED = [
   // relation groups
   'family-tree', 'shaking-hands', 'crown', 'backpack', 'position-marker', 'open-book', 'linked-rings', 'diamond-ring',
   // races and kinds
-  'woman-elf-face', 'dwarf-face', 'orc-head', 'camel-head', 'daemon-skull', 'shambling-zombie', 'vampire-dracula', 'spectre', 'djinn', 'hood',
+  'woman-elf-face', 'dwarf-face', 'orc-head', 'camel-head', 'daemon-skull', 'shambling-zombie', 'vampire-dracula', 'spectre', 'djinn', 'hood', 'fox-head',
   // app
   'quill-ink', 'hourglass', 'sands-of-time', 'spider-web', 'book-cover', 'magnifying-glass', 'hazard-sign', 'cancel', 'check-mark', 'save', 'trash-can',
   'quill', 'photo-camera', 'palette', 'sprout', 'compass', 'pointing', 'laurels', 'plain-arrow', 'perspective-dice-six-faces-random', 'spell-book', 'rune-stone', 'candle-flame', 'magic-swirl', 'treasure-map', 'world', 'return-arrow',

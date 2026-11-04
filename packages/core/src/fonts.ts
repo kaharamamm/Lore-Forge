@@ -1,13 +1,13 @@
 /**
  * Cover title fonts that ship with the app (all SIL Open Font License 1.1). The desktop app loads them as web fonts and
- * the PDF embeds the same files, so a cover looks alike on the shelf and in print. Any other family name in world.json
+ * the PDF embeds the same faces (as .woff, which pdfkit can embed), so a cover looks alike on the shelf and in print. Any other family name in world.json
  * "cover.font" is a system font: used when this computer has it, else the title style's lettering.
  */
 export interface BundledFont {
   family: string;
   /** Rough look, shown next to the name in the picker. */
   kind: 'serif' | 'sans' | 'decorative' | 'blackletter' | 'script';
-  /** @fontsource package id (files/<id>-latin-<weight>-normal.woff2), or "liberation" for the TTFs in packages/pdf/fonts. */
+  /** @fontsource package id (files/<id>-latin-<weight>-normal.woff2 on screen, .woff in the PDF), or "liberation" for the TTFs in packages/pdf/fonts. */
   source: string;
   /** The weights shipped; the first is the regular face. */
   weights: number[];

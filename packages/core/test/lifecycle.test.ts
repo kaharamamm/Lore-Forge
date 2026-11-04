@@ -58,9 +58,11 @@ test('race: parsed, saved, suggested from the world first', async () => {
   assert.equal(r.entry?.race, 'ghoul');
   assert.equal(r.entry?.extra, undefined);
   assert.match(serializeEntry(r.entry as never), /^race: ghoul$/m);
+  // Suggested with a capital first letter, the world's own first, and each race once whatever its case.
   const s = raceSuggestions([r.entry as never]);
-  assert.equal(s[0], 'ghoul');
-  assert.ok(s.includes('vampire') && s.includes('human'));
+  assert.equal(s[0], 'Ghoul');
+  assert.ok(s.includes('Vampire') && s.includes('Human'));
+  assert.equal(s.filter((x) => x.toLowerCase() === 'ghoul').length, 1);
 });
 
 test('every status, race and type has a game-icon', async () => {

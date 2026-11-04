@@ -112,6 +112,33 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--er
 .select-option[aria-selected='true'] { color: var(--gold); font-weight: 600; box-shadow: inset 3px 0 0 var(--gold); }
 .select-option.is-active { background: var(--selected-bg); color: var(--selected-ink); }
 .select-option[aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
+/* An option's icon (relation groups, entry types) or colour dot (eras), in the list and on the closed drop-down. */
+.select-option:has(.select-icon, .select-swatch) { display: flex; align-items: center; gap: 0.5rem; }
+.select-icon { flex: none; width: 1.05rem; height: 1.05rem; color: var(--tc, var(--gold)); }
+.select-option.is-active .select-icon { color: inherit; }
+.select-swatch { flex: none; width: 0.75rem; height: 0.75rem; border-radius: 50%; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.25); }
+/* Text boxes with suggestions (suggest.tsx): the box keeps room on the right for a chevron that shows the whole
+   list; the list is the same themed list as the drop-downs, with an icon, the label (typed text marked) and a muted
+   detail per row. */
+.suggest { position: relative; display: flex; align-items: center; min-width: 0; }
+.suggest > input { padding-right: 2.2rem; }
+/* The value's own icon at the start of the box (a gender, a kind), like its row in the list. */
+.suggest > .suggest-lead { position: absolute; left: 0.7rem; top: 50%; translate: 0 -50%; width: 1.15rem; height: 1.15rem; color: var(--gold); pointer-events: none; }
+.suggest > input.has-lead { padding-left: 2.25rem; }
+.suggest-toggle { display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 6px; background: transparent; flex: none; }
+.suggest > .suggest-toggle { position: absolute; right: 0.2rem; top: 50%; translate: 0 -50%; }
+.suggest-toggle:hover { background: var(--panel-2); }
+.suggest-toggle.is-open .select-chevron { transform: translateY(0.2rem) rotate(-135deg); }
+.chip-input > .suggest-toggle { margin-left: auto; }
+.suggest-popover .select-list { max-height: min(20rem, 60vh); }
+.suggest-option { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.suggest-icon { flex: none; width: 1.1rem; height: 1.1rem; color: var(--tc, var(--gold)); }
+.suggest-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.suggest-label mark { background: none; color: var(--gold); text-decoration: underline; text-underline-offset: 2px; }
+.suggest-option.is-active .suggest-label mark { color: inherit; }
+.suggest-detail { flex: 1 1 auto; min-width: 0; margin-left: 0.4rem; text-align: right; font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggest-option.is-active .suggest-detail { color: inherit; opacity: 0.8; }
+.suggest-option.is-current .suggest-label { color: var(--gold); }
 @media (prefers-reduced-motion: reduce) { .popover { animation: none; } .select-chevron { transition: none; } }
 .row.nowrap { flex-wrap: nowrap; }
 .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
@@ -124,7 +151,8 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--er
 .world-title h1 { margin: 0; font-size: 1.35rem; min-width: 0; }
 .nav-back { flex: none; }
 .nav-back:disabled { opacity: 0.35; cursor: default; }
-.icon.flip-x { transform: scaleX(-1); }
+/* game-icons' plain-arrow points down: turned a quarter it points left (the Back button). */
+.icon.point-left { transform: rotate(90deg); }
 /* The world's mini book and its title are one button to world home. Hover: the cover swings open on its left
    hinge onto a glowing page (reduced motion: the glow only). */
 .world-home-btn { display: flex; align-items: center; gap: 0.7rem; min-width: 0; padding: 0.2rem 0.6rem 0.2rem 0.3rem; border: 1px solid transparent; background: none; border-radius: 8px; font: inherit; color: inherit; }
@@ -262,6 +290,9 @@ mark.search-hit { color: var(--text); background: rgb(224 189 106 / 0.26); borde
 .chip .icon { flex: none; width: 1.05rem; height: 1.05rem; color: var(--gold); }
 .chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .chip.is-invalid { border-color: var(--error); }
+.chip-input.is-invalid { border-color: var(--error); border-width: 2px; }
+/* An entry chip's icon takes its type colour, like the picture it stands for. */
+.chip[class*=' t-'] .icon { color: var(--tc); }
 .chip-remove { width: 1.5rem; height: 1.5rem; padding: 0; border-radius: 50%; border: 0; background: transparent; color: var(--muted); line-height: 1; font-size: 1.05rem; }
 .chip-remove:hover { background: var(--error-bg); color: var(--error); }
 .editor-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
@@ -332,15 +363,46 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 0.5rem; color: var(--ok); }
 .chip-missing { color: var(--error); border-color: var(--error); }
 
-/* Images */
-.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.75rem; }
-.image-slot { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.55rem; display: flex; flex-direction: column; gap: 0.45rem; min-width: 0; }
-.image-slot-empty { border-style: dashed; }
-.thumb { width: 100%; aspect-ratio: 3 / 4; object-fit: contain; background: var(--bg); border-radius: 6px; }
-.thumb-empty { display: grid; place-items: center; color: var(--muted); font-size: 0.9rem; text-align: center; padding: 0.5rem; overflow-wrap: anywhere; }
-.provenance summary { cursor: pointer; font-size: 0.9rem; overflow-wrap: anywhere; }
-.provenance .field { margin-top: 0.4rem; }
+/* Reference images: a gallery of equal tiles, one per view. An empty tile is a dashed button that adds an image;
+   a filled tile shows the picture with its view underneath and three small buttons on hover or focus. Details
+   (where an image came from) open in one panel under the gallery. */
+.ref-images-help { margin: 0 0 0.6rem; }
+.ref-images-count { color: var(--gold); font-weight: 600; white-space: nowrap; }
+.ref-images-where { white-space: nowrap; }
+.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.25rem, 1fr)); gap: 0.65rem; }
+.image-slot { position: relative; display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; padding: 0.45rem; margin: 0; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel); color: var(--text); text-align: left; font: inherit; transition: border-color var(--ease), box-shadow var(--ease), transform var(--ease); }
+.image-slot-frame { position: relative; display: grid; place-items: center; aspect-ratio: 3 / 4; border-radius: 7px; overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, rgb(255 255 255 / 0.04), transparent 70%), var(--bg); }
+.image-slot-label { font-weight: 600; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.image-slot-unusual { font-weight: 400; color: var(--warning); }
+.image-slot-empty { border-style: dashed; border-color: color-mix(in srgb, var(--gold-soft) 70%, var(--border)); background: transparent; cursor: pointer; }
+.image-slot-empty .image-slot-frame { background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem; color: var(--muted); }
+.image-slot-add { width: 1.7rem; height: 1.7rem; color: var(--gold); opacity: 0.55; transition: opacity var(--ease), transform var(--ease); }
+.image-slot-hint { font-size: 0.8rem; }
+.image-slot-empty .image-slot-label { color: var(--muted); }
+.image-slot-empty:hover, .image-slot-empty:focus-visible { border-color: var(--gold); background: rgb(224 189 106 / 0.05); }
+.image-slot-empty:hover .image-slot-add, .image-slot-empty:focus-visible .image-slot-add { opacity: 1; transform: scale(1.08); }
+.image-slot-empty:hover .image-slot-hint, .image-slot-empty:focus-visible .image-slot-hint { color: var(--gold); }
+.image-slot:not(.image-slot-empty) { border-color: var(--gold-soft); }
+.image-slot.is-open { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-glow); }
+.image-slot-actions { position: absolute; top: 0.8rem; right: 0.8rem; display: flex; gap: 0.25rem; opacity: 0; transition: opacity var(--ease); }
+.image-slot:hover .image-slot-actions, .image-slot:focus-within .image-slot-actions, .image-slot.is-open .image-slot-actions { opacity: 1; }
+.image-slot-actions button { width: 1.9rem; height: 1.9rem; min-height: 0; padding: 0; display: grid; place-items: center; border-radius: 50%; background: rgb(12 10 8 / 0.82); border: 1px solid var(--gold-soft); }
+.image-slot-actions button .icon { width: 0.95rem; height: 0.95rem; }
+.image-slot-actions button.danger:hover { color: var(--error); border-color: var(--error); background: var(--error-bg); }
+.thumb { width: 100%; height: 100%; object-fit: contain; }
+.thumb-empty { display: grid; place-items: center; align-content: center; gap: 0.2rem; color: var(--muted); font-size: 0.85rem; text-align: center; padding: 0.5rem; overflow-wrap: anywhere; }
+.thumb-empty .icon { color: var(--warning); }
+.image-details { margin-top: 0.8rem; padding: 0.75rem 0.9rem 0.9rem; border: 1px solid var(--gold-soft); border-radius: 10px; background: rgb(0 0 0 / 0.18); animation: pop var(--ease); }
+.image-details-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.8rem; }
+.image-details-head h4 { margin: 0; color: var(--gold); font-size: 0.95rem; }
+.image-details-head h4 .icon { width: 1rem; height: 1rem; vertical-align: -0.15rem; }
+.image-details-head .file-path { flex: 1; min-width: 8rem; }
+.image-details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.2rem 0.9rem; margin-top: 0.3rem; }
+.image-details-grid > .field:has(textarea) { grid-column: 1 / -1; }
 .file-path { font-size: 0.8rem; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .image-slot-actions { opacity: 1; } }
 
 /* Timeline: label column sticky on the left, px-based track for zoom. */
 .timeline, .relations { display: flex; flex-direction: column; gap: 0.85rem; }
@@ -482,27 +544,40 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .preview-head p { margin: 0; font-size: 0.9rem; flex: 1 1 16rem; }
 .preview-actions { display: flex; gap: 0.5rem; }
 .preview-body { flex: 1; display: flex; min-height: 0; position: relative; isolation: isolate; }
-.preview-options { flex: 0 0 15rem; background: var(--panel); overflow-y: auto; padding: 0.8rem 1rem; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.8rem; }
-.preview-options fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.75rem 0.7rem; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.preview-options { flex: 0 0 19rem; background: var(--panel); overflow-y: auto; padding: 0.8rem 0.8rem; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.8rem; }
+.preview-options fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.7rem 0.7rem; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; min-inline-size: 0; }
 .preview-options legend { font-weight: 600; padding: 0 0.3rem; }
 .check { display: flex; gap: 0.45rem; align-items: center; cursor: pointer; }
 .inline-field span { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
 .preview-pages { flex: 1; overflow-y: auto; padding: 1.5rem; background: rgb(14 16 20 / 0.78); display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+/* Sheets keep their page shape: as flex items they would otherwise shrink to fit, and the cover (min-height 0) shrank to a strip. */
+.preview-pages > .sheet { flex-shrink: 0; }
 .sheet { width: min(100%, 46rem); background: #fbf8f1; color: #23201b; border-radius: 4px; box-shadow: 0 8px 30px rgb(0 0 0 / 0.5); padding: 2.6rem 3rem; font-family: 'DejaVu Sans', system-ui, sans-serif; font-size: 0.95rem; line-height: 1.55; }
 .sheet-cover { min-height: 28rem; display: flex; flex-direction: column; justify-content: center; text-align: center; }
 .sheet-title { font-size: 2.2rem; font-weight: 800; margin: 0 0 0.5rem; color: #2d3e66; }
 .sheet-sub { font-size: 1.15rem; margin: 0 0 1rem; }
-.sheet-cover.has-art { position: relative; padding: 0; overflow: hidden; aspect-ratio: 595 / 842; min-height: 0; justify-content: flex-end; }
-.sheet-cover.has-art.is-print { aspect-ratio: 432 / 648; }
+/* The cover sheet is drawn like the PDF cover, in units of the page width (cqw): the art fills the page, the two gold
+   frames follow the page's own shape (the shelf cover's 3:4 drawing would clip them on a taller page), and the text
+   starts 56% of the way down. */
+.sheet-cover.has-art { position: relative; padding: 0; overflow: hidden; aspect-ratio: 595 / 842; min-height: 0; justify-content: flex-end; container-type: inline-size; }
+.sheet-cover.has-art.is-print { aspect-ratio: 432 / 648; padding: 0; }
 .sheet-cover.has-art.trim-5-5x8-5 { aspect-ratio: 396 / 612; }
 .sheet-cover.has-art.trim-a5 { aspect-ratio: 419.53 / 595.28; }
 .sheet-cover.has-art .world-cover { position: absolute; inset: 0; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
-.sheet-cover-text { position: relative; padding: 0 12% 24%; color: #efe3c4; text-shadow: 0 2px 6px rgb(0 0 0 / 0.85); }
-.sheet-cover-text .sheet-title { font-family: var(--display); font-weight: 700; font-size: 2rem; }
+.sheet-cover.has-art .cover-frame { display: none; }
+.sheet-cover.has-art::before, .sheet-cover.has-art::after { content: ''; position: absolute; z-index: 1; pointer-events: none; border: solid #e0bd6a; }
+.sheet-cover.has-art::before { inset: 4.17cqw; border-width: 0.35cqw; border-radius: 2.5cqw; opacity: 0.75; }
+.sheet-cover.has-art::after { inset: 6.67cqw; border-width: 0.23cqw; border-radius: 1.67cqw; opacity: 0.35; }
+.sheet-cover-text { position: absolute; top: 56%; left: 0; right: 0; padding: 0 11.7cqw; color: #efe3c4; text-shadow: 0 2px 6px rgb(0 0 0 / 0.85); }
+.sheet-cover-text .sheet-title { font-family: var(--display); font-weight: 700; font-size: 5.4cqw; line-height: 1.2; margin: 0 0 1.4cqw; text-wrap: balance; }
 .sheet-cover-text .sheet-title.title-display { text-transform: uppercase; letter-spacing: 0.06em; }
 .sheet-cover-text .sheet-title.title-serif { font-family: 'DejaVu Serif', Georgia, serif; font-style: italic; }
 .sheet-cover-text .sheet-title.title-sans { font-family: 'DejaVu Sans', system-ui, sans-serif; }
-.sheet-cover-text .doc-small { color: #d9ccad; margin: 0.2rem 0; }
+.sheet-cover-text :is(.sheet-sub, .sheet-cover-line) { font-family: 'DejaVu Serif', Georgia, serif; }
+.sheet-cover-text .sheet-sub { font-size: 2.9cqw; margin: 0 0 3.2cqw; }
+.sheet-cover-text .sheet-cover-line { color: #d9ccad; font-size: 1.7cqw; margin: 0 0 0.9cqw; }
+/* A print book's cover has only the author there, as large as on a bookshop cover. */
+.sheet-cover.is-print .sheet-cover-text .sheet-cover-line { color: #efe3c4; font-size: 2.33cqw; }
 .sheet .doc-h { color: #2d3e66; margin: 1.1rem 0 0.4rem; }
 .sheet .doc-h1 { font-size: 1.55rem; border-bottom: 2px solid #2d3e66; padding-bottom: 0.2rem; }
 .sheet .doc-h2 { font-size: 1.2rem; }
@@ -643,7 +718,8 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .aura::before { content: ''; position: absolute; inset: 8% 12% auto; height: 60%; background: radial-gradient(closest-side, rgb(224 189 106 / 0.12), transparent); filter: blur(30px); animation: aura-breathe 9s ease-in-out infinite alternate; }
 .mote { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%; background: #ffe7a8; box-shadow: 0 0 6px 2px rgb(255 214 120 / 0.55);
   opacity: 0; animation: mote-drift var(--t) linear var(--delay) infinite; }
-@keyframes mote-drift { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 0.8; } 60% { opacity: 0.45; } 100% { transform: translate(2.5rem, -14rem); opacity: 0; } }
+/* Motes rise and twinkle; each leans its own way (--dx). */
+@keyframes mote-drift { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 0.8; } 32% { opacity: 0.35; } 48% { opacity: 0.75; } 68% { opacity: 0.3; } 100% { transform: translate(var(--dx, 2.5rem), -14rem); opacity: 0; } }
 @keyframes aura-breathe { from { opacity: 0.55; transform: scale(0.96); } to { opacity: 1; transform: scale(1.04); } }
 /* The calmer sky behind the world views and the publish preview: fewer, fainter motes and a smaller glow. */
 .app { isolation: isolate; }
@@ -651,37 +727,73 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .aura.is-calm::before { inset: 4% 25% auto; height: 45%; background: radial-gradient(closest-side, rgb(224 189 106 / 0.08), transparent); }
 .aura.is-local { position: absolute; }
 html.is-hidden .mote, html.is-hidden .aura::before { animation-play-state: paused; }
-/* The library scene: light shaft with dust, drifting runes, candle glow; each layer shifts a little with the mouse. */
+/* The library scene (aura.tsx), back to front: clouds of colour, beams of light with dust, runes, candles with
+   embers, floor mist, out-of-focus specks of light, a vignette. Each depth layer shifts with the mouse, the
+   nearest the most. Only transform and opacity animate; values that differ per element come in as custom
+   properties from aura.tsx. */
 .scene { position: absolute; inset: 0; --px: 0; --py: 0; }
 .scene-layer { position: absolute; inset: -3rem; transition: transform 900ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.scene-layer.depth-0 { transform: translate3d(calc(var(--px) * -4px), calc(var(--py) * -3px), 0); }
 .scene-layer.depth-1 { transform: translate3d(calc(var(--px) * -10px), calc(var(--py) * -6px), 0); }
 .scene-layer.depth-2 { transform: translate3d(calc(var(--px) * -22px), calc(var(--py) * -14px), 0); }
 .scene-layer.depth-3 { transform: translate3d(calc(var(--px) * 8px), calc(var(--py) * 5px), 0); }
-.light-shaft { position: absolute; top: -10%; left: 8%; width: 26rem; height: 130%; transform: rotate(-24deg); transform-origin: 50% 0;
-  background: linear-gradient(90deg, transparent, rgb(255 224 160 / 0.055) 30%, rgb(255 230 175 / 0.08) 50%, rgb(255 224 160 / 0.06) 70%, transparent);
-  -webkit-mask-image: linear-gradient(180deg, #000 10%, transparent 85%); mask-image: linear-gradient(180deg, #000 10%, transparent 85%);
-  animation: shaft-sway 14s ease-in-out infinite alternate; }
-@keyframes shaft-sway { from { opacity: 0.7; } to { opacity: 1; } }
-.dust { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%; background: #fff1c9; opacity: 0;
+.scene-layer.depth-4 { transform: translate3d(calc(var(--px) * -40px), calc(var(--py) * -26px), 0); }
+/* Clouds of colour that drift and swell over a minute or more. */
+.nebula { position: absolute; width: 60rem; height: 42rem; border-radius: 50%; animation: nebula-drift 64s ease-in-out infinite alternate; }
+.nebula-gold { top: -20rem; left: calc(50% - 30rem); background: radial-gradient(closest-side, rgb(224 189 106 / 0.13), rgb(224 189 106 / 0.04) 55%, transparent); }
+.nebula-violet { top: 38%; right: -24rem; background: radial-gradient(closest-side, rgb(150 110 255 / 0.11), rgb(150 110 255 / 0.035) 55%, transparent); animation-duration: 78s; animation-delay: -30s; }
+.nebula-blue { top: 50%; left: -26rem; background: radial-gradient(closest-side, rgb(80 170 255 / 0.09), rgb(80 170 255 / 0.03) 55%, transparent); animation-duration: 70s; animation-delay: -12s; }
+@keyframes nebula-drift { 0% { transform: translate(0, 0) scale(1); opacity: 0.7; } 50% { transform: translate(3rem, -2rem) scale(1.08); opacity: 1; } 100% { transform: translate(-3rem, 1.5rem) scale(0.94); opacity: 0.8; } }
+/* Beams from a high window on the left, swaying a degree or so; dust drifts down each beam and catches the light. */
+.light-shaft { position: absolute; top: -12%; left: var(--sx); width: var(--sw); height: 135%; transform-origin: 50% 0; transform: rotate(var(--a)); opacity: var(--so);
+  background: linear-gradient(90deg, transparent, rgb(255 224 160 / 0.08) 22%, rgb(255 236 190 / 0.19) 50%, rgb(255 224 160 / 0.08) 78%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, #000 4%, rgb(0 0 0 / 0.6) 45%, transparent 85%); mask-image: linear-gradient(180deg, #000 4%, rgb(0 0 0 / 0.6) 45%, transparent 85%);
+  animation: shaft-sway var(--t) ease-in-out var(--delay) infinite alternate; }
+@keyframes shaft-sway { from { transform: rotate(calc(var(--a) - 1.2deg)); opacity: calc(var(--so) * 0.55); } to { transform: rotate(calc(var(--a) + 1.2deg)); opacity: var(--so); } }
+.dust { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%; background: #fff3d1; box-shadow: 0 0 4px 1px rgb(255 226 160 / 0.55); opacity: 0;
   animation: dust-float var(--t) ease-in-out var(--delay) infinite; }
-@keyframes dust-float { 0% { transform: translate(0, 0); opacity: 0; } 20% { opacity: 0.75; } 50% { transform: translate(1.2rem, 2.2rem); opacity: 0.5; } 80% { opacity: 0.7; } 100% { transform: translate(-0.4rem, 4.5rem); opacity: 0; } }
+@keyframes dust-float { 0% { transform: translate(0, 0); opacity: 0; } 14% { opacity: 0.9; } 28% { opacity: 0.3; } 45% { transform: translate(calc(var(--dx) * 0.6), 2.4rem); opacity: 0.85; } 62% { opacity: 0.25; } 80% { opacity: 0.75; } 100% { transform: translate(var(--dx), 5rem); opacity: 0; } }
+/* Runes that light up, drift up and turn a little, then fade. */
 .rune { position: absolute; left: var(--x); top: var(--y); width: 1.1rem; height: 1.76rem; fill: none; stroke: var(--gold); stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; opacity: 0;
-  filter: drop-shadow(0 0 4px rgb(224 189 106 / 0.6)); animation: rune-drift var(--t) ease-in-out var(--delay) infinite; }
-@keyframes rune-drift { 0% { transform: translate(0, 0) rotate(var(--r)); opacity: 0; } 25% { opacity: 0.16; } 55% { opacity: 0.22; } 100% { transform: translate(1.5rem, -9rem) rotate(calc(var(--r) * -1)); opacity: 0; } }
-.candle { position: absolute; bottom: 4%; width: 22rem; height: 22rem; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 170 70 / 0.16), rgb(255 140 40 / 0.05) 55%, transparent);
-  animation: candle-flicker 3.2s steps(1, end) infinite, candle-breathe 7s ease-in-out infinite alternate; }
-.candle-left { left: -4rem; }
-.candle-right { right: -4rem; animation-delay: -1.3s, -3s; }
-@keyframes candle-flicker { 0%, 100% { opacity: 1; } 13% { opacity: 0.82; } 21% { opacity: 0.95; } 37% { opacity: 0.78; } 52% { opacity: 1; } 68% { opacity: 0.86; } 83% { opacity: 0.93; } }
+  filter: drop-shadow(0 0 4px rgb(224 189 106 / 0.75)); animation: rune-drift var(--t) ease-in-out var(--delay) infinite; }
+@keyframes rune-drift { 0% { transform: translate(0, 0) rotate(var(--r)) scale(calc(var(--k) * 0.9)); opacity: 0; } 18% { opacity: 0.3; } 34% { opacity: 0.14; } 55% { opacity: 0.3; } 100% { transform: translate(1.5rem, -9rem) rotate(calc(var(--r) * -1)) scale(var(--k)); opacity: 0; } }
+/* Candle glows in the bottom corners: a soft, uneven flicker over a slow breath. */
+.candle { position: absolute; bottom: 2%; width: 24rem; height: 24rem; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 176 80 / 0.19), rgb(255 140 40 / 0.06) 55%, transparent);
+  animation: candle-flicker 2.8s ease-in-out infinite, candle-breathe 7s ease-in-out infinite alternate; }
+.candle-left { left: -5rem; }
+.candle-right { right: -5rem; animation-delay: -1.3s, -3s; }
+@keyframes candle-flicker { 0%, 100% { opacity: 1; } 9% { opacity: 0.86; } 17% { opacity: 0.97; } 31% { opacity: 0.8; } 44% { opacity: 0.95; } 58% { opacity: 0.87; } 71% { opacity: 1; } 84% { opacity: 0.83; } }
 @keyframes candle-breathe { from { transform: scale(0.94); } to { transform: scale(1.06); } }
-html.is-hidden .scene *, html.is-hidden .scene-layer { animation-play-state: paused; }
+/* Embers from the candles: the ember rises and fades (linear), its spark sways side to side (::before). */
+.ember { position: absolute; left: var(--x); bottom: 7%; width: var(--s); height: var(--s); opacity: 0; animation: ember-rise var(--t) linear var(--delay) infinite; }
+.ember::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: #ffc777; box-shadow: 0 0 6px 2px rgb(255 135 45 / 0.7);
+  animation: ember-sway calc(var(--t) / 3) ease-in-out var(--delay) infinite alternate; }
+@keyframes ember-rise { 0% { transform: translateY(0) scale(1); opacity: 0; } 10% { opacity: 0.95; } 55% { opacity: 0.7; } 100% { transform: translateY(calc(var(--rise) * -1)) scale(0.35); opacity: 0; } }
+@keyframes ember-sway { from { transform: translateX(calc(var(--sway) * -0.5)); } to { transform: translateX(var(--sway)); } }
+/* Mist along the floor: two wide bands of soft light drifting opposite ways. Each band is two tiles wide and moves
+   one tile per loop, so the loop has no seam. */
+.mist { position: absolute; left: 0; bottom: -2rem; width: 200%; height: 38%; background-repeat: repeat-x; background-size: 50% 100%; animation: mist-drift 100s linear infinite; }
+.mist-back { background-image: radial-gradient(28% 55% at 22% 72%, rgb(190 170 255 / 0.07), transparent 70%), radial-gradient(34% 48% at 66% 80%, rgb(255 220 170 / 0.05), transparent 70%); }
+.mist-front { height: 30%; background-image: radial-gradient(30% 50% at 40% 85%, rgb(255 230 200 / 0.06), transparent 70%), radial-gradient(24% 42% at 78% 78%, rgb(170 200 255 / 0.05), transparent 70%);
+  animation-duration: 150s; animation-direction: reverse; }
+@keyframes mist-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+/* Large out-of-focus specks close to the viewer: they move the most with the mouse and drift slowly. */
+.bokeh { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%; opacity: 0;
+  background: radial-gradient(closest-side, rgb(var(--hue) / 0.15), rgb(var(--hue) / 0.1) 72%, transparent);
+  animation: bokeh-drift var(--t) ease-in-out var(--delay) infinite alternate; }
+@keyframes bokeh-drift { 0% { transform: translate(0, 0) scale(0.9); opacity: 0; } 22% { opacity: 0.9; } 50% { transform: translate(calc(var(--bx) * 0.5), calc(var(--by) * 0.5)) scale(1.05); opacity: 0.55; } 78% { opacity: 0.85; } 100% { transform: translate(var(--bx), var(--by)) scale(0.95); opacity: 0.25; } }
+.vignette { position: absolute; inset: 0; background: radial-gradient(130% 95% at 50% 32%, transparent 52%, rgb(0 0 0 / 0.42)); }
+html.is-hidden .scene *, html.is-hidden .scene *::before, html.is-hidden .scene-layer { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
   .mote { display: none; }
   .aura::before { animation: none; }
   .light-shaft, .candle { animation: none; }
   .dust { display: none; }
+  .ember { display: none; }
   .rune { animation: none; opacity: 0.12; transform: rotate(var(--r)); }
-  .scene-layer, .scene-layer.depth-1, .scene-layer.depth-2, .scene-layer.depth-3 { transform: none; transition: none; }
+  .nebula, .mist, .bokeh { animation: none; }
+  .bokeh { opacity: 0.5; }
+  .scene-layer, .scene-layer.depth-0, .scene-layer.depth-1, .scene-layer.depth-2, .scene-layer.depth-3, .scene-layer.depth-4 { transform: none; transition: none; }
 }
 .bookcase { position: relative; padding: 1.2rem 1.6rem 1.6rem; border-radius: 6px;
   background: repeating-linear-gradient(90deg, rgb(255 255 255 / 0.015) 0 2px, transparent 2px 9px), linear-gradient(180deg, #24180e, var(--wood-back) 40%);
@@ -705,32 +817,43 @@ html.is-hidden .scene *, html.is-hidden .scene-layer { animation-play-state: pau
    z = 0, so the other books do not move with it. Books on the side the cover opens to slide aside (--push). At
    the right end of a row with no room, the cover opens to the left instead (opens-left: moved one cover width to
    the left, hinge on the right). All moves are transitions, so a move that is interrupted turns around from
-   where it is. Faces are backface-hidden. */
+   where it is. Faces are backface-hidden.
+   Going back is timed so nothing runs into the cover: the shelf keeps looking along the hinge (so the closing
+   cover tucks in behind its own spine), the book turns back a little slower than it came out, and the books that
+   moved aside wait a moment and then ease back, arriving only as the cover closes. Moving aside stays quick. */
 .library .shelf { position: relative; --reserve: 9.6rem; padding-right: calc(1.2rem + var(--reserve));
   perspective: 110rem; perspective-origin: var(--hx, 50%) var(--hy, 30%); transition: perspective-origin 420ms ease-out; }
 .library .shelf[hidden] { display: none; }
 .shelf-book { --h: 14rem; --w: 10.5rem; --d: 2.6rem; --push: 0px; --pull: 0.6rem;
   position: relative; flex: none; width: var(--d); height: var(--slot); transform-style: preserve-3d;
-  transform: translateX(var(--push)); transition: transform 380ms cubic-bezier(0.3, 0.7, 0.3, 1); }
+  transform: translateX(var(--push)); transition: transform 400ms cubic-bezier(0.45, 0, 0.25, 1) 90ms; }
+.shelf-book.is-pushed { transition: transform 320ms cubic-bezier(0.2, 0.8, 0.3, 1); }
 .shelf-book.is-out { z-index: 5; }
 .shelf-book.is-closing { z-index: 4; }
 .shelf-book .world-book, .shelf-book .book-lid { position: absolute; left: 0; bottom: 0; width: var(--d); height: var(--h); padding: 0; border: 0; background: none; border-radius: 0; transform-style: preserve-3d; }
 .shelf-book .book-lid { pointer-events: none; }
 .shelf-book .world-book:focus-visible { outline: none; }
 .book-pull, .book-body { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
-.book-pull { transition: transform 360ms cubic-bezier(0.3, 0.7, 0.3, 1); }
+.book-pull { transition: transform 500ms cubic-bezier(0.45, 0, 0.2, 1); }
+.shelf-book.is-out .book-pull { transition: transform 360ms cubic-bezier(0.3, 0.7, 0.3, 1); }
 /* The turn is an angle that every face applies itself, around the spine's left front edge (the hinge): rotating a
    container instead leaves it edge-on to the viewer, and Chromium then stops hit-testing the cover. Each face
    transitions its own transform (--face-move). An animated inherited custom property (@property --turn) used to
    drive the turn, and Chromium could leave the faces painted mid-turn after the book went back. */
-.book-body { --turn: 0deg; --face-move: transform 420ms cubic-bezier(0.4, 0, 0.2, 1); }
+.book-body { --turn: 0deg; --face-move: transform 500ms cubic-bezier(0.45, 0, 0.2, 1); --face-fade: opacity 90ms linear 420ms; }
 .shelf-book.is-out .book-pull { transform: translate3d(0, -0.8rem, var(--pull)); }
 .shelf-book.is-out.opens-left .book-pull { transform: translate3d(calc(var(--d) - var(--w)), -0.8rem, var(--pull)); }
-.shelf-book.is-out .book-body { --turn: -90deg; --face-move: transform 560ms cubic-bezier(0.25, 1.12, 0.4, 1) 40ms; }
+.shelf-book.is-out .book-body { --turn: -90deg; --face-move: transform 560ms cubic-bezier(0.25, 1.12, 0.4, 1) 40ms; --face-fade: opacity 140ms ease-out 50ms; }
 /* A face sits at --fl with width --fw and is placed by --m (about its own centre); the turn comes first. */
 .shelf-book .book-face { --fl: 0px; --fw: var(--d); --m: translateZ(0); position: absolute; top: 0; left: var(--fl); width: var(--fw); height: 100%; backface-visibility: hidden; pointer-events: auto;
-  transform-origin: calc(-1 * var(--fl)) 50% 0; transform: rotateY(var(--turn)) translateX(calc(var(--fw) / 2 + var(--fl))) var(--m) translateX(calc(var(--fw) / -2 - var(--fl))); transition: var(--face-move); }
+  transform-origin: calc(-1 * var(--fl)) 50% 0; transform: rotateY(var(--turn)) translateX(calc(var(--fw) / 2 + var(--fl))) var(--m) translateX(calc(var(--fw) / -2 - var(--fl))); transition: var(--face-move), var(--face-fade); }
 .shelf-book:not(.is-out) .book-face:not(.book-spine) { pointer-events: none; }
+/* On the shelf a book is only its spine. Seen in perspective, the other faces of a book at rest would poke out as
+   slanted slivers: its cover over the next book, its back cover over the one before when the shelf looks along a
+   hinge further left, its top over a shorter neighbour. They fade in as the book starts to turn out, and fade out
+   over the last part of the turn back, so a book put back settles as a clean spine. */
+.shelf-book .book-cover, .shelf-book .book-back, .shelf-book .book-pages, .shelf-book .book-top, .shelf-book .lid-face { opacity: 0; }
+.shelf-book.is-out .book-cover, .shelf-book.is-out .book-back, .shelf-book.is-out .book-pages, .shelf-book.is-out .book-top, .shelf-book.is-out .lid-face { opacity: 1; }
 .shelf-book .book-spine { border-radius: 3px; transition: var(--face-move), filter 300ms ease-out;
   background: linear-gradient(90deg, rgb(0 0 0 / 0.55), rgb(255 255 255 / 0.1) 30%, rgb(0 0 0 / 0) 55%, rgb(0 0 0 / 0.5)), var(--spine);
   box-shadow: inset 0 0.9rem 0 -0.55rem var(--gold-soft), inset 0 -0.9rem 0 -0.55rem var(--gold-soft), inset 0 1.4rem 0 -1.25rem var(--gold-soft), inset 0 -1.4rem 0 -1.25rem var(--gold-soft);
@@ -741,7 +864,7 @@ html.is-hidden .scene *, html.is-hidden .scene-layer { animation-play-state: pau
 .spine-mark { width: 1.1rem; height: 1.1rem; color: var(--spine-ink, var(--gold)); opacity: 0.85; flex: none; }
 .shelf-book .book-cover, .shelf-book .lid-face { --fw: var(--w); --fl: calc(var(--d) - var(--w) / 2); --m: translateZ(calc(var(--w) / -2)) rotateY(90deg); }
 .shelf-book .lid-face { --m: translateZ(calc(var(--w) / -2)) rotateY(90deg) translateZ(1px); pointer-events: none; }
-.shelf-book .book-cover { display: block; aspect-ratio: auto; overflow: hidden; border-radius: 2px 6px 6px 2px; box-shadow: inset 6px 0 10px -6px rgb(0 0 0 / 0.7); transition: var(--face-move), box-shadow 400ms ease-out; }
+.shelf-book .book-cover { display: block; aspect-ratio: auto; overflow: hidden; border-radius: 2px 6px 6px 2px; box-shadow: inset 6px 0 10px -6px rgb(0 0 0 / 0.7); transition: var(--face-move), var(--face-fade), box-shadow 400ms ease-out; }
 .shelf-book.is-out .book-cover { box-shadow: inset 6px 0 10px -6px rgb(0 0 0 / 0.7), 0 1.4rem 2.6rem rgb(0 0 0 / 0.6), 0 0 2.2rem rgb(224 189 106 / 0.35), 0 0 0 2px var(--gold-soft); }
 .shelf-book .book-back { --fw: var(--w); --fl: calc(var(--w) / -2); --m: translateZ(calc(var(--w) / -2)) rotateY(-90deg); border-radius: 6px 2px 2px 6px;
   background: linear-gradient(90deg, rgb(0 0 0 / 0.15), rgb(0 0 0 / 0.5)), var(--spine); }
@@ -754,7 +877,7 @@ html.is-hidden .scene *, html.is-hidden .scene-layer { animation-play-state: pau
 .shelf-book .world-book:disabled .book-face { filter: grayscale(1) brightness(0.6); }
 /* Reduced motion: no turn and no sliding; the spine crossfades to the cover, flat in front of it from the spine's left edge. */
 @media (prefers-reduced-motion: reduce) {
-  .shelf-book, .shelf-book .book-pull, .shelf-book.is-out .book-pull, .shelf-book.is-out.opens-left .book-pull { transition: none; }
+  .shelf-book, .shelf-book.is-pushed, .shelf-book .book-pull, .shelf-book.is-out .book-pull, .shelf-book.is-out.opens-left .book-pull { transition: none; }
   .shelf-book .book-body, .shelf-book.is-out .book-body { --face-move: transform 0s; }
   .shelf-book .book-pull, .shelf-book.is-out .book-pull, .shelf-book.is-out.opens-left .book-pull { transform: none; }
   .shelf-book.is-out .book-body { --turn: 0deg; }
@@ -882,11 +1005,15 @@ button.danger:hover { background: var(--error-bg); }
 .home-cover-badge { position: absolute; right: 0.5rem; top: 0.5rem; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.78rem; background: rgb(12 10 8 / 0.85); color: #fbf3df; border: 1px solid var(--gold-soft); opacity: 0; transition: opacity var(--ease); }
 .home-cover:hover .home-cover-badge, .home-cover:focus-visible .home-cover-badge { opacity: 1; }
 .home-cover .cover-title { font-size: 1.15rem; }
-/* Cover editor: live preview on the left, choices on the right. */
-/* The editor starts near the top so it fits any window; it scrolls inside and keeps Save and Cancel in view. */
+/* Cover editor: a title bar, then the live preview on the left and the choices on the right, then the buttons. It
+   starts near the top so it fits any window. Only the middle scrolls, so nothing shows above the title or under the
+   buttons, and both bars span the whole dialog. */
 .modal-backdrop.cover-editor-backdrop { padding-top: 3vh; }
-.cover-editor { width: min(58rem, 100%); display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 1.4rem; max-height: calc(97vh - 1rem); overflow-y: auto; padding-bottom: 0; }
-.cover-editor-actions { position: sticky; bottom: 0; z-index: 2; align-items: center; margin: 0 -1.4rem 0 0; padding: 0.7rem 1.4rem 0.9rem 0; background: linear-gradient(transparent, var(--panel) 0.6rem); border-top: 1px solid var(--border); }
+.cover-editor { width: min(58rem, 100%); display: flex; flex-direction: column; max-height: calc(97vh - 1rem); padding: 0; overflow: hidden; }
+.cover-editor-head { flex: none; padding: 1.1rem 1.4rem 0.9rem; border-bottom: 1px solid var(--border); }
+.cover-editor-head p { margin: 0.3rem 0 0; }
+.cover-editor-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 1.4rem; padding: 1.1rem 1.4rem 1.2rem; }
+.cover-editor-actions { flex: none; align-items: center; margin: 0; padding: 0.8rem 1.4rem; border-top: 1px solid var(--border); background: var(--panel); border-radius: 0 0 var(--radius) var(--radius); }
 .cover-status { flex: 1; text-align: right; font-size: 0.85rem; color: var(--muted); }
 .cover-status.is-dirty { color: var(--gold); }
 .cover-editor-preview { position: sticky; top: 0; align-self: start; }
@@ -1039,7 +1166,14 @@ button.danger:hover { background: var(--error-bg); }
 .rel-card li:hover .rel-edit, .rel-edit:focus-visible { opacity: 1; }
 .link-dialog { width: min(34rem, 100%); }
 .link-dialog h2 { margin: 0 0 0.4rem; color: var(--gold); font-family: var(--display); }
+/* The two linked entries under the title, each with its picture icon in its type colour. */
+.link-ends { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; margin: 0; }
+.link-end { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text); font-weight: 600; }
+.link-end .icon { width: 1.05rem; height: 1.05rem; color: var(--tc); }
+.link-end .muted { font-weight: 400; }
+.link-mid { width: 1rem; height: 1rem; color: var(--gold); opacity: 0.8; }
 .link-dialog .field { margin-top: 0.7rem; }
+.link-dialog .dialog-body > .field:first-child { margin-top: 0; }
 .dialog-actions .spacer { flex: 1; }
 .relation-web .node { position: relative; }
 
@@ -1050,40 +1184,53 @@ button.danger:hover { background: var(--error-bg); }
 .sheet.is-print .doc-p { text-align: justify; margin: 0; }
 .sheet.is-print .doc-p + .doc-p { text-indent: 1.4em; }
 .sheet.is-print .doc-h { color: #3d2a14; border: 0; font-family: inherit; }
-.sheet.is-print .doc-opener { margin: 22% 0 2.2rem; text-align: center; font-weight: normal; font-size: 1.45rem; }
+/* A chapter opens at the top of its page, as in the PDF: label, bold title (lines evened out) and a short rule. */
+.sheet.is-print .doc-opener { margin: 0.5rem 0 2rem; text-align: center; font-weight: bold; font-size: 1.45rem; line-height: 1.25; text-wrap: balance; }
+.sheet.is-print .doc-opener::after { content: ''; display: block; width: 3.5rem; margin: 0.9rem auto 0; border-top: 1px solid #3d2a14; }
+.sheet.is-print .doc-muted { font-style: italic; font-size: 0.88em; }
 .doc-opener-label { display: block; font-size: 0.62rem; letter-spacing: 0.22em; text-transform: uppercase; color: #5a554c; margin-bottom: 0.6rem; }
 .sheet .doc-dropcap::first-letter { float: left; font-size: 3.6em; line-height: 0.85; padding: 0.06em 0.08em 0 0; color: #3d2a14; font-weight: bold; }
-.sheet.is-print .doc-dropcap { text-indent: 0; }
+/* flow-root keeps the three-line initial inside its paragraph, so it never pushes into the next one (as in the PDF). */
+.sheet.is-print .doc-dropcap { text-indent: 0; display: flow-root; }
 .sheet.is-front { display: flex; flex-direction: column; text-align: center; }
-.doc-front p { margin: 0 0 0.5rem; }
-.doc-front-half-title { margin-top: 30%; font-size: 1.15rem; color: #3d2a14; }
-.doc-front-title { margin-top: 22%; display: flex; flex-direction: column; flex: 1; }
-.doc-front-title p:first-child { font-size: 1.8rem; font-weight: bold; color: #3d2a14; line-height: 1.2; }
-.doc-front-title p:nth-child(2) { font-style: italic; margin-bottom: auto; }
+.doc-front p { margin: 0 0 0.5rem; text-wrap: balance; }
+/* Title page as in the PDF: title about a quarter down, the author halfway, the publisher at the foot. */
+.doc-front-title { margin-top: 34%; display: flex; flex-direction: column; flex: 1; }
+.doc-front-title .ft-title { font-size: 1.8rem; font-weight: bold; color: #3d2a14; line-height: 1.2; }
+.doc-front-title .ft-sub { font-style: italic; }
+.doc-front-title .ft-author { margin-top: 22%; }
+.doc-front-title .ft-publisher { margin-top: auto; font-size: 0.8rem; color: #5a554c; }
 .doc-front-copyright { margin-top: auto; text-align: left; font-size: 0.7rem; color: #5a554c; }
-.doc-front-dedication { margin-top: 32%; font-style: italic; }
-.doc-front-epigraph { margin-top: 32%; font-style: italic; }
+.doc-front-dedication { margin-top: 44%; font-style: italic; }
+.doc-front-epigraph { margin-top: 44%; font-style: italic; }
 .doc-front-epigraph p + p { font-style: normal; text-align: right; padding-right: 2rem; }
 .book-details textarea { min-height: 3.2rem; }
 
 /* Confirm a delete: a themed alert dialog that rises in, with a danger mark, what is about to go and a solid danger button. */
 .confirm-backdrop { align-items: center; padding: 1rem; backdrop-filter: blur(2px); }
-.confirm-dialog { position: relative; width: min(30rem, 100%); padding: 2.6rem 1.6rem 1.3rem; text-align: center; border-radius: var(--radius);
+.confirm-dialog { position: relative; display: flex; flex-direction: column; width: min(30rem, 100%); margin-top: 1.8rem; padding: 0; text-align: center; border-radius: var(--radius);
   background: radial-gradient(22rem 10rem at 50% 0%, rgb(220 90 80 / 0.16), transparent 70%), var(--panel); border: 1px solid color-mix(in srgb, var(--error) 45%, var(--gold-soft));
   box-shadow: var(--shadow), 0 0 3rem rgb(220 90 80 / 0.12); animation: confirm-in 260ms cubic-bezier(0.2, 1.1, 0.4, 1); }
 .confirm-mark { position: absolute; left: 50%; top: 0; translate: -50% -50%; width: 3.4rem; height: 3.4rem; display: grid; place-items: center; border-radius: 50%;
   background: var(--panel); border: 2px solid var(--error); color: var(--error); box-shadow: 0 0 0 5px rgb(220 90 80 / 0.14), 0 0 1.4rem rgb(220 90 80 / 0.35); }
 .confirm-mark .icon { width: 1.8rem; height: 1.8rem; }
-.confirm-dialog h2 { margin: 0 0 0.9rem; font-family: var(--display); color: var(--gold); font-size: 1.3rem; overflow-wrap: anywhere; }
-.confirm-subject { margin: 0 auto 0.9rem; text-align: left; }
-.confirm-world { display: flex; gap: 0.9rem; align-items: center; padding: 0.6rem; border-radius: 8px; background: rgb(0 0 0 / 0.22); border: 1px solid var(--border); }
-.confirm-world > div { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
-.confirm-cover { width: 3.6rem; flex: none; border-radius: 2px 5px 5px 2px; overflow: hidden; box-shadow: 0 3px 10px rgb(0 0 0 / 0.5), 0 0 0 1px var(--gold-soft); }
-.confirm-name { font-family: var(--display); color: var(--text); overflow-wrap: anywhere; }
+.confirm-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2.5rem 1.7rem 1.3rem; border-radius: inherit; }
+.confirm-dialog h2 { margin: 0 0 1rem; font-family: var(--display); color: var(--gold); font-size: 1.3rem; line-height: 1.3; overflow-wrap: anywhere; }
+.confirm-subject { margin: 0 auto 1rem; text-align: left; }
+.confirm-world { display: flex; gap: 1rem; align-items: center; padding: 0.75rem 0.9rem; border-radius: 10px; background: rgb(0 0 0 / 0.25); border: 1px solid var(--border); }
+.confirm-world > div { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.confirm-cover { width: 4rem; flex: none; border-radius: 2px 5px 5px 2px; overflow: hidden; box-shadow: 0 3px 10px rgb(0 0 0 / 0.5), 0 0 0 1px var(--gold-soft); }
+.confirm-name { font-family: var(--display); font-size: 1.05rem; color: var(--gold); overflow-wrap: anywhere; }
 .confirm-world .world-types { display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; font-size: 0.85rem; }
 .confirm-world .world-types .icon { color: var(--tc); }
-.confirm-text p { margin: 0; color: var(--muted); }
-.confirm-dialog .dialog-actions { justify-content: center; margin-top: 1.2rem; }
+.confirm-text p { margin: 0 auto; max-width: 25rem; line-height: 1.5; color: var(--muted); }
+/* Two buttons of the same size: Keep it a quiet panel button (focused on open, with a soft gold ring), the danger
+   button solid red. */
+.confirm-dialog .dialog-actions { justify-content: center; gap: 0.75rem; margin-top: 1.3rem; }
+.confirm-dialog .dialog-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; min-width: 11rem; min-height: 2.6rem; padding: 0.5rem 1.2rem; }
+.confirm-dialog .confirm-cancel { background: var(--panel-2); border-color: var(--border); }
+.confirm-dialog .confirm-cancel:hover { background: #2b3040; border-color: var(--gold-soft); }
+.confirm-dialog .dialog-actions button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 button.danger-solid { background: #8e2c26; border: 1px solid var(--error); color: #fff; font-weight: 600; }
 button.danger-solid:hover:not(:disabled) { background: #a3342d; box-shadow: 0 0 1rem rgb(220 90 80 / 0.4); }
 button.danger-solid:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -1130,8 +1277,12 @@ button.danger-solid:focus-visible { outline: 3px solid var(--accent); outline-of
 .font-more { padding: 0.4rem 0.6rem; font-size: 0.8rem; }
 .font-note { margin: 0; font-size: 0.85rem; }
 .spine-fields { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
-.spine-sample { width: 1.6rem; height: 4.2rem; border-radius: 3px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
-.spine-sample span { writing-mode: vertical-rl; font: 700 0.62rem/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+/* A small spine: rounded like the shelf's, the title on one line down the middle, cut with an ellipsis if it is long. */
+.spine-sample { position: relative; flex: none; width: 2rem; height: 5.2rem; padding: 0.45rem 0; border-radius: 3px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12), 0 2px 6px rgb(0 0 0 / 0.35); }
+.spine-sample::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(0 0 0 / 0.35), rgb(255 255 255 / 0.1) 32%, transparent 55%, rgb(0 0 0 / 0.3)); pointer-events: none; }
+.spine-sample span { position: relative; z-index: 1; writing-mode: vertical-rl; max-height: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font: 700 0.6rem/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 .create-emblem .icon-picker { max-height: 9rem; }
 .create-look-row { display: flex; align-items: end; gap: 0.8rem; flex-wrap: wrap; }
 .create-book .icon-choices { max-height: 8.5rem; overflow-y: auto; }
@@ -1143,15 +1294,24 @@ button.danger-solid:focus-visible { outline: 3px solid var(--accent); outline-of
 .modal-backdrop { --modal-top: clamp(0.75rem, 12vh - 2.5rem, 7rem); padding: var(--modal-top) 1rem 1rem; }
 .modal-backdrop.cover-editor-backdrop { --modal-top: clamp(0.5rem, 3vh, 2rem); padding-top: var(--modal-top); }
 .modal-backdrop:has(> .preview) { padding: 2vh 2vw; align-items: stretch; }
-.modal-backdrop > :is(.about, .world-settings, .confirm-dialog) { max-height: calc(100vh - var(--modal-top) - 1rem); max-width: 100%; overflow-y: auto; overscroll-behavior: contain; }
-.modal-backdrop > :is(.about, .world-settings) > :is(h2, .about-head, .picture-head):first-child,
-.cover-editor-fields > h2:first-child {
-  position: sticky; top: 0; z-index: 3; margin-top: -1.2rem; padding-top: 1.2rem; padding-bottom: 0.5rem; background: var(--panel); }
-.modal-backdrop > :is(.about, .world-settings) > :is(h2, .about-head, .picture-head):first-child { margin-inline: -1.4rem; padding-inline: 1.4rem; }
+/* Dialogs (.about, .world-settings): the head with the title, a body that scrolls, and the action bar, as three
+   parts in a column. Only the body scrolls, so nothing slides under the title or under the buttons. */
+.modal-backdrop > :is(.about, .world-settings) { display: flex; flex-direction: column; max-height: calc(100vh - var(--modal-top) - 1rem); max-width: 100%; overflow: hidden; padding: 0; }
+.dialog-head { flex: none; padding: 1.15rem 1.4rem 0.85rem; border-bottom: 1px solid var(--border); }
+.dialog-head h2 { margin: 0; }
+.dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1rem 1.4rem 1.2rem; }
+.dialog-body > :first-child { margin-top: 0; }
+/* The confirm dialog keeps room above it for its mark and scrolls inside (.confirm-scroll), so the mark is never clipped. */
+.modal-backdrop > .confirm-dialog { max-height: calc(100vh - var(--modal-top) - 1rem - 1.8rem); max-width: 100%; }
 .modal-backdrop > :is(.about, .world-settings, .confirm-dialog) .dialog-actions { position: sticky; bottom: 0; z-index: 3; flex-wrap: wrap; margin-bottom: -1.2rem; padding: 0.7rem 0 1.1rem;
   background: linear-gradient(transparent, var(--panel) 0.7rem); }
 .modal-backdrop > .confirm-dialog .dialog-actions { margin-bottom: -1.3rem; padding-bottom: 1.2rem; }
-.modal-backdrop > .cover-editor .cover-editor-actions { margin-bottom: 0; }
+/* A dialog's own action bar (a direct child) is the fixed third part; one inside a form in the body sticks to the
+   body's bottom edge instead (rule above). */
+.modal-backdrop > :is(.about, .world-settings) > .dialog-actions { flex: none; position: static; margin: 0; padding: 0.8rem 1.4rem; border-top: 1px solid var(--border); background: var(--panel); border-radius: 0 0 var(--radius) var(--radius); }
+/* The cover editor scrolls only its middle (.cover-editor-body): its own title bar and button bar stay put. */
+.modal-backdrop > .cover-editor { overflow: hidden; }
+.modal-backdrop > .cover-editor .cover-editor-actions { position: static; margin: 0; padding: 0.8rem 1.4rem; background: var(--panel); }
 /* Floating panels never get wider than the window. */
 .popover, .pick-menu { max-width: calc(100vw - 1rem); }
 .mention-card.is-picker { max-height: min(22rem, calc(100vh - 1rem)); }
@@ -1159,7 +1319,7 @@ button.danger-solid:focus-visible { outline: 3px solid var(--accent); outline-of
 .ws-eras { overflow-x: auto; }
 /* Narrow windows: two-column dialogs stack. */
 @media (max-width: 820px) {
-  .create-book, .cover-editor { grid-template-columns: minmax(0, 1fr); }
+  .create-book, .cover-editor-body { grid-template-columns: minmax(0, 1fr); }
   .cover-editor-preview { position: static; justify-self: center; }
   .create-side { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
 }

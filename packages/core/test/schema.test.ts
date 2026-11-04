@@ -7,7 +7,7 @@ import { check, report, serializeStoryIgnored, snapshot } from '@lore-forge/core
 import { loadWorld } from '@lore-forge/core/node';
 
 const schemaDir = join(import.meta.dirname, '..', 'schemas');
-const exampleDir = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
+const exampleDir = join(import.meta.dirname, '..', '..', '..', 'worlds', 'camelamamm');
 const ajv = new Ajv2020({ allErrors: true });
 for (const f of readdirSync(schemaDir)) ajv.addSchema(JSON.parse(readFileSync(join(schemaDir, f), 'utf8')));
 const base = 'https://lore-forge.local/schemas/v1/';
@@ -45,4 +45,10 @@ test('world.json cover settings: colours with alpha, emblem, picture and title s
   const bad = ajv.getSchema(`${base}world-manifest.schema.json`)!;
   assert.equal(bad({ ...manifest, cover: { titleStyle: 'gothic' } }), false);
   assert.equal(bad({ ...manifest, cover: { color: 'red' } }), false);
+});
+
+test('world.json book settings: the right-hand chapters switch is a boolean', () => {
+  const manifest = JSON.parse(readFileSync(join(exampleDir, 'world.json'), 'utf8'));
+  valid('world-manifest.schema.json', { ...manifest, book: { ...manifest.book, rightHandChapters: true } });
+  assert.equal(ajv.getSchema(`${base}world-manifest.schema.json`)!({ ...manifest, book: { rightHandChapters: 'yes' } }), false);
 });

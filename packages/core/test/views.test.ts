@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { check, docSheets, familyTree, inlineRuns, relationWeb, storyBook, timelineModel, worldCodex, yearTicks, TREE_LAYOUT, SINGLE_CHAPTER, type Block } from '@lore-forge/core';
+import { check, docSheets, familyTree, inlineRuns, relationWeb, storyBook, timelineModel, worldCodex, yearTicks, TREE_LAYOUT, WEB_LAYOUT, SINGLE_CHAPTER, type Block } from '@lore-forge/core';
 import { world } from './helpers.ts';
 
 const fam = world([
@@ -55,6 +55,12 @@ test('relation web: focus in the middle, neighbours both directions, edges label
   assert.ok(w.edges.some((e) => e.from === 'k1' && e.to === 'k2'), 'edges between neighbours are kept');
   for (const n of w.nodes) assert.ok(n.x > 0 && n.y > 0 && n.x < w.width && n.y < w.height);
   assert.equal(relationWeb(fam, 'nope'), undefined);
+  // Every two cards keep room for a label between them: no two boxes come closer than the label gap on both axes.
+  const { nodeW, nodeH, labelGap } = WEB_LAYOUT;
+  for (const [i, a] of w.nodes.entries()) for (const b of w.nodes.slice(i + 1)) {
+    const gapX = Math.abs(a.x - b.x) - nodeW, gapY = Math.abs(a.y - b.y) - nodeH;
+    assert.ok(Math.max(gapX, gapY) >= labelGap * 0.4 && Math.hypot(Math.max(gapX, 0), Math.max(gapY, 0)) >= labelGap * 0.5, `${a.id} and ${b.id} are too close: ${Math.round(gapX)}, ${Math.round(gapY)}`);
+  }
 });
 
 test('timeline model: lanes by type, points for events, open ends, eras, warnings', () => {

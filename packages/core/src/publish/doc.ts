@@ -14,7 +14,10 @@ export type Block =
    * `toc` headings appear in the table of contents and the PDF outline. `icon` is drawn before the text and
    * `mark` after it (e.g. a tombstone); both are optional decorations, the text alone says everything.
    */
-  /** `opener`: a chapter opening in a print book: starts on a right-hand page, without running head or page number. */
+  /**
+   * `opener`: a chapter opening in a print book: starts at the top of a new page (a right-hand one when the book asks
+   * for right-hand chapters), without running head or page number.
+   */
   | { kind: 'heading'; level: 1 | 2 | 3; text: string; anchor?: string; toc?: boolean; newPage?: boolean; opener?: boolean; icon?: IconName; mark?: IconName }
   /** `dropCap`: the first paragraph of a chapter, set with a large initial letter. */
   | { kind: 'para'; text: string; style?: 'lead' | 'muted'; dropCap?: boolean }
@@ -30,11 +33,11 @@ export type Block =
   | { kind: 'toc' };
 
 /**
- * Front matter, in book order: half-title (title alone, right-hand page), title page (title, subtitle, author,
- * publisher), copyright page (on the back of the title page), then the optional dedication and epigraph
- * (lines: quote, then "— source").
+ * Front matter, in book order, each on its own page: title page (title, subtitle, author, publisher), copyright
+ * page, then the optional dedication and epigraph (lines: quote, then "— source"). There is no half-title: the
+ * cover already carries the title alone, and a second title page right after it read as a repeat.
  */
-export type FrontRole = 'half-title' | 'title' | 'copyright' | 'dedication' | 'epigraph';
+export type FrontRole = 'title' | 'copyright' | 'dedication' | 'epigraph';
 
 /** Page sizes in PDF points (1/72 in) and margins: `inside` is the gutter (binding) side, mirrored on facing pages. */
 export interface Trim { id: TrimSize; label: string; width: number; height: number; inside: number; outside: number; top: number; bottom: number }
@@ -49,14 +52,15 @@ export interface Doc {
   kind: 'codex' | 'book';
   /** Used in PDF metadata, running footers and the Markdown title. */
   title: string;
-  /** Cover page: big title, subtitle, then small lines, drawn over the world's cover art when `art` is set. */
+  /** Cover page: big title, subtitle, then small lines (the Story Book: the author only), drawn over the world's cover art when `art` is set. */
   cover: { title: string; subtitle: string; lines: string[]; art?: CoverArt };
   blocks: Block[];
   /**
-   * Print layout (the Story Book): trim size, mirrored margins and front matter. The front matter replaces the
-   * cover page; running heads show `title` on left pages and the chapter on right pages.
+   * Print layout (the Story Book): trim size, mirrored margins and front matter after the cover; running heads show
+   * `title` on left pages and the chapter on right pages. Every front page and chapter starts a new page; with
+   * `rightHand` (for printed books) they start on right-hand pages, with blank pages added where needed.
    */
-  print?: { trim: TrimSize };
+  print?: { trim: TrimSize; rightHand?: boolean };
 }
 
 export interface InlineRun { text: string; bold: boolean; italic: boolean }

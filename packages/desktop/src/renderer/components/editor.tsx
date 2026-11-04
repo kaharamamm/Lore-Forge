@@ -1,16 +1,17 @@
 import {
-  ageAtDeathText, DETAIL_FIELDS, detailList, detailOf, raceIcon, racesOf, type DetailField, type DetailSection, type IconName,
+  ageAtDeathText, DETAIL_FIELDS, detailList, detailOf, raceIcon, raceLabel, racesOf, suggestionIcon, upperFirst, type DetailField, type DetailSection, type IconName,
   DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_ICON, TYPE_SINGULAR, VISUAL_FIELDS, WorldIndex,
   type Action, type Character, type Entry, type EntryType, type LocationSpan, type LoreEvent, type Participant, type Relation, type RelationGroup, type Warning, type World,
 } from '@lore-forge/core';
-import { useState } from 'preact/hooks';
-import { ChipInput, DateField, Field, ListEditor, ListText, RefField, TextField } from './fields.tsx';
+import { useRef, useState } from 'preact/hooks';
+import { ChipInput, DateField, entrySuggestion, Field, ListEditor, ListText, OpenEntry, RefField, TextField } from './fields.tsx';
 import { ImageSlots } from './images.tsx';
 import { ProseField } from './prose.tsx';
 import { TypeBadge } from './type.tsx';
 import { WarningItem, type WarningActions } from './warnings.tsx';
 import { Icon } from './icon.tsx';
 import { Select } from './select.tsx';
+import { SuggestInput } from './suggest.tsx';
 
 interface Props {
   dir: string;
@@ -29,6 +30,7 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
   const set = <E extends Entry>(e: E) => (patch: Partial<E>) => onChange({ ...e, ...patch });
   const base = set(entry);
   return (
+    <OpenEntry.Provider value={onOpen}>
     <article class={`editor t-${entry.type}`} aria-labelledby="entry-title">
       <header class="editor-head">
         <div>
@@ -131,6 +133,7 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
 
       <ProseField world={world} entry={entry} onInput={(body) => base({ body })} onOpen={onOpen} />
     </article>
+    </OpenEntry.Provider>
   );
 }
 
@@ -138,14 +141,26 @@ function clean<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 }
 
-/** Free text with suggestions (relation types, verbs). */
-function Pick(props: { label: string; field: string; value: string; options: string[]; onChange: (v: string | undefined) => void }) {
+/**
+ * Free text with suggestions (gender, kind, verbs). Suggested words are offered and saved with a capital first
+ * letter, and a value that is one of them (in any case) shows that way; `lower` keeps them as written (verbs, which
+ * sit inside sentences). The value's icon shows at the start of the box, as in the list.
+ */
+function Pick(props: { label: string; field: string; value: string; options: string[]; onChange: (v: string | undefined) => void; icon?: (v: string) => IconName | undefined; lower?: boolean }) {
   const id = `opts-${props.field.replace(/\W/g, '-')}`;
+  const box = useRef<HTMLDivElement>(null);
+  const options = props.lower ? props.options : props.options.map(upperFirst);
+  const canonical = (t: string) => options.find((o) => o.toLowerCase() === t.trim().toLowerCase()) ?? t;
+  const shown = canonical(props.value);
+  const lead = shown.trim() ? props.icon?.(shown) : undefined;
   return (
     <div class="field" data-field={props.field}>
       <label for={`${id}-input`}>{props.label}</label>
-      <input id={`${id}-input`} type="text" list={id} value={props.value} onInput={(e) => props.onChange(e.currentTarget.value)} />
-      <datalist id={id}>{props.options.map((o) => <option key={o} value={o} />)}</datalist>
+      <div class="suggest" ref={box}>
+        <SuggestInput id={`${id}-input`} anchor={box} value={shown} {...(lead ? { icon: lead } : {})}
+          suggestions={options.map((o) => { const icon = props.icon?.(o); return icon ? { value: o, icon } : { value: o }; })}
+          onInput={(t) => props.onChange(canonical(t))} onPick={(o) => props.onChange(o.value)} />
+      </div>
     </div>
   );
 }
@@ -230,7 +245,7 @@ function RelationTypeField({ world, entry, r, field, onChange }: { world: World;
           onChange={(v) => { if (v === '__custom') setCustom(true); else onChange(v); }}
           options={[
             ...(!known && r.type ? [{ value: r.type, label: `${misfit ? '! ' : ''}${r.type.replace(/-/g, ' ')}${misfit ? ' (does not fit)' : ''}` }] : []),
-            ...GROUP_ORDER.flatMap((g) => kinds.filter((k) => k.group === g).map((k) => ({ value: k.type, label: k.label, group: RELATION_GROUPS[g].label }))),
+            ...GROUP_ORDER.flatMap((g) => kinds.filter((k) => k.group === g).map((k) => ({ value: k.type, label: upperFirst(k.label), group: RELATION_GROUPS[g].label, icon: RELATION_GROUPS[g].icon }))),
             { value: '__custom', label: 'Custom type…' },
           ]} />
       )}
@@ -245,8 +260,8 @@ function RaceField({ world, e, set, onOpen }: { world: World; e: Character; set:
   const linked = (r: string) => ix.resolve(r);
   return (
     <ChipInput label="Race or kind" field="race" values={races} placeholder="e.g. human, camel-folk, ghoul"
-      options={raceSuggestions(world.entries).map((r) => ({ value: r, label: r }))}
-      icon={(r) => raceIcon(linked(r)?.name ?? r)} display={(r) => linked(r)?.name ?? r}
+      options={raceSuggestions(world.entries).map((r) => ({ value: r, label: r, icon: raceIcon(r) }))} normalize={upperFirst}
+      icon={(r) => raceIcon(linked(r)?.name ?? r)} display={(r) => raceLabel(r, (x) => linked(x)?.name)}
       {...(races.some((r) => linked(r)) ? { onOpen: (r: string) => { const t = linked(r); if (t) onOpen(t.id); } } : {})}
       hint="Type and press Enter, or pick a suggestion. × removes one."
       onChange={(list) => set({ race: list.length ? list.join(', ') : undefined })} />
@@ -297,7 +312,7 @@ function DetailFields({ world, entry, section, onChange, onOpen }: { world: Worl
         const options = world.entries.filter((x) => x.id !== entry.id && (!f.to || f.to.includes(x.type))).sort((a, b) => a.name.localeCompare(b.name));
         return (
           <ChipInput key={field} label={f.label} field={field} values={detailList(entry, field)} placeholder={`Add ${(f.to ?? []).map((t) => TYPE_SINGULAR[t].toLowerCase()).join(' or ')}…`}
-            options={options.map((x) => ({ value: x.id, label: x.name }))} icon={(v) => TYPE_ICON[ix.resolve(v)?.type ?? (f.to?.[0] ?? 'note')]}
+            options={options.map((x) => ({ ...entrySuggestion(x), label: x.name }))} icon={(v) => TYPE_ICON[ix.resolve(v)?.type ?? (f.to?.[0] ?? 'note')]}
             display={(v) => ix.resolve(v)?.name ?? v} invalid={(v) => !ix.resolve(v)} onOpen={(v) => { const t = ix.resolve(v); if (t) onOpen(t.id); }}
             hint={f.relation ? `Also shown as “${f.relation.replace(/-/g, ' ')}” in the relationship web.` : undefined}
             onChange={(v) => put(f, v)} />
@@ -309,7 +324,7 @@ function DetailFields({ world, entry, section, onChange, onOpen }: { world: Worl
         return <TextField key={field} label={f.label} field={field} value={detailOf(entry, field) as string | undefined} multiline onChange={(v) => put(f, v)} />;
       default:
         return f.suggest ? (
-          <Pick key={field} label={f.label} field={field} value={(detailOf(entry, field) as string | undefined) ?? ''} options={[...f.suggest]} onChange={(v) => put(f, v)} />
+          <Pick key={field} label={f.label} field={field} value={(detailOf(entry, field) as string | undefined) ?? ''} options={[...f.suggest]} icon={(v) => suggestionIcon(entry.type, f.key, v)} onChange={(v) => put(f, v)} />
         ) : (
           <TextField key={field} label={f.label} field={field} value={detailOf(entry, field) as string | undefined} placeholder={f.hint} onChange={(v) => put(f, v)} />
         );
@@ -385,7 +400,7 @@ function EventFields({ world, e, set }: { world: World; e: LoreEvent; set: (p: P
         render={(a, put, f) => (
           <>
             <RefField label="Actor" field={`${f}.actor`} value={a.actor} world={world} onChange={(actor) => put({ ...a, actor: actor ?? '' })} />
-            <Pick label="Verb (past tense)" field={`${f}.verb`} value={a.verb} options={['killed', 'betrayed', 'crowned', 'married', 'met', 'founded', 'destroyed', 'rescued', 'exiled', 'stole']} onChange={(verb) => put({ ...a, verb: verb ?? '' })} />
+            <Pick label="Verb (past tense)" field={`${f}.verb`} lower value={a.verb} options={['killed', 'betrayed', 'crowned', 'married', 'met', 'founded', 'destroyed', 'rescued', 'exiled', 'stole']} icon={(v) => suggestionIcon('event', 'verb', v)} onChange={(verb) => put({ ...a, verb: verb ?? '' })} />
             <RefField label="Target" field={`${f}.target`} value={a.target} world={world} onChange={(target) => put(clean({ ...a, target }))} />
           </>
         )}

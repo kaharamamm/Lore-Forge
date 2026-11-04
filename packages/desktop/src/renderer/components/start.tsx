@@ -152,7 +152,8 @@ function BookBox({ spine, cover }: { spine: preact.ComponentChildren; cover: pre
   );
 }
 
-const placeClass = (p: BookPlace) => `${p.state === 'out' ? ' is-out' : p.state === 'closing' ? ' is-closing' : ''}${p.side === 'left' ? ' opens-left' : ''}`;
+/** is-pushed: moved aside for an open cover. Moving aside is quick; coming back waits for the cover to close (styles.css). */
+const placeClass = (p: BookPlace) => `${p.state === 'out' ? ' is-out' : p.state === 'closing' ? ' is-closing' : ''}${p.side === 'left' ? ' opens-left' : ''}${p.push ? ' is-pushed' : ''}`;
 const placeStyle = (p: BookPlace) => ({ '--push': `${p.push}px` });
 
 /**
@@ -220,13 +221,18 @@ const Book = memo(function Book({ dir, deletable, place, hover, onOpen, onDelete
 /** Pointer rests this long on a book before it comes out, so sweeping across the shelf does not pull out every book. */
 const INTENT_MS = 100;
 /** How long a book going back stays drawn over its neighbours (the longest put-back transition). */
-const CLOSING_MS = 520;
+const CLOSING_MS = 560;
 /** Space between an open cover and the books it pushed aside. */
 const COVER_GAP = 12;
 
-/** hinge: where the out book's hinge is, in shelf pixels; the shelf looks along it (styles.css). */
-interface ShelfState { out: string | null; side: 'right' | 'left'; push: Record<string, number>; hinge: number | null; hingeY: number | null; closing: string | null }
-const IDLE: ShelfState = { out: null, side: 'right', push: {}, hinge: null, hingeY: null, closing: null };
+/**
+ * hinge: where the hinge of the last book taken out is, in shelf pixels; the shelf looks along it (styles.css). It
+ * stays after the book goes back, so the closing cover tucks in behind its spine instead of swinging out over the
+ * next book; books at rest are flat spines, so where the shelf looks from does not matter to them. closing: the
+ * books still turning back, each for CLOSING_MS (a quick sweep can leave more than one turning at once).
+ */
+interface ShelfState { out: string | null; side: 'right' | 'left'; push: Record<string, number>; hinge: number | null; hingeY: number | null; closing: string[] }
+const IDLE: ShelfState = { out: null, side: 'right', push: {}, hinge: null, hingeY: null, closing: [] };
 
 /**
  * Where everything goes while `li` is out. Only its row moves: the books on the side the cover opens to slide
@@ -271,24 +277,31 @@ function useShelf() {
   const [st, setSt] = useState<ShelfState>(IDLE);
   const cur = useRef(st);
   const intent = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout>>();
+  // One timer per book turning back: taking out another book must not cancel it, or the book stays drawn over its
+  // neighbours (is-closing) after it is back.
+  const closeTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const commit = (next: ShelfState) => { cur.current = next; setSt(next); };
   const clearIntent = () => { if (intent.current) clearTimeout(intent.current.timer); intent.current = null; };
-  const goingBack = (key: string | null) => {
-    clearTimeout(closeTimer.current);
-    if (key) closeTimer.current = setTimeout(() => cur.current.closing === key && commit({ ...cur.current, closing: null }), CLOSING_MS);
-    return key;
+  const clearClosing = () => { for (const t of closeTimers.current.values()) clearTimeout(t); closeTimers.current.clear(); };
+  /** The closing list with `key` added (its timer restarted); the timer later drops it from whatever the list is then. */
+  const goingBack = (key: string): string[] => {
+    clearTimeout(closeTimers.current.get(key));
+    closeTimers.current.set(key, setTimeout(() => {
+      closeTimers.current.delete(key);
+      if (cur.current.closing.includes(key)) commit({ ...cur.current, closing: cur.current.closing.filter((k) => k !== key) });
+    }, CLOSING_MS));
+    return [...cur.current.closing.filter((k) => k !== key), key];
   };
   const take = (key: string, li: HTMLElement) => {
     clearIntent();
     const was = cur.current.out;
     if (was === key) return;
-    commit({ out: key, ...layoutOut(li), closing: goingBack(was) ?? (cur.current.closing === key ? null : cur.current.closing) });
+    commit({ out: key, ...layoutOut(li), closing: (was ? goingBack(was) : cur.current.closing).filter((k) => k !== key) });
   };
   const putBack = (key: string) => {
     if (intent.current?.key === key) clearIntent();
     if (cur.current.out !== key) return;
-    commit({ ...IDLE, hingeY: cur.current.hingeY, closing: goingBack(key) });
+    commit({ ...IDLE, hinge: cur.current.hinge, hingeY: cur.current.hingeY, closing: goingBack(key) });
   };
   const focused = () => !!document.activeElement?.closest('.shelf-book.is-out');
   const away = () => {
@@ -305,7 +318,7 @@ function useShelf() {
     if (intent.current && intent.current.key !== key) clearIntent();
     if (cur.current.out && cur.current.out !== key && !focused()) putBack(cur.current.out);
   };
-  useEffect(() => () => { clearIntent(); clearTimeout(closeTimer.current); }, []);
+  useEffect(() => () => { clearIntent(); clearClosing(); }, []);
   const hover = (key: string): ShelfHover => ({
     onPointerEnter: (e) => {
       const li = e.currentTarget as HTMLElement;
@@ -319,11 +332,11 @@ function useShelf() {
     onBlurCapture: (e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) putBack(key); },
   });
   const place = (key: string): BookPlace => ({
-    state: st.out === key ? 'out' : st.closing === key ? 'closing' : 'rest',
+    state: st.out === key ? 'out' : st.closing.includes(key) ? 'closing' : 'rest',
     side: st.out === key ? st.side : 'right',
     push: st.push[key] ?? 0,
   });
-  return { hover, place, away, track, hinge: st.out ? st.hinge : null, hingeY: st.hingeY, reset: () => { clearIntent(); commit(IDLE); } };
+  return { hover, place, away, track, hinge: st.hinge, hingeY: st.hingeY, reset: () => { clearIntent(); clearClosing(); commit(IDLE); } };
 }
 
 const SWATCHES = ['#7a2e2e', '#8a5a1c', '#2f5d3a', '#1f4f6b', '#3b3478', '#5c2a5e', '#2b2f3a', '#6b4a2b', '#14161b', '#3a2a1e'];
@@ -339,8 +352,8 @@ function Dialog({ title, onClose, children }: { title: string; onClose: () => vo
   return (
     <div class="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section ref={box} class="about library-dialog" role="dialog" aria-modal="true" aria-labelledby="library-dialog-title" onKeyDown={(e) => trapTab(box.current, e)}>
-        <h2 id="library-dialog-title">{title}</h2>
-        {children}
+        <header class="dialog-head"><h2 id="library-dialog-title">{title}</h2></header>
+        <div class="dialog-body">{children}</div>
       </section>
     </div>
   );
@@ -391,7 +404,7 @@ function CreateBook({ worldsDir, onClose, onCreated }: { worldsDir: string; onCl
             <span class="world-cover">
               <WorldCover art={art} image={preview} title={name || 'Untitled world'} />
             </span>
-            <span class="spine-sample create-spine" style={{ background: art.spine, color: art.spineInk }}><span>{(name || 'Untitled world').slice(0, 14)}</span></span>
+            <span class="spine-sample create-spine" style={{ background: art.spine, color: art.spineInk }}><span>{name || 'Untitled world'}</span></span>
           </div>
           <CoverSwitches art={art} set={set} />
         </div>

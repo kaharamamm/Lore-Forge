@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "shifting-sands",
+  "name": "The Shifting Sands",
+  "description": "Example world for Lore-Forge. Desert caravans, camel-folk and a fallen salt queen. Every starter rule is triggered on purpose; see README.md in this folder.",
+  "calendar": {
+    "eras": [
+      { "id": "OK", "name": "Old Kingdom", "start": -1000 },
+      { "id": "AS", "name": "After the Sundering", "start": 1 }
+    ],
+    "defaultEra": "AS",
+    "months": [
+      { "name": "Sunwake", "days": 60 },
+      { "name": "Highsun", "days": 60 },
+      { "name": "Emberfall", "days": 60 },
+      { "name": "Duststorm", "days": 60 },
+      { "name": "Coldsand", "days": 60 },
+      { "name": "Longnight", "days": 60 }
+    ],
+    "approxYears": 5
+  },
+  "rules": {},
+  "book": { "title": "Tales of the Shifting Sands", "author": "Ahmet Kadir Zengin", "chapterYears": 50 }
+}

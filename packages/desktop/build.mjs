@@ -46,7 +46,8 @@ async function bundleFonts() {
 
 /**
  * Cover title fonts (SIL OFL 1.1, listed in core/src/fonts.ts) into dist/renderer/fonts/cover: the @fontsource woff2
- * files (latin and latin-ext) and the Liberation TTFs from packages/pdf/fonts. The PDF embeds the same files.
+ * files (latin and latin-ext) for the app, the latin .woff files for the PDF (pdfkit embeds WOFF2 with empty glyphs),
+ * and the Liberation TTFs from packages/pdf/fonts, which both use.
  */
 async function bundleCoverFonts() {
   const { BUNDLED_FONTS } = await import('../core/src/fonts.ts');
@@ -70,6 +71,8 @@ async function bundleCoverFonts() {
         await cp(join(pkg, 'files', file), join(out, file));
         css += `@font-face { font-family: '${f.family}'; font-style: normal; font-display: swap; font-weight: ${weight}; src: url(./fonts/cover/${file}) format('woff2'); unicode-range: ${ranges[subset]}; }\n`;
       }
+      const woff = `${f.source}-latin-${weight}-normal.woff`;
+      if (existsSync(join(pkg, 'files', woff))) await cp(join(pkg, 'files', woff), join(out, woff));
     }
     if (f.source !== 'liberation') await cp(join(dirname(pdfRequire.resolve(`@fontsource/${f.source}/package.json`)), 'LICENSE'), join(out, `${f.source}-OFL.txt`));
   }

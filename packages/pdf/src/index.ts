@@ -76,6 +76,8 @@ export const chapterParts = (text: string): [string | undefined, string] => {
   return m ? [m[1], m[2]!] : [undefined, text];
 };
 const INK = '#222222';
+/** Space above a chapter opener's label, in points below the top margin. */
+const OPENER_SINK = 18;
 const GOLD = '#e0bd6a';
 const MUTED = '#6b6b6b';
 
@@ -99,6 +101,8 @@ class Layout {
   private readonly numbers: Map<string, number> | undefined;
   /** Print books: trim size and mirrored margins, and what each page (1-based) carries. */
   private readonly trim: Trim | undefined;
+  /** Print books for a printer: front pages and chapters open on right-hand pages, padded with blank pages. */
+  private readonly rightHand: boolean;
   private readonly roles: PageRole[] = [];
   private readonly chapters: string[] = [];
   private flowRole: PageRole = 'body';
@@ -113,6 +117,7 @@ class Layout {
     this.opts = opts;
     this.numbers = numbers;
     this.trim = doc.print ? TRIMS[doc.print.trim] : undefined;
+    this.rightHand = !!doc.print?.rightHand;
     this.t = THEMES[this.trim ? 'print' : doc.kind];
     const tr = this.trim;
     this.pdf = new PDFDocument({
@@ -143,24 +148,36 @@ class Layout {
   private get top(): number { return this.trim ? this.trim.top : this.t.margin; }
   private get bottom(): number { return this.pdf.page.height - this.pdf.page.margins.bottom; }
   private atTop(): boolean { return this.pdf.y <= this.top + 1; }
-  /** Start a right-hand (odd) page, leaving a blank left-hand page before it when needed. */
-  private recto(role: PageRole): void {
+  /**
+   * Start a new page for a front page, the contents or a chapter opener. Only a book with right-hand chapters lands
+   * it on `side` (right: odd pages, left: even pages) by adding a blank page first; otherwise nothing is padded, so
+   * a book read on screen has no empty pages.
+   */
+  private startPage(role: PageRole, side: 'right' | 'left'): void {
     this.flowRole = 'blank';
     this.pdf.addPage();
-    if (this.pages % 2 === 0) this.pdf.addPage();
+    if (this.rightHand && this.pages % 2 === (side === 'right' ? 0 : 1)) this.pdf.addPage();
     this.roles[this.pages] = role;
     this.flowRole = role === 'opener' ? 'body' : role;
   }
-  /** Start a left-hand (even) page, e.g. the copyright page on the back of the title page. */
-  private verso(role: PageRole): void {
-    this.flowRole = 'blank';
-    this.pdf.addPage();
-    if (this.pages % 2 === 1) this.pdf.addPage();
-    this.roles[this.pages] = role;
-    this.flowRole = role;
-  }
   private room(h: number): void {
     if (this.pdf.y + h > this.bottom && !this.atTop()) this.pdf.addPage();
+  }
+  /**
+   * The box for centred display text (titles, dedication, epigraph) with its lines evened out: the narrowest width
+   * that still needs no more lines than `width`, so no word is left alone on the last line. Set the font first.
+   */
+  private balanced(text: string, x: number, width: number, o: PDFKit.Mixins.TextOptions = {}): { x: number; width: number } {
+    const height = (w: number) => this.pdf.heightOfString(text, { ...o, width: w });
+    const target = height(width);
+    let lo = width * 0.3, hi = width;
+    for (let i = 0; i < 14; i++) {
+      const mid = (lo + hi) / 2;
+      if (height(mid) > target + 0.5) lo = mid;
+      else hi = mid;
+    }
+    const w = Math.min(width, hi + 1);
+    return { x: x + (width - w) / 2, width: w };
   }
   private space(pt: number): void {
     if (!this.atTop()) this.pdf.y += pt;
@@ -230,23 +247,29 @@ class Layout {
     this.pdf.x = this.left;
   }
 
-  /** Print chapter opening: a right-hand page, the title a third of the way down, no running head or page number. */
+  /**
+   * Print chapter opening: a new page (right-hand with right-hand chapters), the label, title and a short rule at the
+   * top of the text area, no running head or page number.
+   */
   private opener(b: Heading, key: string): void {
     const [label, title] = chapterParts(b.text);
     this.chapter = title;
-    this.recto('opener');
+    this.startPage('opener', 'right');
     this.chapters[this.pages] = title;
     if (!this.bodyStart) this.bodyStart = this.pages;
     if (b.toc) {
       this.pageOf.set(key, this.pages);
       if (this.numbers) this.outlineTop = this.pdf.outline.addItem(b.text);
     }
-    this.pdf.y = this.top + (this.pdf.page.height - this.top - this.trim!.bottom) * 0.2;
+    // A small sink only: the chapter starts where the reader looks first, not a fifth of the way down.
+    this.pdf.y = this.top + OPENER_SINK;
     if (label) {
       this.font('r').fontSize(9.5).fillColor(MUTED).text(label.toUpperCase(), this.left, this.pdf.y, { width: this.width, align: 'center', characterSpacing: 2.2 });
       this.pdf.y += 8;
     }
-    this.font('b').fontSize(this.t.heading[1]).fillColor(this.t.accent).text(title, this.left, this.pdf.y, { width: this.width, align: 'center', lineGap: 2, ...(b.toc ? { destination: key } : {}) });
+    this.font('b').fontSize(this.t.heading[1]).fillColor(this.t.accent);
+    const box = this.balanced(title, this.left, this.width, { lineGap: 2 });
+    this.pdf.text(title, box.x, this.pdf.y, { width: box.width, align: 'center', lineGap: 2, ...(b.toc ? { destination: key } : {}) });
     const y = this.pdf.y + 12;
     const mid = this.left + this.width / 2;
     this.pdf.moveTo(mid - 28, y).lineTo(mid + 28, y).lineWidth(0.7).strokeColor(this.t.accent).stroke();
@@ -254,7 +277,10 @@ class Layout {
     this.pdf.x = this.left;
   }
 
-  /** Front matter: each page on its own, right-hand except the copyright page on the back of the title page. */
+  /**
+   * Front matter: each page on its own. With right-hand chapters they open on right-hand pages, except the copyright
+   * page on the back of the title page.
+   */
   private front(b: Extract<Block, { kind: 'front' }>): void {
     if (!this.trim) {
       // Without a print layout these are plain centered lines.
@@ -262,19 +288,16 @@ class Layout {
       this.pdf.y += 10;
       return;
     }
-    if (b.role === 'copyright') this.verso('front');
-    else this.recto('front');
+    this.startPage('front', b.role === 'copyright' ? 'left' : 'right');
     const h = this.pdf.page.height;
     const center = (text: string, size: number, style: 'r' | 'b' | 'i', color = INK, gap = 6) => {
-      this.font(style).fontSize(size).fillColor(color).text(text, this.left, this.pdf.y, { width: this.width, align: 'center', lineGap: 2 });
+      this.font(style).fontSize(size).fillColor(color);
+      const box = this.balanced(text, this.left, this.width, { lineGap: 2 });
+      this.pdf.text(text, box.x, this.pdf.y, { width: box.width, align: 'center', lineGap: 2 });
       this.pdf.y += gap;
     };
     const [first, ...rest] = b.lines;
     switch (b.role) {
-      case 'half-title':
-        this.pdf.y = h * 0.28;
-        center(first ?? '', 17, 'r', this.t.accent);
-        break;
       case 'title': {
         this.pdf.y = h * 0.24;
         center(first ?? '', 26, 'b', this.t.accent, 10);
@@ -296,12 +319,21 @@ class Layout {
         this.pdf.y = h * 0.3;
         for (const l of b.lines) center(l, 11.5, 'i');
         break;
-      case 'epigraph':
+      case 'epigraph': {
         this.pdf.y = h * 0.3;
-        this.runs(first ?? '', { italic: true, align: 'center', size: 11 });
+        const quote = first ?? '';
+        this.font('i').fontSize(11);
+        const box = this.balanced(inlineRuns(quote.replace(/\n/g, ' ')).map((r) => r.text).join(''), this.left, this.width, { lineGap: this.t.gap });
+        this.runs(quote, { x: box.x, width: box.width, italic: true, align: 'center', size: 11 });
         this.pdf.y += 8;
-        for (const l of rest) this.runs(l, { align: 'right', size: 10, color: MUTED });
+        // The source sits under the quote's right edge, or the page's when it is wider than the quote.
+        for (const l of rest) {
+          this.font('r').fontSize(10);
+          const fits = this.pdf.widthOfString(l) <= box.width;
+          this.runs(l, { x: fits ? box.x : this.left, width: fits ? box.width : this.width, align: 'right', size: 10, color: MUTED });
+        }
         break;
+      }
     }
     this.pdf.x = this.left;
   }
@@ -387,7 +419,7 @@ class Layout {
   private toc(): void {
     this.afterPara = false;
     if (this.trim) {
-      this.recto('toc');
+      this.startPage('toc', 'right');
       this.pdf.y = this.top + 40;
       this.font('b').fontSize(this.t.heading[1]).fillColor(this.t.accent).text('Contents', this.left, this.pdf.y, { width: this.width, align: 'center' });
       this.pdf.y += 18;
@@ -407,7 +439,10 @@ class Layout {
       const y = this.pdf.y;
       const n = this.numbers?.get(key);
       this.font(h.level === 1 ? 'b' : 'r').fontSize(size).fillColor(INK);
-      this.pdf.text(h.text, this.left + indent, y, { width: this.width - indent - 44, lineGap: 1.5, ...(this.numbers ? { goTo: key } : {}) });
+      // Print books even out an entry that wraps, so a chapter title does not leave one word on its own line.
+      const room = this.width - indent - 44;
+      const width = this.trim ? this.balanced(h.text, 0, room, { lineGap: 1.5 }).width : room;
+      this.pdf.text(h.text, this.left + indent, y, { width, lineGap: 1.5, ...(this.numbers ? { goTo: key } : {}) });
       const after = this.pdf.y;
       this.pdf.text(n === undefined ? '' : String(n), this.left + this.width - 40, y, { width: 40, align: 'right', lineBreak: false });
       this.pdf.y = after;
@@ -583,16 +618,20 @@ class Layout {
     const font = art.titleStyle === 'serif' ? 'serif-i' : art.titleStyle === 'sans' ? 'sans-b' : 'serif-b';
     const title = art.titleStyle === 'display' ? c.title.toUpperCase() : c.title;
     if (art.showTitle) {
-      pdf.font(this.opts.titleFont ?? font).fontSize(Math.min(30, 13 * k)).fillOpacity(inkA).fillColor(ink)
-        .text(title, pad, H * 0.56, { width: W - 2 * pad, align: 'center', characterSpacing: art.titleStyle === 'display' ? 1.5 : 0 });
+      const o = { align: 'center' as const, characterSpacing: art.titleStyle === 'display' ? 1.5 : 0 };
+      pdf.font(this.opts.titleFont ?? font).fontSize(Math.min(30, 13 * k)).fillOpacity(inkA).fillColor(ink);
+      const box = this.balanced(title, pad, W - 2 * pad, o);
+      pdf.text(title, box.x, H * 0.56, { ...o, width: box.width });
     } else pdf.y = H * 0.56;
     pdf.fillOpacity(1);
     pdf.y += 6;
     pdf.font('serif').fontSize(Math.min(16, 7 * k)).fillColor('#efe3c4').text(c.subtitle, pad, pdf.y, { width: W - 2 * pad, align: 'center' });
     pdf.y += 14;
+    // A print book's cover has only the author under the subtitle, set large enough to read on a shelf.
+    const lineSize = this.trim ? Math.min(13, 5.6 * k) : Math.min(10, 4.4 * k);
     for (const l of c.lines) {
       if (pdf.y > H - 40 * k) break;
-      pdf.font('serif').fontSize(Math.min(10, 4.4 * k)).fillColor('#d9ccad').text(l.replace(/\*\*/g, ''), pad + 10 * k, pdf.y, { width: W - 2 * pad - 20 * k, align: 'center' });
+      pdf.font('serif').fontSize(lineSize).fillColor(this.trim ? '#efe3c4' : '#d9ccad').text(l.replace(/\*\*/g, ''), pad + 10 * k, pdf.y, { width: W - 2 * pad - 20 * k, align: 'center' });
       pdf.y += 4;
     }
   }
@@ -652,7 +691,7 @@ class Layout {
   run(): number {
     if (!this.trim) this.cover();
     else if (this.doc.cover.art) {
-      // Print books: the front cover first; the half-title then opens on the next right-hand page (page 3).
+      // Print books: the front cover first, then the title page (on page 3 with right-hand chapters).
       this.flowRole = 'blank';
       this.pdf.addPage();
       this.artCover(this.doc.cover.art);

@@ -1,8 +1,10 @@
-import { useEffect, useId, useState } from 'preact/hooks';
+import { createContext } from 'preact';
+import { useContext, useEffect, useId, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { DATE_FORMATS_HINT, describeDate, parseDate, TYPE_SINGULAR, WorldIndex, type Calendar, type IconName, type World } from '@lore-forge/core';
+import { DATE_FORMATS_HINT, describeDate, entryIcon, parseDate, TYPE_SINGULAR, WorldIndex, type Calendar, type Entry, type IconName, type World } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
 import { Select } from './select.tsx';
+import { SuggestInput, type Suggestion } from './suggest.tsx';
 import { EditErasLink } from './world-settings.tsx';
 
 /** Empty input -> undefined, so empty fields disappear from the file. */
@@ -79,31 +81,56 @@ export function DateField(props: { label: string; field: string; value: string |
   );
 }
 
-/** Reference to another entry: an id (or name), with suggestions limited to `types` (all types when empty). */
+/** An entry as a suggestion: its picture's icon in its type colour, the name, then the type and the id. */
+export const entrySuggestion = (e: Entry): Suggestion => ({ value: e.id, label: e.name, detail: `${TYPE_SINGULAR[e.type].toLowerCase()} · ${e.id}`, icon: entryIcon(e), tone: `t-${e.type}` });
+
+/** Opens an entry in the editor; EntryEditor provides it so every entry field can link to the entry it names. */
+export const OpenEntry = createContext<((id: string) => void) | null>(null);
+
+/**
+ * Reference to another entry (an id or a name), with suggestions limited to `types` (all types when empty). An entry
+ * it names shows as a chip like the multi-entry fields: its picture icon and name (click opens it) and × to clear,
+ * with a box beside it to pick another. Text that names no entry stays in the box, marked, so it can be fixed.
+ * Typing is committed on Enter, on leaving the box or by picking, so a name is not taken while it is half typed.
+ */
 export function RefField(props: { label: string; field: string; value: string | undefined; world: World; onChange: (v: string | undefined) => void; types?: readonly string[]; exclude?: string }) {
   const ix = new WorldIndex(props.world);
+  const open = useContext(OpenEntry);
   const target = props.value ? ix.resolve(props.value) : undefined;
-  const listId = useId();
+  const box = useRef<HTMLDivElement>(null);
+  const shownText = target ? '' : props.value ?? '';
+  const [text, setText] = useState(shownText);
+  useEffect(() => setText(shownText), [props.value, !!target]);
   const allowed = props.types && props.types.length ? props.types : undefined;
   const wrongType = !!target && !!allowed && !allowed.includes(target.type);
   const invalid = (!!props.value && !target) || wrongType;
   const want = allowed ? allowed.map((t) => TYPE_SINGULAR[t as keyof typeof TYPE_SINGULAR].toLowerCase()).join(', ') : undefined;
   const hint = !props.value
-    ? `Type an id or name${want ? ` (${want})` : ''}`
+    ? `Pick ${want ? `a ${want.replace(/, ([^,]*)$/, ' or $1')}` : 'an entry'}, or type its name or id`
     : !target ? 'No entry has this id or name'
-    : `${target.name} · ${TYPE_SINGULAR[target.type]}${wrongType ? ` (expected ${want})` : ''}`;
-  const options = props.world.entries.filter((e) => e.id !== props.exclude && (!allowed || allowed.includes(e.type))).sort((a, b) => a.name.localeCompare(b.name));
+    : `${TYPE_SINGULAR[target.type]} · ${target.id}${wrongType ? ` (expected ${want})` : ''}`;
+  const options = props.world.entries.filter((e) => e.id !== props.exclude && e.id !== target?.id && (!allowed || allowed.includes(e.type))).sort((a, b) => a.name.localeCompare(b.name));
+  const commit = (t: string) => { if (t !== shownText) props.onChange(opt(t)); };
   return (
     <Field label={props.label} field={props.field} hint={hint} invalid={invalid}>
       {(id, hintId) => (
-        <>
-          <input id={id} type="text" list={listId} value={props.value ?? ''} aria-invalid={invalid} aria-describedby={hintId} onInput={(e) => props.onChange(opt(e.currentTarget.value))} />
-          <datalist id={listId}>
-            {options.map((e) => (
-              <option key={e.id} value={e.id}>{`${e.name} · ${TYPE_SINGULAR[e.type].toLowerCase()}`}</option>
-            ))}
-          </datalist>
-        </>
+        <div class={`chip-input ref-input${invalid ? ' is-invalid' : ''}`} ref={box}>
+          {target && (
+            <span class={`chip t-${target.type}${wrongType ? ' is-invalid' : ''}`} data-chip={props.value}>
+              <Icon name={entryIcon(target)} />
+              {open ? <button type="button" class="link chip-label" title={`Open ${target.name}`} onClick={() => open(target.id)}>{target.name}</button> : <span class="chip-label">{target.name}</span>}
+              <button type="button" class="chip-remove" aria-label={`Clear ${props.label.toLowerCase()}`} onClick={() => props.onChange(undefined)}>×</button>
+            </span>
+          )}
+          <SuggestInput id={id} anchor={box} value={text} invalid={invalid} describedBy={hintId} suggestions={options.map(entrySuggestion)}
+            placeholder={target ? 'Change…' : 'Pick an entry…'}
+            onInput={(t) => setText(t)} onPick={(s) => props.onChange(s.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && text.trim()) { e.preventDefault(); commit(text.trim()); }
+              else if (e.key === 'Backspace' && !text && target) props.onChange(undefined);
+            }}
+            onBlur={() => commit(text.trim())} />
+        </div>
       )}
     </Field>
   );
@@ -155,7 +182,7 @@ export function ListEditor<T>(props: {
   );
 }
 
-export interface ChipOption { value: string; label: string }
+export interface ChipOption { value: string; label: string; icon?: IconName; detail?: string; tone?: string }
 
 /**
  * Several short values as chips with an icon and a remove button; a text box with suggestions adds more
@@ -165,22 +192,26 @@ export function ChipInput(props: {
   label: string; field: string; values: string[]; options: ChipOption[]; onChange: (v: string[]) => void;
   icon: (v: string) => IconName; display?: (v: string) => string; hint?: ComponentChildren; placeholder?: string; invalid?: (v: string) => boolean;
   onOpen?: (v: string) => void;
+  /** Applied to each new value (race: a capital first letter). */
+  normalize?: (v: string) => string;
 }) {
   const [text, setText] = useState('');
-  const listId = useId();
-  const add = (raw: string) => {
-    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean).map((s) => props.options.find((o) => o.label.toLowerCase() === s.toLowerCase())?.value ?? s);
+  const box = useRef<HTMLDivElement>(null);
+  /** Adds values as they are (picked from the list) or typed labels mapped to their values. */
+  const addValues = (raw: string[]) => {
+    const parts = props.normalize ? raw.map(props.normalize) : raw;
     const next = [...props.values];
     for (const p of parts) if (!next.some((v) => v.toLowerCase() === p.toLowerCase())) next.push(p);
     setText('');
     if (next.length !== props.values.length) props.onChange(next);
   };
+  const add = (raw: string) => addValues(raw.split(',').map((s) => s.trim()).filter(Boolean).map((s) => props.options.find((o) => o.label.toLowerCase() === s.toLowerCase())?.value ?? s));
   const remove = (v: string) => props.onChange(props.values.filter((x) => x !== v));
   const shown = (v: string) => props.display?.(v) ?? v;
   return (
     <Field label={props.label} field={props.field} hint={props.hint} invalid={props.values.some((v) => props.invalid?.(v))}>
       {(id, hintId) => (
-        <div class="chip-input">
+        <div class="chip-input" ref={box}>
           {props.values.map((v) => (
             <span key={v} class={`chip${props.invalid?.(v) ? ' is-invalid' : ''}`} data-chip={v}>
               <Icon name={props.icon(v)} />
@@ -188,20 +219,15 @@ export function ChipInput(props: {
               <button type="button" class="chip-remove" aria-label={`Remove ${shown(v)}`} onClick={() => remove(v)}>×</button>
             </span>
           ))}
-          <input id={id} type="text" list={listId} value={text} placeholder={props.values.length ? 'Add another…' : props.placeholder} aria-describedby={hintId}
-            onInput={(e) => {
-              const t = e.currentTarget.value;
-              if ((e as InputEvent).inputType === 'insertReplacementText' || t.endsWith(',')) add(t);
-              else setText(t);
-            }}
+          <SuggestInput id={id} anchor={box} value={text} placeholder={props.values.length ? 'Add another…' : props.placeholder} describedBy={hintId}
+            suggestions={props.options.filter((o) => !props.values.some((v) => v.toLowerCase() === o.value.toLowerCase()))}
+            onInput={(t) => (t.endsWith(',') ? add(t) : setText(t))}
+            onPick={(o) => addValues([o.value])}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && text.trim()) { e.preventDefault(); add(text); }
               else if (e.key === 'Backspace' && !text && props.values.length) remove(props.values[props.values.length - 1]!);
             }}
             onBlur={() => text.trim() && add(text)} />
-          <datalist id={listId}>
-            {props.options.filter((o) => !props.values.includes(o.value)).map((o) => <option key={o.value} value={o.label} />)}
-          </datalist>
         </div>
       )}
     </Field>

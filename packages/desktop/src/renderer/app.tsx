@@ -16,7 +16,6 @@ import { involves, WarningsPanel, type WarningActions } from './components/warni
 import { Icon } from './components/icon.tsx';
 import { Aura } from './components/aura.tsx';
 import { ErasLink, WorldSettings } from './components/world-settings.tsx';
-import { AboutDialog } from './components/about.tsx';
 import { transition } from './motion.ts';
 import { WorldHome } from './components/home.tsx';
 import { forgetImages, Portrait, WorldBookCover, WorldDir } from './components/cover.tsx';
@@ -162,7 +161,6 @@ export function App() {
   const [sidebarW, setSidebarW] = useSidebarWidth();
   const [preview, setPreview] = useState<PdfKind | null>(null);
   const [relMode, setRelMode] = useState<RelationMode | null>(null);
-  const [about, setAbout] = useState(false);
   const [settings, setSettings] = useState(false);
   const [creating, setCreating] = useState<EntryType | null>(null);
   const [chapterFile, setChapterFile] = useState<string | null>(null);
@@ -384,14 +382,15 @@ export function App() {
             'Back sits at the far top-left, then the mini cover and the title as one button');
           expect(top('World Codex') && top('Story Book'), 'exports are in the top bar');
           {
-            // The cover + title unit opens world home; Back returns to where we were.
+            // The cover + title unit opens world home; Alt+Left returns to where we were. The Back button itself always
+            // goes to the library (checked with the library below).
             const pressed = () => $('.topbar .tabs button[aria-pressed="true"]')?.textContent?.trim();
             const was = pressed();
             unit!.click();
             expect(await until(() => !!$('.home-hero') && unit!.getAttribute('aria-current') === 'page'), 'the top-left cover and title open world home');
-            expect(await until(() => !back!.disabled), 'Back is enabled once there is somewhere to go back to');
-            back!.click();
-            expect(await until(() => !$('.home-hero') && pressed() === was), `the Back button returns to ${was}`);
+            expect(!back!.disabled && back!.getAttribute('aria-label') === 'Back to the library', 'the Back button is the way back to the library');
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true }));
+            expect(await until(() => !$('.home-hero') && pressed() === was), `Alt+Left returns to ${was}`);
             const cover = unit!.querySelector<HTMLElement>('.mini-cover')!;
             expect(getComputedStyle(cover).transformOrigin.startsWith('0px') && !!unit!.querySelector('.mini-page'), 'the mini cover is hinged on its left edge over a page');
           }
@@ -410,15 +409,15 @@ export function App() {
         [...document.querySelectorAll<HTMLButtonElement>('.topbar .tabs button')].find((b) => b.textContent?.trim() === 'Editor')!.click();
         expect(await until(() => !!$(`.editor`) && $('.editor h2, .editor input')?.closest('.editor') !== null), 'the Editor tab shows the selected entry');
         $<HTMLButtonElement>('.topbar .top-settings')!.click();
-        expect(await until(() => !!$('.world-settings .ws-about')), 'World settings has an About button');
-        $<HTMLButtonElement>('.world-settings .ws-about')!.click();
-        expect(await until(() => !!$('.about') && !$('.world-settings')), 'About opens from World settings');
-        await popupFit('About', '.about', '.about-head button');
-        dom['credits'] = count('.about .credit');
-        expect(!!$('.about') && ($('.about')!.textContent ?? '').includes('CC BY 3.0') && ($('.about')!.textContent ?? '').includes('Open Font License'), 'About lists the icon and font licences');
-        key(window, 'Escape');
-        await tick();
-        expect(!$('.about'), 'Escape closes About');
+        {
+          // World settings: the default era comes first, before the list of eras; About lives in the library only.
+          expect(await until(() => !!$('.world-settings')), 'the top-bar gear opens World settings');
+          const body = $('.world-settings .dialog-body')!;
+          expect(!$('.world-settings .ws-about') && body.firstElementChild?.classList.contains('ws-default-row') === true && !!body.querySelector('.ws-default-row #ws-default'),
+            'World settings starts with the default era and has no About button');
+          key(window, 'Escape');
+          expect(await until(() => !$('.world-settings')), 'Escape closes World settings');
+        }
         {
           // The editor fills the centre pane (no max width).
           await until(() => !!$('.editor'));
@@ -493,7 +492,10 @@ export function App() {
             // Print book: trim-shaped pages, the cover art then front matter, chapter openers with a drop cap.
             const bookOnDisk = async (ok: (ws: World) => boolean) => { for (let i = 0; i < 60; i++) { if (ok(parseWorld(await window.lore.readWorld(dirRef.current!)))) return true; await tick(50); } return false; };
             expect(count('.preview .sheet.is-print.trim-6x9') > 1 && !!$('.preview .sheet-cover.is-print.trim-6x9'), 'the book preview uses 6x9 print pages, cover included');
-            expect(['half-title', 'title', 'copyright'].every((r) => count(`.preview .doc-front-${r}`) === 1), 'half-title, title and copyright pages');
+            expect(['title', 'copyright'].every((r) => count(`.preview .doc-front-${r}`) === 1) && count('.preview .doc-front-half-title') === 0, 'title and copyright pages, no half-title');
+            // The cover keeps its page shape (it used to shrink to a strip) and carries the book title.
+            const cv = $('.preview .sheet-cover.has-art')!.getBoundingClientRect();
+            expect(cv.height > cv.width * 1.3 && !!$('.preview .sheet-cover-text .sheet-title'), `the cover sheet keeps its page shape and shows the title (${Math.round(cv.width)}x${Math.round(cv.height)})`);
             expect(count('.preview .doc-opener') > 0 && count('.preview .doc-dropcap') > 0, 'chapter openers with a drop cap');
             expect(!!$('.preview .save-docx'), 'Save Word button');
             const ded = $<HTMLInputElement>('.preview textarea[name="book-dedication"]')!;
@@ -892,11 +894,12 @@ export function App() {
           setView('editor');
           await tick();
         }
-        // Back to the library through the Library link on world home; history covers the library too.
+        // Back to the library through the top-left Back button (world home also has a Library link); history covers the
+        // library too.
         const homeWorld = dirRef.current;
         $<HTMLButtonElement>('.world-home-btn')!.click();
         expect(await until(() => !!$('.home-library')), 'world home has a Library link');
-        $<HTMLButtonElement>('.home-library')!.click();
+        $<HTMLButtonElement>('.topbar .nav-back')!.click();
         expect(await until(() => count('.shelf .world-card .book-spine') > 1 && !!$('.shelf .world-count')), 'the library shows worlds as books');
         mouse(3);
         expect(await until(() => dirRef.current === homeWorld && !!$('.home-hero'), 5000), 'mouse back from the library reopens the world on its home page');
@@ -904,21 +907,27 @@ export function App() {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true }));
         expect(await until(() => !!$('.shelf .world-count') && !dirRef.current, 5000), 'Alt+Right goes forward to the library again');
         dom['shelf'] = count('.shelf .world-card:not(.new-book)');
-        // The library scene: light shaft with dust, runes, candles; transform/opacity only, parallax, still under reduced motion.
+        // The library scene: colour clouds, light shafts with dust, runes, candles with embers, mist, bokeh; transform/opacity
+        // only, parallax, still under reduced motion.
         {
           const anim = (sel: string) => [...document.querySelectorAll<HTMLElement>(sel)].map((el) => getComputedStyle(el).animationName);
-          expect(!!$('.start > .aura .light-shaft') && count('.light-shaft .dust') > 5 && count('.scene .rune') > 5 && count('.scene .candle') === 2, 'the library has a light shaft with dust, runes and candles');
-          expect(['.light-shaft', '.dust', '.rune', '.candle'].every((sel) => anim(sel).every((n) => n && n !== 'none')), 'the scene animates');
-          const frames = [...document.styleSheets].flatMap((sh) => [...sh.cssRules]).filter((r): r is CSSKeyframesRule => r instanceof CSSKeyframesRule && ['shaft-sway', 'dust-float', 'rune-drift', 'candle-flicker', 'candle-breathe'].includes(r.name));
+          expect(!!$('.start > .aura .light-shaft') && count('.light-shaft') >= 2 && count('.light-shaft .dust') > 5 && count('.scene .rune') > 5 && count('.scene .candle') === 2
+            && count('.scene .ember') > 5 && count('.scene .bokeh') > 3 && count('.scene .nebula') > 0 && count('.scene .mist') > 0 && !!$('.scene .vignette'),
+            'the library has light shafts with dust, runes, candles with embers, colour clouds, mist and bokeh under a vignette');
+          expect(['.light-shaft', '.dust', '.rune', '.candle', '.ember', '.bokeh', '.nebula', '.mist'].every((sel) => anim(sel).every((n) => n && n !== 'none'))
+            && getComputedStyle($('.ember')!, '::before').animationName === 'ember-sway', 'the scene animates');
+          const sceneFrames = ['shaft-sway', 'dust-float', 'rune-drift', 'candle-flicker', 'candle-breathe', 'nebula-drift', 'ember-rise', 'ember-sway', 'mist-drift', 'bokeh-drift', 'mote-drift'];
+          const frames = [...document.styleSheets].flatMap((sh) => [...sh.cssRules]).filter((r): r is CSSKeyframesRule => r instanceof CSSKeyframesRule && sceneFrames.includes(r.name));
           const props = new Set(frames.flatMap((f) => [...f.cssRules].flatMap((k) => [...(k as CSSKeyframeRule).style])));
-          expect(frames.length === 5 && [...props].every((p) => p === 'transform' || p === 'opacity'), `scene keyframes only use transform and opacity: ${[...props].join(', ')}`);
+          expect(frames.length === sceneFrames.length && [...props].every((p) => p === 'transform' || p === 'opacity'), `scene keyframes only use transform and opacity: ${[...props].join(', ')}`);
           const scene = $<HTMLElement>('.scene')!;
           window.dispatchEvent(new MouseEvent('mousemove', { clientX: 10, clientY: 10 }));
           await tick(80);
           expect(Math.abs(parseFloat(scene.style.getPropertyValue('--px')) + 0.5) < 0.05 && getComputedStyle($('.scene-layer.depth-2')!).transform !== 'none', `the scene layers follow the mouse (--px ${scene.style.getPropertyValue('--px')}, ${getComputedStyle($('.scene-layer.depth-2')!).transform}, reduced ${matchMedia('(prefers-reduced-motion: reduce)').matches}, hidden ${document.hidden})`);
           expect(getComputedStyle($('.rune')!).animationPlayState === (document.hidden ? 'paused' : 'running'), 'the scene pauses while the window is hidden');
           const still = [...document.styleSheets].flatMap((sh) => [...sh.cssRules]).filter((r) => r instanceof CSSMediaRule && r.conditionText.includes('prefers-reduced-motion')).map((r) => r.cssText).join(' ');
-          expect(/\.light-shaft, \.candle \{ animation: [^;}]*\bnone\b/.test(still) && /\.dust \{ display: none/.test(still) && /\.rune \{ animation: [^;}]*\bnone\b/.test(still) && /\.scene-layer[^{]*\{ transform: none/.test(still), `the scene is still under reduced motion: ${still.slice(still.indexOf('.light-shaft'), still.indexOf('.light-shaft') + 400)}`);
+          expect(/\.light-shaft, \.candle \{ animation: [^;}]*\bnone\b/.test(still) && /\.dust \{ display: none/.test(still) && /\.ember \{ display: none/.test(still) && /\.rune \{ animation: [^;}]*\bnone\b/.test(still)
+            && /\.nebula, \.mist, \.bokeh \{ animation: [^;}]*\bnone\b/.test(still) && /\.scene-layer[^{]*\{ transform: none/.test(still), `the scene is still under reduced motion: ${still.slice(still.indexOf('.light-shaft'), still.indexOf('.light-shaft') + 400)}`);
         }
         const startText = $('.start')!.textContent ?? '';
         expect(!/example/i.test(startText) && !startText.includes(dirRef.current ?? '\u0000'), 'no paths and no "example" label in the library');
@@ -1004,7 +1013,10 @@ export function App() {
           await tick();
           expect($('.cover-editor .cover-status')?.textContent === 'Unsaved changes' && !$<HTMLButtonElement>('.cover-editor .cover-save')!.disabled, 'a change marks the cover as unsaved and enables Save');
           const actions = $('.cover-editor .cover-editor-actions')!.getBoundingClientRect();
-          expect(actions.bottom <= window.innerHeight + 1 && actions.top >= 0 && getComputedStyle($('.cover-editor .cover-editor-actions')!).position === 'sticky', `Save and Cancel stay in view (${Math.round(actions.top)}-${Math.round(actions.bottom)} of ${window.innerHeight})`);
+          const body = $('.cover-editor .cover-editor-body')!;
+          expect(actions.bottom <= window.innerHeight + 1 && actions.top >= 0 && !body.contains($('.cover-editor .cover-editor-actions')) && !body.contains($('#cover-editor-title'))
+            && getComputedStyle(body).overflowY === 'auto' && getComputedStyle($('.cover-editor')!).overflowY === 'hidden',
+            `Save and Cancel stay in view, and only the body between the title and the buttons scrolls (${Math.round(actions.top)}-${Math.round(actions.bottom)} of ${window.innerHeight})`);
         }
         const titleField = [...document.querySelectorAll<HTMLElement>('.cover-editor .color-field')].find((f) => f.textContent?.includes('Title colour'))!;
         titleField.querySelector<HTMLButtonElement>('.color-button')!.click();
@@ -1186,6 +1198,10 @@ export function App() {
             const spineRest = face(a, 'spine').getBoundingClientRect();
             expect(near(rest['spine']!, [0, 0, 1]) && near(rest['cover']!, [1, 0, 0]) && near(rest['back']!, [-1, 0, 0]) && near(rest['pages']!, [0, 0, -1]) && near(rest['top']!, [0, -1, 0])
               && Math.abs(spineRest.width - thick) < 2, `at rest the spine faces the viewer (${Math.round(spineRest.width)}px wide, the book is ${Math.round(thick)}px thick): ${JSON.stringify(rest)}`);
+            // In perspective the other faces of a book at rest would poke out beside its spine, so they are not drawn.
+            const sides = (c: HTMLElement) => faces.filter((f) => f !== 'spine').map((f) => getComputedStyle(face(c, f)).opacity);
+            const onlySpine = (c: HTMLElement) => sides(c).every((o) => o === '0') && getComputedStyle(face(c, 'spine')).opacity === '1';
+            expect(cards.every(onlySpine), `a book at rest shows only its spine (${sides(a).join(', ')})`);
             const spines = () => cards.map((c) => face(c, 'spine').getBoundingClientRect());
             const restAt = spines().map((r) => Math.round(r.left));
             const atRest = () => spines().every((r, i) => Math.abs(r.left - restAt[i]!) < 1.5);
@@ -1201,6 +1217,7 @@ export function App() {
             const spineOut = face(a, 'spine').getBoundingClientRect();
             expect(near(outLooks['cover']!, [0, 0, 1]) && near(outLooks['spine']!, [-1, 0, 0]) && near(outLooks['back']!, [0, 0, -1]) && near(outLooks['pages']!, [1, 0, 0]),
               `out, the book has turned so the front cover faces the viewer: ${JSON.stringify(outLooks)}`);
+            expect(getComputedStyle(cover(a)).opacity === '1' && cards.filter((c) => c !== a).every(onlySpine), 'out, the cover shows; the books around it still show only their spines');
             expect(r.width > coverW * 0.95 && r.width < coverW * 1.25 && r.height > 60 && spineOut.width < thick * 0.6,
               `the pulled-out book shows its whole cover (${Math.round(r.width)}x${Math.round(r.height)}, cover ${coverW}px) and the spine is edge-on (${Math.round(spineOut.width)}px)`);
             expect(!a.classList.contains('opens-left') && Math.abs(spineOut.left - spineRest.left) <= 3 && Math.abs(r.left - spineRest.left) <= 3,
@@ -1222,7 +1239,21 @@ export function App() {
             await settleAll();
             const back = looks(a);
             expect(near(back['spine']!, [0, 0, 1]) && near(back['cover']!, [1, 0, 0]) && Math.abs(face(a, 'spine').getBoundingClientRect().width - thick) < 2, `a book put back shows its spine again: ${JSON.stringify(back)}`);
+            expect(cards.every(onlySpine), `a book put back shows only its spine again, no cover sticking out (${sides(a).join(', ')})`);
             expect(atRest(), 'the pushed books slide back to their places');
+            // A book put back just before the next one comes out still finishes going back: it must not stay drawn over
+            // its neighbours (is-closing) while the next one is out.
+            a.dispatchEvent(new PointerEvent('pointerenter'));
+            expect(await until(() => a.classList.contains('is-out')), 'pointing at the first book again pulls it out');
+            a.dispatchEvent(new PointerEvent('pointerleave'));
+            b.dispatchEvent(new PointerEvent('pointerenter'));
+            expect(await until(() => b.classList.contains('is-out')), 'pointing at the next book right after pulls that one out');
+            await tick(700);
+            expect(b.classList.contains('is-out') && count('.shelf .is-closing') === 0, `the book put back before it is no longer drawn over its neighbours (${count('.shelf .is-closing')} closing)`);
+            b.dispatchEvent(new PointerEvent('pointerleave'));
+            expect(await until(() => count('.shelf .is-out') === 0), 'leaving puts that book back too');
+            await tick(700);
+            await settleAll();
             // Spam: quick enters and leaves across three books end in one consistent state.
             const c3 = cards[2] ?? b;
             const trio = [a, b, c3];
@@ -1284,7 +1315,24 @@ export function App() {
               await until(() => a.classList.contains('is-out'));
               await tick(900);
               expect(getComputedStyle(a.querySelector('.world-meta')!).opacity === '1', 'the counts show on a book that is fully out');
+              // Going back, the books that moved aside wait for the cover: on every frame while the cover still
+              // shows, the next spine stays to the right of it, so the two are never drawn over each other.
+              const clearOf = (book: HTMLElement, next: HTMLElement, ms: number) => new Promise<number>((done) => {
+                const c = cover(book);
+                const s = face(next, 'spine');
+                const t0 = performance.now();
+                let worst = Infinity;
+                const frame = () => {
+                  if (Number(getComputedStyle(c).opacity) > 0.05) worst = Math.min(worst, s.getBoundingClientRect().left - c.getBoundingClientRect().right);
+                  if (performance.now() - t0 < ms) requestAnimationFrame(frame);
+                  else done(Math.round(worst));
+                };
+                requestAnimationFrame(frame);
+              });
+              const clash = clearOf(a, b, 900);
               await window.lore.smokeMouse([spot()]);
+              const closest = await clash;
+              expect(closest >= 0, `going back, the next book stays clear of the closing cover (closest ${closest}px)`);
               await checkRest('fully out');
               await window.lore.smokeMouse([at(a)]);
               await tick(25);
@@ -1380,6 +1428,8 @@ export function App() {
           $<HTMLButtonElement>('.start-about')!.click();
           expect(await until(() => !!$('.about')), 'About opens from the library');
           await popupFit('library About', '.about', '.about-head button');
+          dom['credits'] = count('.about .credit');
+          expect(($('.about')!.textContent ?? '').includes('CC BY 3.0') && ($('.about')!.textContent ?? '').includes('Open Font License'), 'About lists the icon and font licences');
           $<HTMLButtonElement>('.about-head button')!.click();
           await until(() => !$('.about'));
           // A big library: generated worlds in a throwaway worlds folder (never the repository's worlds/).
@@ -1752,7 +1802,7 @@ export function App() {
   };
 
   /** Back to the library: write what is pending, then close the world (Back returns to it). */
-  const closeWorld = () => flush().then(() => { setWorld(null); setDir(null); dirRef.current = null; setSettings(false); setAbout(false); setDoomed(null); document.title = 'Lore-Forge'; });
+  const closeWorld = () => flush().then(() => { setWorld(null); setDir(null); dirRef.current = null; setSettings(false); setDoomed(null); document.title = 'Lore-Forge'; });
 
   /** One step back or forward. Windows can report a mouse button both as a DOM event and an app command; count it once. */
   const lastNav = useRef({ at: 0, d: '' });
@@ -1896,7 +1946,8 @@ export function App() {
       <Aura calm />
       <header class="topbar">
         <div class="world-title">
-          <button type="button" class="ghost icon-only nav-back" onClick={() => navigate('back')} disabled={!history.canBack} aria-label="Back" title="Back (Alt+Left or mouse button 4)"><Icon name="plain-arrow" class="flip-x" /></button>
+          {/* Always the way out to the library; Alt+Left and mouse button 4 still step back through history. */}
+          <button type="button" class="ghost icon-only nav-back" onClick={() => void closeWorld()} aria-label="Back to the library" title="Back to the library"><Icon name="plain-arrow" class="point-left" /></button>
           <h1>
             <button type="button" class="world-home-btn" onClick={() => goView('home')} aria-current={view === 'home' ? 'page' : undefined} title="World home: cover, counts, timeline, family tree and more">
               <span class="mini-book" aria-hidden="true">
@@ -1949,7 +2000,6 @@ export function App() {
       </main>
       <WarningsPanel warnings={warnings} selectedId={selectedId} actions={actions} />
       {preview && <PreviewDialog dir={dir} world={world} kind={preview} onClose={() => setPreview(null)} onSave={savePdf} onSaveDocx={saveDocx} onSaveBook={saveBook} />}
-      {about && <AboutDialog onClose={() => setAbout(false)} />}
       {doomed?.kind === 'entry' && (
         <ConfirmDialog title={`Delete “${doomed.entry.name}”?`} confirmLabel="Delete entry" onClose={() => setDoomed(null)} onConfirm={() => deleteEntry(doomed.entry).then(() => setDoomed(null))}
           subject={<div class="confirm-world"><Portrait entry={doomed.entry} size="md" /><div><strong class="confirm-name">{doomed.entry.name}</strong><span class="muted">{TYPE_SINGULAR[doomed.entry.type]} · {world.files[doomed.entry.id]}</span></div></div>}>
@@ -1965,7 +2015,7 @@ export function App() {
           </ConfirmDialog>
         );
       })()}
-      {settings && <WorldSettings world={world} onSave={saveCalendar} onClose={() => setSettings(false)} onAbout={() => { setSettings(false); setAbout(true); }} />}
+      {settings && <WorldSettings world={world} onSave={saveCalendar} onClose={() => setSettings(false)} />}
       <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>
     </ErasLink.Provider>

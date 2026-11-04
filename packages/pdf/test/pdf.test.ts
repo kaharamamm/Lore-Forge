@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { storyBook, worldCodex } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
-import { defaultFontDir, inlineRuns, printable, renderPdf, sidecarPath, writePublication } from '@lore-forge/pdf';
+import { BUNDLED_FONTS, bundledFontFile, bundledFontPath, defaultFontDir, inlineRuns, printable, renderPdf, sidecarPath, writePublication } from '@lore-forge/pdf';
 
-const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'shifting-sands');
+const example = join(import.meta.dirname, '..', '..', '..', 'worlds', 'camelamamm');
 const hasPdftotext = (() => {
   try {
     execFileSync('pdftotext', ['-v'], { stdio: 'ignore' });
@@ -49,13 +49,16 @@ test('writes the PDF and a Markdown sidecar with image links relative to it', as
   const dir = await mkdtemp(join(tmpdir(), 'lore-pdf-'));
   try {
     const world = await loadWorld(example);
-    const out = await writePublication(worldCodex(world), example, join(dir, 'codex.pdf'));
+    const doc = worldCodex(world);
+    // Turkish letters (DejaVu has them) and an image link; the example world has no pictures of its own.
+    doc.blocks.push({ kind: 'para', text: "Şafakta İlsa'nın ışığı söndü." }, { kind: 'image', file: 'images/place-singing-well/establishing.png', caption: 'The Singing Well: Establishing shot', details: [] });
+    const out = await writePublication(doc, example, join(dir, 'codex.pdf'));
     assert.equal(out.md, join(dir, 'codex.md'));
     const md = await readFile(out.md, 'utf8');
-    assert.match(md, /Art brief: Kadir Humpback/);
+    assert.match(md, /Art brief: Mr Camel/);
     assert.match(md, /Şafakta İlsa'nın ışığı söndü/);
-    const link = /!\[Saltmere: Establishing shot\]\(([^)]+)\)/.exec(md)?.[1];
-    assert.ok(link && !link.startsWith('/') && link.endsWith('worlds/shifting-sands/images/place-saltmere/establishing.png'), link);
+    const link = /!\[The Singing Well: Establishing shot\]\(([^)]+)\)/.exec(md)?.[1];
+    assert.ok(link && !link.startsWith('/') && link.endsWith('worlds/camelamamm/images/place-singing-well/establishing.png'), link);
     if (hasPdftotext) {
       const text = execFileSync('pdftotext', [out.pdf, '-'], { encoding: 'utf8' });
       assert.match(text, /Contents/);
@@ -114,4 +117,14 @@ test('cover fonts: a bundled font is embedded, a missing one falls back to DejaV
   assert.match(missing.notes[0] ?? '', /No Such Font 123.*DejaVu/);
   const hidden = await renderPdf(worldCodex(withCover({ font: 'Pirata One', showTitle: false })), { worldDir: example });
   assert.ok(!names(hidden.pdf).some((n) => n?.startsWith('PirataOne')));
+});
+
+test('bundled cover fonts embed as .woff or .ttf, never .woff2 (pdfkit draws WOFF2 glyphs as nothing)', () => {
+  for (const f of BUNDLED_FONTS) {
+    for (const bold of [false, true]) {
+      const file = bundledFontFile(f, bold);
+      assert.match(file, /\.(woff|ttf)$/, file);
+      assert.ok(bundledFontPath(f, bold), `${f.family} ${bold ? 'bold' : 'regular'}: ${file} is in its package`);
+    }
+  }
 });
