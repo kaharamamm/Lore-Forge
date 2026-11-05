@@ -53,12 +53,24 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 
 ## Features
 
-| | |
-| --- | --- |
-| <img src="docs/media/library.png" alt="The library: each world is a book on a shelf"><br>**Library.** Every world is a book on a shelf, with search and new books. | <img src="docs/media/world-home.png" alt="World home with the book cover and entry cards"><br>**World home.** Cover, counts and a card for every entry. |
-| <img src="docs/media/entry.png" alt="The entry editor for Mr Camel"><br>**Editor.** Structured fields per type, dates on your own calendar, linked names. | <img src="docs/media/warnings.png" alt="An after-death error in the warnings panel"><br>**Consistency warnings.** Live, with *Go to* and *Mark intended*. |
-| <img src="docs/media/relationships.png" alt="The relationship web around Mr Camel"><br>**Relationship web and family tree.** Drag to link entries. | <img src="docs/media/timeline.png" alt="The timeline with eras, lifespans and events"><br>**Timeline.** Eras, lifespans, events and warning markers. |
-| <img src="docs/media/story.png" alt="The Story space with a chapter and proposals"><br>**Story.** A chapter-by-chapter manuscript that proposes entries from your text. | <img src="docs/media/story-book-pdf.png" alt="Cover and first pages of the exported Story Book PDF"><br>**Story Book and World Codex.** Print-ready PDF, Word and Markdown. |
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/media/library.png" alt="The library: each world is a book on a shelf" width="100%"><br><b>Library.</b> Every world is a book on a shelf, with search and new books.</td>
+    <td width="50%" valign="top"><img src="docs/media/world-home.png" alt="World home with the book cover and entry cards" width="100%"><br><b>World home.</b> Cover, counts and a card for every entry.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/media/entry.png" alt="The entry editor for Mr Camel" width="100%"><br><b>Editor.</b> Structured fields per type, dates on your own calendar, linked names.</td>
+    <td width="50%" valign="top"><img src="docs/media/warnings.png" alt="An after-death error in the warnings panel" width="100%"><br><b>Consistency warnings.</b> Live, with <i>Go to</i> and <i>Mark intended</i>.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/media/relationships.png" alt="The relationship web around Mr Camel" width="100%"><br><b>Relationship web and family tree.</b> Drag to link entries.</td>
+    <td width="50%" valign="top"><img src="docs/media/timeline.png" alt="The timeline with eras, lifespans and events" width="100%"><br><b>Timeline.</b> Eras, lifespans, events and warning markers.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/media/story.png" alt="The Story space with a chapter and proposals" width="100%"><br><b>Story.</b> A chapter-by-chapter manuscript that proposes entries from your text.</td>
+    <td width="50%" valign="top"><img src="docs/media/story-book-pdf.png" alt="Cover and first pages of the exported Story Book PDF" width="100%"><br><b>Story Book and World Codex.</b> Print-ready PDF, Word and Markdown.</td>
+  </tr>
+</table>
 
 The warning in these screenshots was added on purpose to a copy of the sample world; the sample world itself has none.
 
