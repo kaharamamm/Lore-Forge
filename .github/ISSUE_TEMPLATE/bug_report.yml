@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in Lore-Forge doesn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. Please check the [open issues](https://github.com/kaharamamm/Lore-Forge/issues) first.
+  - type: input
+    id: version
+    attributes:
+      label: Lore-Forge version
+      description: Shown under About in the library.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options:
+        - Windows
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (.deb)
+        - Linux (AppImage)
+        - From source
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the sample world
+        2. ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages or logs
+      description: Anything from the terminal or a dialog. Screenshots can be pasted here too.
+      render: text
