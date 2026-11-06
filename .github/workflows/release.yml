@@ -2,13 +2,10 @@
 # The version is the newest vX.Y.Z tag plus the chosen bump, or the exact version given. It goes to electron-builder
 # on the command line; package.json is never bumped by hand. If that tag already exists, nothing runs.
 #
-# Each release carries:
-#   versioned files      Lore-Forge-<version>-win-x64.exe, -linux-amd64.deb, -linux-x86_64.AppImage,
-#                        -mac-arm64.dmg/.zip, -mac-x64.dmg/.zip, their .blockmap files, and latest.yml,
-#                        latest-linux.yml, latest-mac.yml (read by the app's self-updater)
-#   stable names         Lore-Forge-Setup-x64.exe, Lore-Forge-amd64.deb, Lore-Forge-x86_64.AppImage,
-#                        Lore-Forge-mac-arm64.dmg, Lore-Forge-mac-x64.dmg, so these links never change:
-#                        https://github.com/kaharamamm/Lore-Forge/releases/latest/download/<stable name>
+# Each release publishes only:
+#   Lore-Forge-Setup-x64.exe, Lore-Forge-x86_64.AppImage, Lore-Forge-mac-arm64.dmg, Lore-Forge-mac-x64.dmg
+#   plus latest.yml / latest-linux.yml / latest-mac.yml (self-updater; pointed at those stable names).
+# Stable links: https://github.com/kaharamamm/Lore-Forge/releases/latest/download/<name>
 # The builds are not code-signed (no paid certificates), so Windows and macOS ask once before the first start.
 name: Release
 
@@ -139,18 +136,68 @@ jobs:
           pattern: release-*
           path: assets
           merge-multiple: true
-      - name: Stable download names
+      - name: Keep only the public downloads
         working-directory: assets
         run: |
+          set -euo pipefail
           cp "Lore-Forge-$V-win-x64.exe" Lore-Forge-Setup-x64.exe
-          cp "Lore-Forge-$V-linux-amd64.deb" Lore-Forge-amd64.deb
           cp "Lore-Forge-$V-linux-x86_64.AppImage" Lore-Forge-x86_64.AppImage
           cp "Lore-Forge-$V-mac-arm64.dmg" Lore-Forge-mac-arm64.dmg
           cp "Lore-Forge-$V-mac-x64.dmg" Lore-Forge-mac-x64.dmg
+          # Point electron-updater at the stable names, then drop everything else.
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const path = require('path');
+          function meta(file) {
+            const buf = fs.readFileSync(file);
+            return {
+              url: path.basename(file),
+              sha512: crypto.createHash('sha512').update(buf).digest('base64'),
+              size: buf.length,
+            };
+          }
+          function writeYml(out, primary, extras = []) {
+            const files = [primary, ...extras];
+            const lines = [`version: ${process.env.V}`, 'files:'];
+            for (const f of files) {
+              lines.push(`  - url: ${f.url}`);
+              lines.push(`    sha512: ${f.sha512}`);
+              lines.push(`    size: ${f.size}`);
+            }
+            lines.push(`path: ${primary.url}`);
+            lines.push(`sha512: ${primary.sha512}`);
+            lines.push(`releaseDate: '${new Date().toISOString()}'`);
+            fs.writeFileSync(out, lines.join('\n') + '\n');
+          }
+          const win = meta('Lore-Forge-Setup-x64.exe');
+          const linux = meta('Lore-Forge-x86_64.AppImage');
+          const macX64 = meta('Lore-Forge-mac-x64.dmg');
+          const macArm = meta('Lore-Forge-mac-arm64.dmg');
+          writeYml('latest.yml', win);
+          writeYml('latest-linux.yml', linux);
+          writeYml('latest-mac.yml', macX64, [macArm]);
+          NODE
+          # Public assets only (plus GitHub's auto source archives).
+          find . -type f ! -name 'Lore-Forge-Setup-x64.exe' \
+            ! -name 'Lore-Forge-x86_64.AppImage' \
+            ! -name 'Lore-Forge-mac-arm64.dmg' \
+            ! -name 'Lore-Forge-mac-x64.dmg' \
+            ! -name 'latest.yml' \
+            ! -name 'latest-linux.yml' \
+            ! -name 'latest-mac.yml' \
+            -delete
           ls -l
       - name: Create the release
         run: |
-          gh release create "$TAG" assets/* \
+          gh release create "$TAG" \
+            assets/Lore-Forge-Setup-x64.exe \
+            assets/Lore-Forge-x86_64.AppImage \
+            assets/Lore-Forge-mac-arm64.dmg \
+            assets/Lore-Forge-mac-x64.dmg \
+            assets/latest.yml \
+            assets/latest-linux.yml \
+            assets/latest-mac.yml \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Lore-Forge $V" \

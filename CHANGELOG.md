@@ -4,6 +4,10 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+
+- GitHub Release ships only the four stable installers plus updater `latest*.yml` files (no blockmaps, zips, debs, or versioned duplicates).
+
 ### Added
 
 - **Duplicate world**, on the shelf next to Delete and on the world home: a copy with a new id and its cover, which opens straight away. Works on the read-only sample world. `lore duplicate` does the same from the command line.
