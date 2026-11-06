@@ -3,7 +3,7 @@
 # on the command line; package.json is never bumped by hand. If that tag already exists, nothing runs.
 #
 # Each release publishes only:
-#   Lore-Forge-Setup-x64.exe, Lore-Forge-x86_64.AppImage, Lore-Forge-mac-arm64.dmg, Lore-Forge-mac-x64.dmg
+#   Lore-Forge-Setup-x64.exe, Lore-Forge-amd64.deb, Lore-Forge-x86_64.AppImage, Lore-Forge-mac-arm64.dmg, Lore-Forge-mac-x64.dmg
 #   plus latest.yml / latest-linux.yml / latest-mac.yml (self-updater; pointed at those stable names).
 # Stable links: https://github.com/kaharamamm/Lore-Forge/releases/latest/download/<name>
 # The builds are not code-signed (no paid certificates), so Windows and macOS ask once before the first start.
@@ -141,6 +141,7 @@ jobs:
         run: |
           set -euo pipefail
           cp "Lore-Forge-$V-win-x64.exe" Lore-Forge-Setup-x64.exe
+          cp "Lore-Forge-$V-linux-amd64.deb" Lore-Forge-amd64.deb
           cp "Lore-Forge-$V-linux-x86_64.AppImage" Lore-Forge-x86_64.AppImage
           cp "Lore-Forge-$V-mac-arm64.dmg" Lore-Forge-mac-arm64.dmg
           cp "Lore-Forge-$V-mac-x64.dmg" Lore-Forge-mac-x64.dmg
@@ -180,6 +181,7 @@ jobs:
           NODE
           # Public assets only (plus GitHub's auto source archives).
           find . -type f ! -name 'Lore-Forge-Setup-x64.exe' \
+            ! -name 'Lore-Forge-amd64.deb' \
             ! -name 'Lore-Forge-x86_64.AppImage' \
             ! -name 'Lore-Forge-mac-arm64.dmg' \
             ! -name 'Lore-Forge-mac-x64.dmg' \
@@ -192,6 +194,7 @@ jobs:
         run: |
           gh release create "$TAG" \
             assets/Lore-Forge-Setup-x64.exe \
+            assets/Lore-Forge-amd64.deb \
             assets/Lore-Forge-x86_64.AppImage \
             assets/Lore-Forge-mac-arm64.dmg \
             assets/Lore-Forge-mac-x64.dmg \
