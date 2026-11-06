@@ -365,7 +365,20 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
   const D = p.date;
   const DP = `(?:(?:in|on|during|by)${S}(?:the${S}year${S})?)?${D}`;
   const LOC = `(?:${S}(?:in|at)${S}${PLACE})?`;
-  const rx = (s: string) => new RegExp(s, 'gu');
+  // The sentence patterns, as tagged templates: each is compiled once per chapter (its parts are the chapter's
+  // constants) instead of once per sentence, which was most of the time a story check took. A shared regex starts
+  // each use at index 0, as a fresh one did (matchAll works on its own copy; exec reads lastIndex).
+  const sites = new Map<TemplateStringsArray, { values: unknown[]; re: RegExp }>();
+  const rx = (strings: TemplateStringsArray, ...values: unknown[]): RegExp => {
+    const hit = sites.get(strings);
+    if (hit && hit.values.every((v, i) => v === values[i])) {
+      hit.re.lastIndex = 0;
+      return hit.re;
+    }
+    const re = new RegExp(strings.reduce((src, part, i) => src + String(values[i - 1]) + part), 'gu');
+    sites.set(strings, { values, re });
+    return re;
+  };
   const notPlace = (n: string) => p.months.has(n) || p.eras.has(n) || TITLE_SET.has(n.split(' ')[0]!) || STOP.has(n) || /['’]s$/.test(n);
 
   /** The one person the previous sentences were about, for "he"/"she"; undefined when unclear. */
@@ -376,7 +389,7 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
     const span: SourceSpan = { chapter: ch.file, start: s.start, end: s.start + s.text.length, quote: s.text.length > 240 ? `${s.text.slice(0, 237)}...` : s.text };
     const dates = [...s.text.matchAll(p.datePhrase)].map((m) => toDate(m[1], cal)).filter((d): d is string => !!d);
     const sentenceDate = dates.length === 1 ? dates[0] : undefined;
-    const sentencePlace = [...s.text.matchAll(rx(`${START}(?:in|at)${S}${PLACE}`))].map((m) => m[1]!).find((n) => !notPlace(n) && !STOP.has(n));
+    const sentencePlace = [...s.text.matchAll(rx`${START}(?:in|at)${S}${PLACE}`)].map((m) => m[1]!).find((n) => !notPlace(n) && !STOP.has(n));
     const add = (r: Omit<RawProposal, 'sourceSpan'>) => proposals.push({ ...r, sourceSpan: span });
     const person = (rawIn: string, fields: ProposalFields, pattern: string, confidence = 0.9): string | undefined => {
       const split = ix.resolve(rawIn.trim()) ? { raw: rawIn } : splitRole(rawIn);
@@ -407,14 +420,14 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
     };
 
     // born: "King Camel was born in Qarim in 1998", "Camel, son of Leyla, was born in 1998"
-    for (const m of s.text.matchAll(rx(`${P}(?:,[^,]{1,60},)?${S}(?:was${S})?born${LOC}(?:${S}${DP})?`))) {
+    for (const m of s.text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(?:was${S})?born${LOC}(?:${S}${DP})?`)) {
       const born = toDate(m[3], cal) ?? sentenceDate;
       const where = place(m[2], 'born');
       if (!born && !where) continue;
       person(m[1]!, born ? { born } : {}, 'born');
     }
     // died: "Camel died in 2050", "Camel was slain at Qarim"
-    for (const m of s.text.matchAll(rx(`${P}(?:,[^,]{1,60},)?${S}(?:died|perished|passed${S}away|was${S}(?:killed|slain|murdered|executed))(?!${S}by)${LOC}(?:${S}${DP})?`))) {
+    for (const m of s.text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(?:died|perished|passed${S}away|was${S}(?:killed|slain|murdered|executed))(?!${S}by)${LOC}(?:${S}${DP})?`)) {
       const died = toDate(m[3], cal) ?? sentenceDate;
       place(m[2], 'died');
       person(m[1]!, died ? { died, status: 'dead' } : { status: 'dead' }, 'died');
@@ -431,12 +444,12 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       if (placeName) fields.place = placeName;
       add({ entryType: 'event', name: `The ${KILL_NOUN[verb] ?? 'Death'} of ${victim}`, fields, confidence: 0.8, pattern: 'killed' });
     };
-    for (const m of s.text.matchAll(rx(`${P}${S}(${KILL_VERBS.join('|')})${S}${P}${LOC}(?:${S}${DP})?`))) killed(m[1]!, m[2]!, m[3]!, m[4], m[5]);
-    for (const m of s.text.matchAll(rx(`${P}${S}was${S}(killed|slain|murdered|executed|assassinated)${S}by${S}${P}${LOC}(?:${S}${DP})?`))) {
+    for (const m of s.text.matchAll(rx`${P}${S}(${KILL_VERBS.join('|')})${S}${P}${LOC}(?:${S}${DP})?`)) killed(m[1]!, m[2]!, m[3]!, m[4], m[5]);
+    for (const m of s.text.matchAll(rx`${P}${S}was${S}(killed|slain|murdered|executed|assassinated)${S}by${S}${P}${LOC}(?:${S}${DP})?`)) {
       killed(m[3]!, m[2] === 'slain' ? 'slew' : m[2]!, m[1]!, m[4], m[5]);
     }
     // married: "Camel married Leyla in 1950"
-    for (const m of s.text.matchAll(rx(`${P}${S}(?:married|wed)${S}${P}(?:${S}${DP})?`))) {
+    for (const m of s.text.matchAll(rx`${P}${S}(?:married|wed)${S}${P}(?:${S}${DP})?`)) {
       const other = person(m[2]!, {}, 'married', 0.7);
       if (!other) continue;
       const rel: Relation = { type: 'spouse-of', target: other };
@@ -445,18 +458,18 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       person(m[1]!, { relations: [rel] }, 'married');
     }
     // son/daughter/child of: "Camel, son of Leyla", "Camel was the daughter of Leyla"
-    for (const m of s.text.matchAll(rx(`${P}(?:,|${S}(?:was|is))${S}(?:the${S})?(?:son|daughter|child|heir)${S}of${S}${P}`))) {
+    for (const m of s.text.matchAll(rx`${P}(?:,|${S}(?:was|is))${S}(?:the${S})?(?:son|daughter|child|heir)${S}of${S}${P}`)) {
       const parent = person(m[2]!, {}, 'child-of', 0.7);
       if (parent) person(m[1]!, { relations: [{ type: 'child-of', target: parent }] }, 'child-of');
     }
     // the X of Place: "Ilsa, the Salt Queen of Saltmere", "the Sultan of Qarim", "the City of Brass"
-    for (const m of s.text.matchAll(rx(`${P},${S}the${S}((?:${CAP}${S}){0,2}${CAP})${S}of${S}(?:the${S})?${PLACE}`))) {
+    for (const m of s.text.matchAll(rx`${P},${S}the${S}((?:${CAP}${S}){0,2}${CAP})${S}of${S}(?:the${S})?${PLACE}`)) {
       const where = place(m[3], 'title-of', 0.7);
       person(m[1]!, { title: where ? `${m[2]} of ${where}` : m[2]! }, 'title-of', 0.8);
     }
-    for (const m of s.text.matchAll(rx(`${START}(?:${TITLE}|${PLACE_WORDS.join('|')})${S}of${S}(?:the${S})?${PLACE}`))) place(m[1], 'title-of', 0.7);
+    for (const m of s.text.matchAll(rx`${START}(?:${TITLE}|${PLACE_WORDS.join('|')})${S}of${S}(?:the${S})?${PLACE}`)) place(m[1], 'title-of', 0.7);
     // battle/war/siege of X: an event, "in DATE" next to it or anywhere in the sentence
-    for (const m of s.text.matchAll(rx(`${START}(?:[Tt]he${S})?(${either(EVENT_WORDS)})${S}(?:of|on|at)${S}(?:the${S})?(${NAME})(?:${S}${DP})?`))) {
+    for (const m of s.text.matchAll(rx`${START}(?:[Tt]he${S})?(${either(EVENT_WORDS)})${S}(?:of|on|at)${S}(?:the${S})?(${NAME})(?:${S}${DP})?`)) {
       if (!/^[Tt]he[ \t]/.test(m[0]) && /^\p{Ll}/u.test(m[1]!)) continue; // "a raid on Qarim" is too unsure; "the raid on Qarim" is fine
       const word = capitalise(m[1]!);
       const target = cleanName(m[2]!)?.name;
@@ -478,7 +491,7 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       add({ entryType: 'event', name: `The ${word} ${prep} ${/^the\s/i.test(after) ? 'the ' : ''}${target}`, fields, confidence, pattern: 'event' });
     }
     // a deed at a place: "Hadi fought at Saltmere in 1920" -> The Battle of Saltmere, with its place, date and people
-    for (const m of s.text.matchAll(rx(`${P}(?:,[^,]{1,60},)?${S}(${Object.keys(PLACE_DEEDS).join('|')})(?:${S}(at|in|on|near|outside|before))?${S}(?:the${S}(?:${PLACE_NOUNS.join('|')})${S}of${S})?${PLACE}(?:${S}${DP})?`))) {
+    for (const m of s.text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(${Object.keys(PLACE_DEEDS).join('|')})(?:${S}(at|in|on|near|outside|before))?${S}(?:the${S}(?:${PLACE_NOUNS.join('|')})${S}of${S})?${PLACE}(?:${S}${DP})?`)) {
       const deed = PLACE_DEEDS[m[2]!]!;
       const target = cleanName(m[4]!);
       if (!target || target.title || notPlace(target.name) || !!deed.at !== !!m[3]) continue;
@@ -502,18 +515,18 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       add({ entryType: 'event', name: `The ${deed.noun} ${deed.of} ${where}`, fields, confidence: 0.4 + sure, pattern: 'deed-at' });
     }
     // places from motion and description: "rode to Qarim", "Qarim, a port on the salt sea", "the gates of Qarim"
-    for (const m of s.text.matchAll(rx(`${START}(?:${MOTION})(?:${S}(?:back|home|north|south|east|west|on))?${S}(?:to|into|toward|towards|for|from|at|in)${S}(?:the${S}(?:${PLACE_NOUNS.join('|')})${S}of${S})?${PLACE}`))) {
+    for (const m of s.text.matchAll(rx`${START}(?:${MOTION})(?:${S}(?:back|home|north|south|east|west|on))?${S}(?:to|into|toward|towards|for|from|at|in)${S}(?:the${S}(?:${PLACE_NOUNS.join('|')})${S}of${S})?${PLACE}`)) {
       const n = cleanName(m[1]!);
       if (!n || findExisting(ix, n.name, 'character')) continue;
       place(m[1], 'motion', 0.5);
     }
-    for (const m of s.text.matchAll(rx(`${START}${PLACE},${S}(?:a|an|the)${S}(?:${WORD}${S}){0,2}?(?:${PLACE_NOUNS.join('|')})${END}`))) {
+    for (const m of s.text.matchAll(rx`${START}${PLACE},${S}(?:a|an|the)${S}(?:${WORD}${S}){0,2}?(?:${PLACE_NOUNS.join('|')})${END}`)) {
       if (!/^[\s"'“‘(]*$/.test(s.text.slice(0, m.index!)) && !/[,;:][ \t]*$/.test(s.text.slice(0, m.index!))) continue;
       place(m[1], 'place-is', 0.8);
     }
-    for (const m of s.text.matchAll(rx(`${START}the${S}(?:gates|walls|streets|ruins|markets|harbour|harbor|towers|halls|road|roads|way|throne|people|sands|dunes)${S}(?:of|to)${S}${PLACE}`))) place(m[1], 'place-of', 0.55);
+    for (const m of s.text.matchAll(rx`${START}the${S}(?:gates|walls|streets|ruins|markets|harbour|harbor|towers|halls|road|roads|way|throne|people|sands|dunes)${S}(?:of|to)${S}${PLACE}`)) place(m[1], 'place-of', 0.55);
     // named things: "a sword called Dawnbreaker", "her blade, Nightfall,"
-    for (const m of s.text.matchAll(rx(`${START}(?:a|an|the|his|her|their|its|my)${S}(?:${WORD}${S}){0,2}?(${ITEM_NOUNS.join('|')})(?:${S}(?:called|named|known${S}as)${S}|,${S})(?:the${S})?(${NAME})(?=[ \t]*(?:[,.;:!?]|$|${S}(?:and|which|that)${END}))`))) {
+    for (const m of s.text.matchAll(rx`${START}(?:a|an|the|his|her|their|its|my)${S}(?:${WORD}${S}){0,2}?(${ITEM_NOUNS.join('|')})(?:${S}(?:called|named|known${S}as)${S}|,${S})(?:the${S})?(${NAME})(?=[ \t]*(?:[,.;:!?]|$|${S}(?:and|which|that)${END}))`)) {
       const n = cleanName(m[2]!);
       if (!n || n.title || findExisting(ix, n.name, 'character')?.type === 'character') continue;
       const comma = !/called|named|known/.test(m[0]);
@@ -531,43 +544,43 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       return FACTION_PREFIX.includes(words[0]!) && !/ of /.test(t) ? t : `The ${t}`;
     };
     const factions = new Set<string>();
-    for (const m of s.text.matchAll(rx(`${START}${FACTION}`))) {
+    for (const m of s.text.matchAll(rx`${START}${FACTION}`)) {
       if (!/^the /i.test(m[1]!) && !FACTION_PREFIX.includes(m[1]!.split(/[ \t]/)[0]!)) continue;
       const name = factionName(m[1]!);
       if (!name || factions.has(name)) continue;
       factions.add(name);
       add({ entryType: 'faction', name, fields: {}, confidence: / of /.test(name) ? 0.7 : 0.6, pattern: 'faction' });
     }
-    for (const m of s.text.matchAll(rx(`${P}(?:,[^,]{1,60},)?${S}(${Object.keys(FACTION_VERBS).join('|')})${S}(?:with${S}|against${S}|for${S})?${FACTION}`))) {
+    for (const m of s.text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(${Object.keys(FACTION_VERBS).join('|')})${S}(?:with${S}|against${S}|for${S})?${FACTION}`)) {
       const name = factionName(m[3]!);
       if (name) person(m[1]!, { relations: [{ type: FACTION_VERBS[m[2]!]!, target: name }] }, 'faction-deed', 0.75);
     }
-    for (const m of s.text.matchAll(rx(`${P},${S}(?:a|an|the)${S}(member|knight|servant|soldier|brother|sister|leader|head|founder|master)${S}of${S}${FACTION}`))) {
+    for (const m of s.text.matchAll(rx`${P},${S}(?:a|an|the)${S}(member|knight|servant|soldier|brother|sister|leader|head|founder|master)${S}of${S}${FACTION}`)) {
       const name = factionName(m[3]!);
       const type = /^(?:leader|head|master)$/.test(m[2]!) ? 'leader-of' : m[2] === 'founder' ? 'founded' : 'member-of';
       if (name) person(m[1]!, { relations: [{ type, target: name }] }, 'faction-of', 0.8);
     }
     // items: "the Glass Compass", "the Crown of Thorns"
-    for (const m of s.text.matchAll(rx(`${START}[Tt]he${S}((?:${CAP}${S}){0,3}(?:${ITEM_WORDS.join('|')})(?:${S}of${S}(?:the${S})?${NAME})?)${END}`))) {
+    for (const m of s.text.matchAll(rx`${START}[Tt]he${S}((?:${CAP}${S}){0,3}(?:${ITEM_WORDS.join('|')})(?:${S}of${S}(?:the${S})?${NAME})?)${END}`)) {
       if (!/[ \t]/.test(m[1]!)) continue; // "the Crown" alone is too vague
       add({ entryType: 'item', name: `The ${m[1]!.replace(/[ \t]+/g, ' ')}`, fields: {}, confidence: 0.6, pattern: 'item' });
     }
     // in/at Place
-    for (const m of s.text.matchAll(rx(`${START}(?:in|at|near|into)${S}(?:the${S}(?:${PLACE_WORDS.map((w) => w.toLowerCase()).join('|')})${S}of${S})?${PLACE}`))) place(m[1], 'in-place', 0.5);
+    for (const m of s.text.matchAll(rx`${START}(?:in|at|near|into)${S}(?:the${S}(?:${PLACE_WORDS.map((w) => w.toLowerCase()).join('|')})${S}of${S})?${PLACE}`)) place(m[1], 'in-place', 0.5);
     // appositives: "Keller the grand magus", "Leyla, the healer," (a capitalised "the Grand Magus" is split in person())
     const ROLE_PHRASE = `((?:${WORD}${S}){0,3}?(?:${either(ROLES)}))${END}`;
-    for (const m of s.text.matchAll(rx(`${P}${S}the${S}${ROLE_PHRASE}(?!${S}of${END})`))) {
+    for (const m of s.text.matchAll(rx`${P}${S}the${S}${ROLE_PHRASE}(?!${S}of${END})`)) {
       // Only as the subject ("Keller the magus created"), not "told Leyla the king had died".
       if (!/(?:^[\s"'“‘(]*|[,;:][ \t]*|(?:^|[^\p{L}])and[ \t]+)$/u.test(s.text.slice(0, m.index!))) continue;
       const role = roleFields(m[2]!);
       if (role) person(m[1]!, role, 'role', 0.8);
     }
-    for (const m of s.text.matchAll(rx(`${P},${S}(?:the|a|an)${S}${ROLE_PHRASE}(?=[ \t]*(?:[,.;:!?]|$))`))) {
+    for (const m of s.text.matchAll(rx`${P},${S}(?:the|a|an)${S}${ROLE_PHRASE}(?=[ \t]*(?:[,.;:!?]|$))`)) {
       const role = roleFields(m[2]!);
       if (role) person(m[1]!, role, 'role', 0.8);
     }
     // deeds with things: "Keller created the scepter", "Leyla found the Glass Compass"
-    for (const m of s.text.matchAll(rx(`${P}(?:${S}the${S}(?:${WORD}${S}){0,3}?(?:${either(ROLES)}))?(?:,[^,]{1,60},)?${S}(${Object.keys(ITEM_VERBS).join('|')})${S}the${S}((?:${WORD}${S}){0,2}?(?:${either(ITEM_WORDS)})(?:${S}of${S}(?:the${S})?${NAME})?)${END}`))) {
+    for (const m of s.text.matchAll(rx`${P}(?:${S}the${S}(?:${WORD}${S}){0,3}?(?:${either(ROLES)}))?(?:,[^,]{1,60},)?${S}(${Object.keys(ITEM_VERBS).join('|')})${S}the${S}((?:${WORD}${S}){0,2}?(?:${either(ITEM_WORDS)})(?:${S}of${S}(?:the${S})?${NAME})?)${END}`)) {
       const item = `The ${titleCase(m[3]!.replace(/[ \t]+/g, ' '))}`;
       const existing = findExisting(ix, item);
       if (existing && existing.type !== 'item') continue;
@@ -575,7 +588,7 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       person(m[1]!, { relations: [{ type: ITEM_VERBS[m[2]!]!, target: existing?.name ?? item }] }, 'item-deed', 0.8);
     }
     // any other capitalised name: a "new entry?" proposal, typed from its words and what stands before it
-    for (const m of s.text.matchAll(rx(`${START}${NAME}`))) {
+    for (const m of s.text.matchAll(rx`${START}${NAME}`)) {
       const at = m.index!;
       const before = s.text.slice(0, at);
       const initial = /^[\s"'“‘(]*$/.test(before);
@@ -635,7 +648,7 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
 
     // generic dated deed: "Camel fought at Qarim in 1920." Feeds warnings only.
     if (sentenceDate) {
-      const m = rx(`^(?:[^,]{0,40},${S})?${P}${S}(\\p{Ll}+)(?:${S}${P})?`).exec(s.text);
+      const m = rx`^(?:[^,]{0,40},${S})?${P}${S}(\\p{Ll}+)(?:${S}${P})?`.exec(s.text);
       const verb = m?.[2];
       if (m && verb && !SPECIFIC_VERBS.has(verb) && (/ed$/.test(verb) || /^(?:fought|met|led|rode|went|came|fled|saw|took|made|won|lost|wrote|built|became|ruled|stole|forged|wielded|left|crossed|sailed|reached|found|held|gave|sent|spoke|began|ran|struck|swore|broke|drove|fell|rose|stood|sat|slept|returned|visited)$/.test(verb))) {
         const actor = cleanName(m[1]!);

@@ -1,3 +1,5 @@
+import type { ModelFile } from '@lore-forge/core/node';
+import type { UpdateState } from './update-state.ts';
 import type { CodexOptions, BookOptions, BookSettings, Calendar, ImageView, WorldCoverSettings, WorldFile } from '@lore-forge/core';
 
 export type PdfKind = 'codex' | 'book';
@@ -10,6 +12,14 @@ export type PublishOptions = CodexOptions & BookOptions;
 export interface Settings {
   /** Where new worlds go by default. Empty: the app's worlds folder. */
   worldsDir?: string;
+  /** The first-run tour was finished or skipped. */
+  tourDone?: boolean;
+  /** Check for updates on launch and every few hours (default on). */
+  autoUpdate?: boolean;
+  /** The sample world was removed from the library (Library settings "Show sample world" brings it back). */
+  hideSample?: boolean;
+  /** The library shelf in the order the user arranged it: world folder paths (see shared/library.ts orderShelf). */
+  shelfOrder?: string[];
 }
 export interface CreateWorldOptions {
   name: string;
@@ -29,13 +39,15 @@ export interface LoreApi {
   initialWorld(): Promise<string | null>;
   /** The read-only world that ships with the packaged app; null when running from source (worlds/ is the author's own). */
   bundledWorld(): Promise<string | null>;
+  /** The sample world Camelamamm, used by the tour (also when running from source). */
+  sampleWorld(): Promise<string | null>;
   recentWorlds(): Promise<string[]>;
   pickWorld(): Promise<string | null>;
   /** Create <parent>/<slug of name> (parent defaults to the worlds folder). Returns the new world folder. */
   createWorld(options: CreateWorldOptions): Promise<string | null>;
   /** World folders for the library shelf: recent, then the worlds folder, then the bundled world. */
   listWorlds(): Promise<string[]>;
-  settings(): Promise<Required<Pick<Settings, 'worldsDir'>> & { defaultWorldsDir: string }>;
+  settings(): Promise<Settings & Required<Pick<Settings, 'worldsDir'>> & { defaultWorldsDir: string }>;
   saveSettings(settings: Settings): Promise<void>;
   /** Folder picker; null when cancelled. */
   chooseFolder(title: string, start?: string): Promise<string | null>;
@@ -47,6 +59,26 @@ export interface LoreApi {
   systemFonts(): Promise<string[]>;
   /** Preview of a file returned by pickImageFile, as a data: URL. */
   readPickedImage(path: string): Promise<string | null>;
+  /**
+   * Copy a whole world (any world, even the read-only bundled one) into the worlds folder under a new name. Returns
+   * the copy's folder and its files (world.json with the cover and its seed), so its book is drawn right at once.
+   */
+  duplicateWorld(dir: string, name: string): Promise<{ dir: string; files: WorldFile[] }>;
+  /** 3D models of an entry (models/<entryId>/), sorted by name. */
+  listModels(dir: string, entryId: string): Promise<ModelFile[]>;
+  /** Pick a .glb, .gltf, .obj or .fbx file and copy it into models/<entryId>/. Returns its path inside the world. */
+  importModel(dir: string, entryId: string): Promise<string | null>;
+  /** Rename a model (the extension stays). Returns its new path. */
+  renameModel(dir: string, file: string, name: string): Promise<string>;
+  deleteModel(dir: string, file: string): Promise<void>;
+  /** A model file's bytes, for the 3D viewer. */
+  readModel(dir: string, file: string): Promise<Uint8Array>;
+  /** Self-update: the current state, a check, the download, and the restart that installs it. */
+  updateState(): Promise<UpdateState>;
+  checkForUpdates(): Promise<UpdateState>;
+  downloadUpdate(): Promise<UpdateState>;
+  installUpdate(): Promise<void>;
+  onUpdateState(cb: (state: UpdateState) => void): void;
   /** Move a world folder to the system trash (never a hard delete) and drop it from the recent list. */
   trashWorld(dir: string): Promise<void>;
   readWorld(dir: string): Promise<WorldFile[]>;
@@ -83,11 +115,13 @@ export interface LoreApi {
   smokeShow(show: boolean): Promise<void>;
   /** Smoke test only: make a throwaway worlds folder of `count` generated worlds the library's worlds folder. */
   smokeLibrary(count: number): Promise<string | null>;
+  /** Smoke test only: add the test .glb to an entry. Returns its path inside the world. */
+  smokeImportModel(dir: string, entryId: string): Promise<string | null>;
   /** Smoke test only: real mouse input (moves and wheel turns), at window coordinates. */
   smokeMouse(events: SmokeMouse[]): Promise<void>;
 }
 
-export type SmokeMouse = { type: 'move'; x: number; y: number } | { type: 'wheel'; x: number; y: number; deltaY: number };
+export type SmokeMouse = { type: 'move'; x: number; y: number; /** The left button is held (a drag). */ held?: boolean } | { type: 'down'; x: number; y: number } | { type: 'up'; x: number; y: number } | { type: 'wheel'; x: number; y: number; deltaY: number };
 
 declare global {
   interface Window {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { IMAGE_VIEWS, viewLabel, type Entry, type Provenance, type RefImage } from '@lore-forge/core';
 import { ListText, TextField } from './fields.tsx';
 import { Icon } from './icon.tsx';
+import { ModelPanel } from './models.tsx';
 
 function Thumb({ dir, file, alt }: { dir: string; file: string; alt: string }) {
   const [src, setSrc] = useState<string | null | undefined>(undefined);
@@ -101,5 +102,23 @@ export function ImageSlots({ dir, entry, onChange }: { dir: string; entry: Entry
         </section>
       )}
     </fieldset>
+  );
+}
+
+/** Reference images and 3D models of an entry, as two tabs: Images | 3D model. */
+export function EntryMedia({ dir, entry, onChange }: { dir: string; entry: Entry; onChange: (images: RefImage[] | undefined) => void }) {
+  const [tab, setTab] = useState<'images' | 'models'>('images');
+  const tabs: ['images' | 'models', 'photo-camera' | 'cube', string][] = [['images', 'photo-camera', 'Images'], ['models', 'cube', '3D model']];
+  return (
+    <div class="entry-media">
+      <div class="media-tabs" role="tablist" aria-label="Pictures and models">
+        {tabs.map(([t, icon, label]) => (
+          <button key={t} type="button" role="tab" id={`media-tab-${t}`} aria-selected={tab === t} aria-controls={`media-${t}`} class={`media-tab${tab === t ? ' is-on' : ''}`} onClick={() => setTab(t)}><Icon name={icon} /> {label}</button>
+        ))}
+      </div>
+      <div role="tabpanel" id={`media-${tab}`} aria-labelledby={`media-tab-${tab}`}>
+        {tab === 'images' ? <ImageSlots dir={dir} entry={entry} onChange={onChange} /> : <ModelPanel dir={dir} entry={entry} />}
+      </div>
+    </div>
   );
 }

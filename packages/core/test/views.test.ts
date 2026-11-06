@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { check, docSheets, familyTree, inlineRuns, relationWeb, storyBook, timelineModel, worldCodex, yearTicks, TREE_LAYOUT, WEB_LAYOUT, SINGLE_CHAPTER, type Block } from '@lore-forge/core';
+import { check, docSheets, familyTree, inlineRuns, relationWeb, storyBook, timelineModel, worldCodex, yearTicks, monthTicks, packRows, TREE_LAYOUT, WEB_LAYOUT, SINGLE_CHAPTER, type Block } from '@lore-forge/core';
 import { world } from './helpers.ts';
 
 const fam = world([
@@ -81,6 +81,23 @@ test('timeline model: lanes by type, points for events, open ends, eras, warning
   const tm = timelineModel(bad, check(bad))!;
   assert.equal(tm.groups[0]!.lanes[0]!.worst, 'error');
   assert.equal(timelineModel(world([{ id: 'n', type: 'note', name: 'N' }]), []), undefined);
+});
+
+test('timeline gantt helpers: rows that never overlap, month starts in a range', () => {
+  const spans = [{ from: 0, to: 10 }, { from: 5, to: 20 }, { from: 11, to: 15 }, { from: 21, to: 30 }, { from: 6, to: 7 }];
+  const { rows, count } = packRows(spans);
+  assert.deepEqual(rows, [0, 1, 0, 0, 2]);
+  assert.equal(count, 3);
+  for (const [i, a] of spans.entries()) for (const [j, b] of spans.entries()) {
+    if (i < j && rows[i] === rows[j]) assert.ok(a.to < b.from || b.to < a.from, `spans ${i} and ${j} overlap on row ${rows[i]}`);
+  }
+  assert.deepEqual(packRows(spans, 5).rows, [0, 1, 3, 0, 2]);
+  assert.deepEqual(packRows([]), { rows: [], count: 0 });
+  const cal = { eras: [{ id: 'AS', name: 'After', start: 1 }], defaultEra: 'AS', months: [{ name: 'Sunwake', days: 60 }, { name: 'Highsun', days: 300 }] };
+  const m = { min: 0, max: 360 * 5, daysPerYear: 360, eras: [], groups: [] };
+  const ticks = monthTicks(m, cal, 360, 1000);
+  assert.deepEqual(ticks.map((t) => [t.day, t.name, t.first]), [[360, 'Sunwake', true], [420, 'Highsun', false], [720, 'Sunwake', true], [780, 'Highsun', false]]);
+  assert.deepEqual(monthTicks(m, cal, -5000, -1000), []);
 });
 
 test('codex options: types and warnings appendix; book grouping options', () => {

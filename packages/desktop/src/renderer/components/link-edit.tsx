@@ -1,6 +1,7 @@
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { detailField, detailList, entryIcon, RELATION_GROUPS, relationKindsFor, TYPE_SINGULAR, WorldIndex, type Entry, type RelationGroup, type World } from '@lore-forge/core';
+import { worldIndex } from '../hooks.ts';
 import { Icon } from './icon.tsx';
 import { Select } from './select.tsx';
 
@@ -43,7 +44,7 @@ const withRelations = (e: Entry, relations: NonNullable<Entry['relations']>): En
 export function LinkDialog({ world, draft, prefer, onClose, onWrite, onOpen }: {
   world: World; draft: LinkDraft; prefer?: RelationGroup; onClose: () => void; onWrite: (changed: LinkWrite) => void; onOpen: (id: string) => void;
 }) {
-  const ix = new WorldIndex(world);
+  const ix = worldIndex(world);
   const link = draft.kind === 'edit' ? draft.link : undefined;
   const a = ix.byIdOf(draft.kind === 'new' ? draft.from : link!.from)!;
   const b = ix.byIdOf(draft.kind === 'new' ? draft.to : link!.to)!;

@@ -1,7 +1,7 @@
 ---
 title: The Steward of Water
 order: 2
-date: 10.03.512
+date: "10.03.512"
 ---
 
 The palace council sat in a long cool room under the copper dome, and when Mr Camel ducked through its door every one of them stopped talking.

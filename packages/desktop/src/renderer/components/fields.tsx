@@ -1,7 +1,8 @@
 import { createContext } from 'preact';
 import { useContext, useEffect, useId, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { DATE_FORMATS_HINT, describeDate, entryIcon, parseDate, TYPE_SINGULAR, WorldIndex, type Calendar, type Entry, type IconName, type World } from '@lore-forge/core';
+import { DATE_FORMATS_HINT, describeDate, entryIcon, parseDate, TYPE_SINGULAR, type Calendar, type Entry, type IconName, type World } from '@lore-forge/core';
+import { worldIndex } from '../hooks.ts';
 import { Icon } from './icon.tsx';
 import { Select } from './select.tsx';
 import { SuggestInput, type Suggestion } from './suggest.tsx';
@@ -94,7 +95,7 @@ export const OpenEntry = createContext<((id: string) => void) | null>(null);
  * Typing is committed on Enter, on leaving the box or by picking, so a name is not taken while it is half typed.
  */
 export function RefField(props: { label: string; field: string; value: string | undefined; world: World; onChange: (v: string | undefined) => void; types?: readonly string[]; exclude?: string }) {
-  const ix = new WorldIndex(props.world);
+  const ix = worldIndex(props.world);
   const open = useContext(OpenEntry);
   const target = props.value ? ix.resolve(props.value) : undefined;
   const box = useRef<HTMLDivElement>(null);

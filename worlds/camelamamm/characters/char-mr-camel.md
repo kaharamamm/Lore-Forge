@@ -6,6 +6,14 @@ aliases:
   - Barnaby Camel
 summary: Patient camel-folk tea merchant of Camelamamm, once a caravan map-reader, who wakes the Singing Well.
 race: camel-folk
+gender: male
+occupation: Tea merchant, retired caravan map-reader
+personality: Slow to speak and slower to anger. Believes most problems look smaller after a cup of tea.
+goals: Keep the kettle warm, the well singing and his friends out of trouble.
+skills: Map-reading, tea-blending, listening, staying calm in a sandstorm
+home: place-patient-kettle
+possessions:
+  - item-humming-map
 born: "471"
 status: alive
 locations:
@@ -23,14 +31,6 @@ relations:
     from: "512"
   - type: ally-of
     target: char-samira
-gender: male
-occupation: Tea merchant, retired caravan map-reader
-personality: Slow to speak and slower to anger. Believes most problems look smaller after a cup of tea.
-goals: Keep the kettle warm, the well singing and his friends out of trouble.
-skills: Map-reading, tea-blending, listening, staying calm in a sandstorm
-home: place-patient-kettle
-possessions:
-  - item-humming-map
 visual:
   appearance: Humanoid camel, honey-brown fur going grey at the muzzle, long eyelashes, kind half-closed eyes.
   build: Tall (2 m with hump), round-bellied, unhurried.
@@ -42,6 +42,15 @@ picture:
   icon: camel-head
   color: "#5a3a1e"
   accent: "#f2c46d"
+  image: images/char-mr-camel/three-quarter.png
+images:
+  - file: images/char-mr-camel/three-quarter.png
+    view: three-quarter
+    provenance:
+      tool: Grok Bot image generation
+      prompt: Painterly fantasy concept art of Mr Camel, from its visual description
+      date: "2026-11-05"
+      rights: Made for the Lore-Forge sample world; MIT like the rest of the repo
 ---
 
 Mr Camel keeps [[place-patient-kettle|The Patient Kettle]], the smallest tea house in [[place-camelamamm|Camelamamm]]. As a young camel he read maps for the long caravans of the [[place-sunsea|Sunsea]], until his old teacher [[char-ozra|Ozra]] left him her map and told him to stay home and listen.

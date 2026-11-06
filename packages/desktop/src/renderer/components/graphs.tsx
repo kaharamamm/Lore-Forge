@@ -22,7 +22,6 @@ function Node(props: { e: Entry; x: number; y: number; w: number; h: number; end
       onClick={open} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } }}>
       <title>{`${TYPE_SINGULAR[e.type]}: ${e.name}${ended && lc ? ` (${lc.endedWord})` : ''}${props.sub ? `\n${props.sub}` : ''}`}</title>
       <rect x={x} y={y} width={w} height={h} rx={10} />
-      <rect class="node-stripe" x={x} y={y} width={6} height={h} rx={3} />
       <foreignObject x={x + 12} y={y + h / 2 - 16} width={32} height={32} class="node-portrait"><Portrait entry={e} raceName={props.raceName} size="sm" /></foreignObject>
       <text x={x + 52} y={y + h / 2 - 3} class="node-name">{clip(e.name, 13)}</text>
       {ended && lc && <SvgIcon class="node-mark" name={lc.endedIcon} x={x + w - 24} y={y + 6} size={16} />}
@@ -94,25 +93,29 @@ export function FamilyTreeSvg({ tree, onOpen, onConnect, onHide, onEdit }: {
             </path>
           );
           if (ed.kind === 'parent') {
-            const x1 = a.x + w / 2, y1 = a.y + h, x2 = b.x + w / 2, y2 = b.y;
-            const mid = y2 > y1 ? (y1 + y2) / 2 : y1 + 20;
+            // From the parent's bottom border to the child's top border; a child drawn higher up (a loop in the data)
+            // is met at its bottom border, so the line never runs through its card.
+            const x1 = a.x + w / 2, y1 = a.y + h, x2 = b.x + w / 2, below = b.y >= y1;
+            const y2 = below ? b.y : b.y + h;
+            const mid = below ? (y1 + y2) / 2 : Math.max(y1, y2) + 20;
             const d = `M${x1} ${y1} V${mid} H${x2} V${y2}`;
-            return <g key={i}><path class="edge edge-parent" d={d} />{hit(d)}</g>;
+            return <g key={i} data-from={ed.from} data-to={ed.to}><path class="edge edge-parent" d={d} />{hit(d)}</g>;
           }
           const [l, r] = a.x <= b.x ? [a, b] : [b, a];
           if (ed.kind === 'spouse' && l.gen === r.gen) {
             const y = l.y + h / 2;
             return (
-              <g key={i}>
+              <g key={i} data-from={l.id} data-to={r.id}>
                 <line class="edge edge-spouse" x1={l.x + w} y1={y} x2={r.x} y2={y} />
                 {hit(`M${l.x + w} ${y} H${r.x}`)}
                 <SvgIcon class="edge-icon" name="diamond-ring" x={(l.x + w + r.x) / 2 - 8} y={y - 20} size={16} />
               </g>
             );
           }
-          const x1 = l.x + w / 2, x2 = r.x + w / 2, y = Math.min(l.y, r.y);
-          const d = `M${x1} ${y} C${x1} ${y - 22}, ${x2} ${y - 22}, ${x2} ${y}`;
-          return <g key={i}><path class={`edge edge-${ed.kind}`} d={d} />{hit(d)}</g>;
+          // An arc over the top: each end on its own card's top border, even when the two are on different rows.
+          const x1 = l.x + w / 2, x2 = r.x + w / 2, top = Math.min(l.y, r.y) - 22;
+          const d = `M${x1} ${l.y} C${x1} ${top}, ${x2} ${top}, ${x2} ${r.y}`;
+          return <g key={i} data-from={l.id} data-to={r.id}><path class={`edge edge-${ed.kind}`} d={d} />{hit(d)}</g>;
         })}
       </g>
       {tree.nodes.map((n) => <Node key={n.id} e={n.entry} x={n.x} y={n.y} w={w} h={h} ended={n.ended} focus={n.focus} sub={n.dates} onOpen={onOpen}

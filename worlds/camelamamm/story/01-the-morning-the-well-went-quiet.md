@@ -1,7 +1,7 @@
 ---
 title: The Morning the Well Went Quiet
 order: 1
-date: 10.03.512
+date: "10.03.512"
 ---
 
 Every morning in Camelamamm began with a song, and every morning Mr Camel was awake to hear it.

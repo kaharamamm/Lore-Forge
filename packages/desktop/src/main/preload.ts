@@ -4,6 +4,7 @@ import type { LoreApi } from '../shared/api.ts';
 const api: LoreApi = {
   initialWorld: () => ipcRenderer.invoke('initialWorld'),
   bundledWorld: () => ipcRenderer.invoke('bundledWorld'),
+  sampleWorld: () => ipcRenderer.invoke('sampleWorld'),
   recentWorlds: () => ipcRenderer.invoke('recentWorlds'),
   pickWorld: () => ipcRenderer.invoke('pickWorld'),
   createWorld: (options) => ipcRenderer.invoke('createWorld', options),
@@ -15,6 +16,17 @@ const api: LoreApi = {
   readPickedImage: (path) => ipcRenderer.invoke('readPickedImage', path),
   coverImages: (dir) => ipcRenderer.invoke('coverImages', dir),
   systemFonts: () => ipcRenderer.invoke('systemFonts'),
+  duplicateWorld: (dir, name) => ipcRenderer.invoke('duplicateWorld', dir, name),
+  listModels: (dir, entryId) => ipcRenderer.invoke('listModels', dir, entryId),
+  importModel: (dir, entryId) => ipcRenderer.invoke('importModel', dir, entryId),
+  renameModel: (dir, file, name) => ipcRenderer.invoke('renameModel', dir, file, name),
+  deleteModel: (dir, file) => ipcRenderer.invoke('deleteModel', dir, file),
+  readModel: (dir, file) => ipcRenderer.invoke('readModel', dir, file),
+  updateState: () => ipcRenderer.invoke('updateState'),
+  checkForUpdates: () => ipcRenderer.invoke('checkForUpdates'),
+  downloadUpdate: () => ipcRenderer.invoke('downloadUpdate'),
+  installUpdate: () => ipcRenderer.invoke('installUpdate'),
+  onUpdateState: (cb) => void ipcRenderer.on('update-state', (_e, state: Parameters<typeof cb>[0]) => cb(state)),
   trashWorld: (dir) => ipcRenderer.invoke('trashWorld', dir),
   readWorld: (dir) => ipcRenderer.invoke('readWorld', dir),
   peekWorld: (dir) => ipcRenderer.invoke('peekWorld', dir),
@@ -33,6 +45,7 @@ const api: LoreApi = {
   smokeResize: (width, height) => ipcRenderer.invoke('smokeResize', width, height),
   smokeShow: (show) => ipcRenderer.invoke('smokeShow', show),
   smokeLibrary: (count) => ipcRenderer.invoke('smokeLibrary', count),
+  smokeImportModel: (dir, entryId) => ipcRenderer.invoke('smokeImportModel', dir, entryId),
   smokeMouse: (events) => ipcRenderer.invoke('smokeMouse', events),
 };
 

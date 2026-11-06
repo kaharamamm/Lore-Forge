@@ -102,6 +102,14 @@ export interface WorldManifest {
   cover?: WorldCoverSettings;
 }
 
+/**
+ * A place on the front cover, in percent of the room an element has inside the gold frame: x 0 puts its left edge
+ * on the frame's left margin, 100 its right edge on the right margin, 50 centres it; y the same from top to
+ * bottom. Because it is measured in the room left over by the element's own size, any value from 0 to 100 keeps
+ * the whole element inside the frame.
+ */
+export interface CoverPosition { x: number; y: number }
+
 export interface WorldCoverSettings {
   /** Cover colour (the top of the gradient), #rrggbb or #rrggbbaa. Without it the colours come from the world id. */
   color?: string;
@@ -123,10 +131,19 @@ export interface WorldCoverSettings {
   showTitle?: boolean;
   /** false hides the emblem on the front cover (it stays on the spine). Default true. */
   showEmblem?: boolean;
+  /** Where the title sits on the front cover (see CoverPosition). Without it, the default place. */
+  titlePos?: CoverPosition;
+  /** Where the emblem sits on the front cover (see CoverPosition). Without it, the default place, near the top. */
+  emblemPos?: CoverPosition;
   /** Spine colour on the shelf. Without it, the left edge of the cover picture, else a darker shade of the cover colour. */
   spineColor?: string;
   /** Spine title colour. Without it, gold, parchment or ink, whichever reads on the spine. */
   spineInk?: string;
+  /**
+   * What the generated parts (colours, emblem and stars left unset, the book's height) come from instead of the
+   * world id. A Duplicate gets its original's, so the copy looks exactly like it under its new id.
+   */
+  seed?: string;
 }
 
 export interface BookSettings {
@@ -144,11 +161,38 @@ export interface BookSettings {
   dedication?: string;
   epigraph?: string;
   epigraphSource?: string;
-  /** Copyright page text; a plain notice with the author and year is used when empty. */
+  /** Copyright page text. The copyright page is printed only when this or `publisher` is set. */
   copyright?: string;
   publisher?: string;
+  /** First letter of each chapter: none, raised (big, on the first line's baseline; the default) or dropped (two lines deep). */
+  dropCap?: DropCapStyle;
+  /** Show the date (with era) at the top right of each chapter opening, and on chronicle pages. Default true. */
+  dateStamps?: boolean;
+  /** Body text font family: DejaVu Serif (default), DejaVu Sans or a bundled font. */
+  bodyFont?: string;
+  /** Body text size in points (8 to 16). Default 10.5. */
+  bodySize?: number;
+  /** Body text colour, #rrggbb. Default #222222. */
+  bodyColor?: string;
+  /** Chapter title font family. Default the body font. */
+  chapterFont?: string;
+  /** Chapter title size in points (12 to 40). Default 19. */
+  chapterSize?: number;
+  /** Chapter title colour, #rrggbb. Default #3d2a14. */
+  chapterColor?: string;
+  /** Line spacing as a multiple of the body size (1 to 2.2). Default 1.45. */
+  lineSpacing?: number;
+  /** Page margins. Default normal. */
+  margins?: 'narrow' | 'normal' | 'wide';
+  /** Front cover title colour for the book, #rrggbb; default the cover's own title colour. */
+  coverTitleColor?: string;
+  /** Front cover title size in percent of the default (50 to 200). */
+  coverTitleSize?: number;
+  /** Author line size on the cover and title page, in percent of the default (50 to 200). */
+  authorSize?: number;
 }
-export type TrimSize = '6x9' | '5.5x8.5' | 'a5';
+export type TrimSize = '6x9' | '5.5x8.5' | 'a5' | 'a4' | 'letter';
+export type DropCapStyle = 'none' | 'raised' | 'dropped';
 
 export interface Relation {
   /** parent-of, child-of, member-of, leader-of, ally-of, enemy-of, rules, owns, killed, spouse-of, sibling-of, ... */

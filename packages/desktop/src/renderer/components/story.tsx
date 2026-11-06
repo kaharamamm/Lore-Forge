@@ -1,5 +1,5 @@
 import { Fragment } from 'preact';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   chapterDate, ENTRY_TYPES, entryIcon, guessEntry, sentences, type Guess, relationLabel, TYPE_ICON, TYPE_SINGULAR, wordCount, WorldIndex,
   type Entry, type EntryType, type Proposal, type ProposalFields, type SourceSpan, type StoryAnalysis, type StoryChapter, type Warning, type World,
@@ -165,7 +165,8 @@ function PickMenu({ pick, guess, onClose, onOpen, onAdd, onLink, onSearch }: {
   const box = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState({ x: pick.x, y: pick.y });
   const [size, setSize] = useState('');
-  useEffect(() => setFull(pick.how === 'menu'), [pick]);
+  // A layout effect: a plain effect could run after a click on More that came in first, and close the menu again.
+  useLayoutEffect(() => setFull(pick.how === 'menu'), [pick]);
   useEffect(() => {
     const el = box.current;
     if (!el) return;

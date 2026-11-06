@@ -78,7 +78,6 @@ export function WorldSettings({ world, onSave, onClose }: { world: World; onSave
           <Icon name="calendar" class="about-mark" />
           <div>
             <h2 id="ws-title">World settings</h2>
-            <p class="muted">The calendar of {world.manifest.name}, saved in world.json.</p>
           </div>
         </header>
 

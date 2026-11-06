@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { memo } from 'preact/compat';
 import type { FactRef, Warning } from '@lore-forge/core';
 import { animated } from '../motion.ts';
 import { BADGE, kindOf, SeverityBadge, type BadgeKind } from './severity.tsx';
@@ -67,7 +68,8 @@ export function WarningItem({ w, actions, compact }: { w: Warning; actions: Warn
 const COLLAPSED_KEY = 'lore-forge.warningSections';
 const SECTIONS: [BadgeKind, string][] = [['error', 'Errors'], ['warning', 'Warnings'], ['info', 'Info'], ['intended', 'Marked intended']];
 
-export function WarningsPanel({ warnings, selectedId, actions }: { warnings: Warning[]; selectedId: string | null; actions: WarningActions }) {
+/** Memoized: while an entry is being typed in, the warnings (and so this panel) stay as they are. */
+export const WarningsPanel = memo(function WarningsPanel({ warnings, selectedId, actions }: { warnings: Warning[]; selectedId: string | null; actions: WarningActions }) {
   const [scope, setScope] = useState<'all' | 'entry'>('all');
   const shown = scope === 'entry' && selectedId ? warnings.filter((w) => involves(w, selectedId)) : warnings;
   const active = shown.filter((w) => !w.intended);
@@ -114,6 +116,6 @@ export function WarningsPanel({ warnings, selectedId, actions }: { warnings: War
       })}
     </aside>
   );
-}
+});
 
 export const involves = (w: Warning, id: string): boolean => w.offending.entryId === id || w.conflicting?.entryId === id;

@@ -6,7 +6,7 @@
 import { formatDate, formatYearless, parseDate, type ParsedDate } from '../dates.ts';
 import type { IconName } from '../icons.ts';
 import type { CoverArt } from '../cover.ts';
-import type { Calendar, TrimSize } from '../types.ts';
+import type { BookSettings, Calendar, DropCapStyle, TrimSize } from '../types.ts';
 import type { WorldIndex } from '../world-index.ts';
 
 export type Block =
@@ -18,7 +18,8 @@ export type Block =
    * `opener`: a chapter opening in a print book: starts at the top of a new page (a right-hand one when the book asks
    * for right-hand chapters), without running head or page number.
    */
-  | { kind: 'heading'; level: 1 | 2 | 3; text: string; anchor?: string; toc?: boolean; newPage?: boolean; opener?: boolean; icon?: IconName; mark?: IconName }
+  /** `stamp`: a chapter opener's date (with era), set small at the top right of the opening page. */
+  | { kind: 'heading'; level: 1 | 2 | 3; text: string; anchor?: string; toc?: boolean; newPage?: boolean; opener?: boolean; icon?: IconName; mark?: IconName; stamp?: string }
   /** `dropCap`: the first paragraph of a chapter, set with a large initial letter. */
   | { kind: 'para'; text: string; style?: 'lead' | 'muted'; dropCap?: boolean }
   /** A front-matter page of a print book, always on its own page. */
@@ -45,8 +46,68 @@ export const TRIMS: Record<TrimSize, Trim> = {
   '6x9': { id: '6x9', label: '6 × 9 in (trade paperback)', width: 432, height: 648, inside: 63, outside: 45, top: 54, bottom: 58 },
   '5.5x8.5': { id: '5.5x8.5', label: '5.5 × 8.5 in (digest)', width: 396, height: 612, inside: 60, outside: 42, top: 52, bottom: 56 },
   a5: { id: 'a5', label: 'A5 (148 × 210 mm)', width: 419.53, height: 595.28, inside: 60, outside: 43, top: 52, bottom: 56 },
+  a4: { id: 'a4', label: 'A4 (210 × 297 mm)', width: 595.28, height: 841.89, inside: 78, outside: 60, top: 68, bottom: 72 },
+  letter: { id: 'letter', label: 'US Letter (8.5 × 11 in)', width: 612, height: 792, inside: 78, outside: 60, top: 66, bottom: 70 },
 };
 export const DEFAULT_TRIM: TrimSize = '6x9';
+
+/** Body and chapter title fonts the Story Book offers: the PDF embeds them, the preview shows them. */
+export const BOOK_FONTS: readonly string[] = ['DejaVu Serif', 'DejaVu Sans', 'EB Garamond', 'Cormorant Garamond', 'Caladea', 'Liberation Serif', 'Playfair Display', 'Carlito', 'Liberation Sans'];
+/** Extra fonts for chapter titles only (no italic or too ornate for running text). */
+export const TITLE_FONTS: readonly string[] = ['Cinzel Decorative', 'IM Fell English', 'Almendra', 'MedievalSharp', 'Uncial Antiqua', 'Metamorphous', 'Pirata One', 'UnifrakturMaguntia'];
+
+/** The Story Book's typography with every default filled in: what the preview, the PDF and the Word file all use. */
+export interface BookLook {
+  bodyFont: string;
+  bodySize: number;
+  bodyColor: string;
+  chapterFont: string;
+  chapterSize: number;
+  chapterColor: string;
+  lineSpacing: number;
+  margins: 'narrow' | 'normal' | 'wide';
+  dropCap: DropCapStyle;
+  dateStamps: boolean;
+  /** Cover title colour override; without it the cover's own colour. */
+  coverTitleColor?: string;
+  /** Multipliers of the default cover title and author sizes. */
+  coverTitleScale: number;
+  authorScale: number;
+}
+export const DEFAULT_LOOK: BookLook = {
+  bodyFont: 'DejaVu Serif', bodySize: 10.5, bodyColor: '#222222', chapterFont: 'DejaVu Serif', chapterSize: 19, chapterColor: '#3d2a14',
+  lineSpacing: 1.45, margins: 'normal', dropCap: 'raised', dateStamps: true, coverTitleScale: 1, authorScale: 1,
+};
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+const num = (v: unknown, lo: number, hi: number, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
+const font = (v: unknown, list: readonly string[], d: string): string => (typeof v === 'string' && list.some((f) => f.toLowerCase() === v.trim().toLowerCase()) ? list.find((f) => f.toLowerCase() === v.trim().toLowerCase())! : d);
+
+/** world.json "book" settings to a full look: unknown or out-of-range values fall back to the defaults. */
+export function bookLook(b: BookSettings = {}): BookLook {
+  const bodyFont = font(b.bodyFont, BOOK_FONTS, DEFAULT_LOOK.bodyFont);
+  return {
+    bodyFont,
+    bodySize: num(b.bodySize, 8, 16, DEFAULT_LOOK.bodySize),
+    bodyColor: HEX6.test(b.bodyColor ?? '') ? b.bodyColor! : DEFAULT_LOOK.bodyColor,
+    chapterFont: font(b.chapterFont, [...BOOK_FONTS, ...TITLE_FONTS], bodyFont),
+    chapterSize: num(b.chapterSize, 12, 40, DEFAULT_LOOK.chapterSize),
+    chapterColor: HEX6.test(b.chapterColor ?? '') ? b.chapterColor! : DEFAULT_LOOK.chapterColor,
+    lineSpacing: num(b.lineSpacing, 1, 2.2, DEFAULT_LOOK.lineSpacing),
+    margins: b.margins === 'narrow' || b.margins === 'wide' ? b.margins : 'normal',
+    dropCap: b.dropCap === 'none' || b.dropCap === 'dropped' ? b.dropCap : 'raised',
+    dateStamps: b.dateStamps !== false,
+    ...(HEX6.test(b.coverTitleColor ?? '') ? { coverTitleColor: b.coverTitleColor! } : {}),
+    coverTitleScale: num(b.coverTitleSize, 50, 200, 100) / 100,
+    authorScale: num(b.authorSize, 50, 200, 100) / 100,
+  };
+}
+
+/** A trim with the look's margins: narrow takes a quarter off every margin, wide adds 30 %. */
+export function trimFor(id: TrimSize, margins: BookLook['margins'] = 'normal'): Trim {
+  const t = TRIMS[id] ?? TRIMS[DEFAULT_TRIM];
+  const k = margins === 'narrow' ? 0.75 : margins === 'wide' ? 1.3 : 1;
+  return k === 1 ? t : { ...t, inside: t.inside * k, outside: t.outside * k, top: t.top * k, bottom: t.bottom * k };
+}
 
 export interface Doc {
   kind: 'codex' | 'book';
@@ -60,7 +121,7 @@ export interface Doc {
    * `title` on left pages and the chapter on right pages. Every front page and chapter starts a new page; with
    * `rightHand` (for printed books) they start on right-hand pages, with blank pages added where needed.
    */
-  print?: { trim: TrimSize; rightHand?: boolean };
+  print?: { trim: TrimSize; rightHand?: boolean; look?: BookLook };
 }
 
 export interface InlineRun { text: string; bold: boolean; italic: boolean }

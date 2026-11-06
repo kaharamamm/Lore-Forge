@@ -109,7 +109,7 @@ Tests use Node's built-in test runner with native TypeScript type stripping: no 
 
 ### Headless smoke test
 
-The desktop app has a built-in end-to-end run that loads a world, exercises every view, dialog and preview at 1280 × 720, 1920 × 1080 and 2560 × 1440, and exports the PDFs and a `.docx`:
+The desktop app has a built-in end-to-end run that loads a world, exercises every view, dialog and preview at 1024 × 640, 1280 × 720, 1920 × 1080 and 2560 × 1440 (including the first-run tour, Duplicate, the shelf width and title fitting, and a test `.glb` in the 3D viewer), checks that the sample world is unchanged afterwards, and exports the PDFs and a `.docx`:
 
 ```bash
 LORE_FORGE_SMOKE=1 LORE_FORGE_OPEN=$PWD/packages/core/test/fixtures/shifting-sands \
@@ -149,13 +149,22 @@ Only the sample world is packaged; other folders in `worlds/` stay private.
 
 ### Releases
 
-`.github/workflows/release.yml` builds the downloads on GitHub's own Windows, Linux and macOS machines and attaches them to the release:
+**Actions → Release → Run workflow** (`.github/workflows/release.yml`) makes a release. Choose a bump (patch, minor, major) from the newest `vX.Y.Z` tag, or type an exact version, and optionally release notes. The workflow:
 
-1. Bump the version in every `package.json` and in `GENERATOR` (`packages/core/src/snapshot.ts`), then commit and push.
-2. Create and publish a release for the tag (for example `gh release create v1.0.0 --title "Lore-Forge 1.0.0" --notes-file notes.md`, or **Draft a new release** on GitHub).
-3. The workflow runs the tests, builds the Windows installer, the `.deb` and AppImage, and the two macOS disk images, and uploads all five to that release (about 10 to 15 minutes).
+1. works out the version (`scripts/release-version.mjs`) and stops if that tag already exists;
+2. runs the typecheck and the tests;
+3. builds the Windows installer, the `.deb` and AppImage, and the macOS disk images and zips on GitHub's machines, passing the version to electron-builder (`-c.extraMetadata.version`), so no `package.json` is bumped by hand;
+4. creates the tag and the release with the versioned files, their `.blockmap`s and `latest.yml`, `latest-linux.yml`, `latest-mac.yml` (which the app's updater reads), plus copies under stable names: `Lore-Forge-Setup-x64.exe`, `Lore-Forge-amd64.deb`, `Lore-Forge-x86_64.AppImage`, `Lore-Forge-mac-arm64.dmg`, `Lore-Forge-mac-x64.dmg`. Links of the form `https://github.com/kaharamamm/Lore-Forge/releases/latest/download/<stable name>` always fetch the newest version.
 
-**Actions → Release downloads → Run workflow** rebuilds the downloads for an existing tag. All packages share one version (`1.0.0`), set in each `package.json` and in `GENERATOR`.
+It only uses the workflow's own `GITHUB_TOKEN` (`contents: write`). `GENERATOR` in `packages/core/src/snapshot.ts` is not changed by the workflow.
+
+### Self-update
+
+`packages/desktop/src/main/updater.ts` uses electron-updater with the GitHub provider (the `publish` block in `electron-builder.yml`). The states and the version logic are in `src/shared/update-state.ts` with unit tests. It is off when running from source, in the smoke test and with `LORE_FORGE_NO_UPDATE=1`. To try it locally, serve a folder with a newer build and its `latest-linux.yml` and start an installed build with `LORE_FORGE_UPDATE_URL=http://localhost:8000/`; `LORE_FORGE_UPDATE_SUDO=sudo` replaces the `pkexec` prompt of the `.deb` install (for a terminal without a desktop).
+
+### The `lore` command in the packages
+
+`packages/desktop/build/bin/lore` and `lore.cmd` are copied to `resources/bin` and run `resources/app.asar/dist/cli.cjs` with the app's own Electron (`ELECTRON_RUN_AS_NODE=1`). The `.deb` scripts in `packages/desktop/build/linux/` are electron-builder's defaults plus the `/usr/bin/lore` link; compare them with `node_modules/app-builder-lib/templates/linux/` after upgrading electron-builder.
 
 ## Troubleshooting
 

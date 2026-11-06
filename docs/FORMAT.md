@@ -71,6 +71,10 @@ Every morning in Camelamamm began with a song…
 
 Reference images are copied into `images/<entry-id>/` and listed on the entry with their view and provenance (tool, prompt, date, sources, rights note). Each type suggests its own views: characters A-pose, front, back, left, right, three-quarter and concept; places establishing shot, map, interior, exterior, mood and concept; items front, back, side, top, detail and concept; events scene, establishing shot, map, mood and concept. Other view names are allowed. In the editor they show as a gallery with one tile per view.
 
+### 3D models
+
+3D models live in `models/<entry-id>/<name>.<ext>`, one folder per entry, as `.glb`, `.gltf` (with buffers and textures embedded as `data:` URIs, since the file is copied alone), `.obj` or `.fbx`. The file name without its extension is the model's name. Nothing in the entry file lists them: the folder is the list, so adding or removing a model by hand works too. The folder is optional; worlds without it (every world made before 1.1) load as before.
+
 ### Intended marks and ignored proposals
 
 `intended.json` keeps the warnings you marked intended, with your note and the date. `story-ignored.json` keeps the story proposals you ignored, so they are not proposed again.

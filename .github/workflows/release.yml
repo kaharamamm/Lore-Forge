@@ -1,31 +1,88 @@
-name: Release downloads
-
-# When a GitHub release is published, build the downloads on each platform and attach them to that release:
-#   Windows  Lore-Forge-<version>-win-x64.exe          (NSIS installer)
-#   Linux    Lore-Forge-<version>-linux-amd64.deb      (Debian, Ubuntu)
-#            Lore-Forge-<version>-linux-x86_64.AppImage (other distributions)
-#   macOS    Lore-Forge-<version>-mac-arm64.dmg        (Apple Silicon)
-#            Lore-Forge-<version>-mac-x64.dmg          (Intel)
+# Build and publish a Lore-Forge release: Actions > Release > Run workflow.
+# The version is the newest vX.Y.Z tag plus the chosen bump, or the exact version given. It goes to electron-builder
+# on the command line; package.json is never bumped by hand. If that tag already exists, nothing runs.
+#
+# Each release carries:
+#   versioned files      Lore-Forge-<version>-win-x64.exe, -linux-amd64.deb, -linux-x86_64.AppImage,
+#                        -mac-arm64.dmg/.zip, -mac-x64.dmg/.zip, their .blockmap files, and latest.yml,
+#                        latest-linux.yml, latest-mac.yml (read by the app's self-updater)
+#   stable names         Lore-Forge-Setup-x64.exe, Lore-Forge-amd64.deb, Lore-Forge-x86_64.AppImage,
+#                        Lore-Forge-mac-arm64.dmg, Lore-Forge-mac-x64.dmg, so these links never change:
+#                        https://github.com/kaharamamm/Lore-Forge/releases/latest/download/<stable name>
 # The builds are not code-signed (no paid certificates), so Windows and macOS ask once before the first start.
-# "Run workflow" rebuilds the downloads for an existing release tag.
+name: Release
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
-      tag:
-        description: Existing release tag to build and attach to (for example v1.0.0)
-        required: true
+      bump:
+        description: Version bump from the newest vX.Y.Z tag
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: Exact version instead of the bump (optional, for example 1.1.0)
+        type: string
+        required: false
+        default: ''
+      notes:
+        description: Release notes (shown above the generated list of changes)
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      skip: ${{ steps.resolve.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Resolve the version
+        id: resolve
+        env:
+          BUMP: ${{ inputs.bump }}
+          EXACT: ${{ inputs.version }}
+        run: git tag -l | node scripts/release-version.mjs "$BUMP" "$EXACT" | tee -a "$GITHUB_OUTPUT"
+      - name: Tag exists
+        if: steps.resolve.outputs.skip == 'true'
+        run: echo "::notice::${{ steps.resolve.outputs.tag }} already exists, nothing to release."
+
+  test:
+    name: Test
+    needs: version
+    if: needs.version.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
   build:
     name: ${{ matrix.name }}
+    needs: [version, test]
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - name: Windows
@@ -36,43 +93,67 @@ jobs:
             target: --linux AppImage deb --x64
           - name: macOS
             os: macos-latest
-            target: --mac dmg --arm64 --x64
+            target: --mac dmg zip --arm64 --x64
     runs-on: ${{ matrix.os }}
     env:
-      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      APP_VERSION: ${{ needs.version.outputs.version }}
+      # No signing certificate: never look for one in the runner's keychain (macOS is signed ad hoc instead).
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
-
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version: 24
           cache: npm
-
-      - name: Install
-        run: npm ci
-
-      - name: Test
-        if: runner.os == 'Linux'
-        run: npm test
-
-      - name: Build
-        run: npm run build
-
+      - run: npm ci
+      - run: npm run build
       - name: Package
         working-directory: packages/desktop
-        run: npx electron-builder ${{ matrix.target }} --publish never
-        env:
-          # No signing certificate: never look for one in the runner's keychain (macOS is signed ad hoc instead).
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Attach to the release
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
+        run: npx electron-builder ${{ matrix.target }} --publish never "-c.extraMetadata.version=$APP_VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}
+          if-no-files-found: error
+          path: |
+            packages/desktop/release/*.exe
+            packages/desktop/release/*.deb
+            packages/desktop/release/*.AppImage
+            packages/desktop/release/*.dmg
+            packages/desktop/release/*.zip
+            packages/desktop/release/*.blockmap
+            packages/desktop/release/latest*.yml
+
+  release:
+    name: Publish
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    env:
+      V: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+      NOTES: ${{ inputs.notes }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+      - name: Stable download names
+        working-directory: assets
         run: |
-          shopt -s nullglob
-          files=(packages/desktop/release/*.exe packages/desktop/release/*.deb packages/desktop/release/*.AppImage packages/desktop/release/*.dmg)
-          if [ ${#files[@]} -eq 0 ]; then echo "No packages were built" >&2; exit 1; fi
-          gh release upload "$TAG" "${files[@]}" --clobber
+          cp "Lore-Forge-$V-win-x64.exe" Lore-Forge-Setup-x64.exe
+          cp "Lore-Forge-$V-linux-amd64.deb" Lore-Forge-amd64.deb
+          cp "Lore-Forge-$V-linux-x86_64.AppImage" Lore-Forge-x86_64.AppImage
+          cp "Lore-Forge-$V-mac-arm64.dmg" Lore-Forge-mac-arm64.dmg
+          cp "Lore-Forge-$V-mac-x64.dmg" Lore-Forge-mac-x64.dmg
+          ls -l
+      - name: Create the release
+        run: |
+          gh release create "$TAG" assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Lore-Forge $V" \
+            --notes "$NOTES" \
+            --generate-notes \
+            --latest

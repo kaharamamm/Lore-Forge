@@ -16,8 +16,8 @@
     "start": "node run.mjs",
     "dev": "node build.mjs && node run.mjs",
     "dist:win": "electron-builder --win nsis --publish never",
-    "dist:linux": "electron-builder --linux AppImage --publish never",
-    "dist:mac": "electron-builder --mac dmg --publish never",
+    "dist:linux": "electron-builder --linux AppImage deb --publish never",
+    "dist:mac": "electron-builder --mac dmg zip --publish never",
     "contrast": "node scripts/contrast.mjs",
     "icons": "electron scripts/app-icon.cjs"
   },
@@ -29,14 +29,17 @@
     "@xyflow/react": "^12.12.0",
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",
+    "electron-updater": "^6.8.11",
     "pdfkit": "^0.20.2",
     "preact": "^10.29.8"
   },
   "devDependencies": {
     "@types/d3-selection": "^3.0.12",
     "@types/d3-zoom": "^3.0.9",
+    "@types/three": "^0.181.0",
     "electron": "45.1.0",
     "electron-builder": "^26.18.0",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "three": "^0.181.2"
   }
 }

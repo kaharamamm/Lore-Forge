@@ -1,4 +1,4 @@
-import type { Entry, World, WorldCoverSettings } from './types.ts';
+import type { CoverPosition, Entry, World, WorldCoverSettings, WorldManifest } from './types.ts';
 import { ICONS, type IconName } from './icons.ts';
 import { hslHex, luminance, mix, withAlpha, HEX_COLOUR } from './color.ts';
 
@@ -59,6 +59,62 @@ export interface CoverArt {
   showEmblem: boolean;
   /** Title font family from world.json, when one is chosen. */
   font?: string;
+  /** Chosen places on the front cover (0 to 100 of the room inside the frame); without them, the default places. */
+  titlePos?: CoverPosition;
+  emblemPos?: CoverPosition;
+}
+
+/**
+ * The room on the 240 x 320 cover canvas that the title and emblem may use: inside the thin gold frame (16 units
+ * in) with a safe margin of 6 more, so nothing ever touches the frame.
+ */
+export const COVER_SAFE = { left: 22, top: 22, right: 218, bottom: 298 } as const;
+/** The emblem's size on the cover canvas, and its default top-left corner (centred, near the top). */
+export const COVER_EMBLEM = { size: 72, x: 84, y: 70 } as const;
+
+const clamp01 = (v: number) => Math.min(100, Math.max(0, Math.round(v * 10) / 10));
+/** A cover position from world.json, clamped to 0..100 (one decimal); anything that is not two numbers is ignored. */
+export function coverPosition(p: unknown): CoverPosition | undefined {
+  if (!p || typeof p !== 'object') return undefined;
+  const { x, y } = p as Record<string, unknown>;
+  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return undefined;
+  return { x: clamp01(x), y: clamp01(y) };
+}
+
+/**
+ * Where an element of size w x h goes on a cover of size W x H (any units: the 240 x 320 canvas, PDF points),
+ * as its top-left corner. The safe room scales with the cover width (the frame is drawn that way), and an element
+ * bigger than the room is centred in it. The result never leaves the room.
+ */
+export function placeOnCover(pos: CoverPosition, w: number, h: number, W: number, H: number): { x: number; y: number } {
+  const k = W / 240;
+  const left = COVER_SAFE.left * k, top = COVER_SAFE.top * k;
+  const roomW = W - 2 * left, roomH = H - 2 * top;
+  const p = coverPosition(pos) ?? { x: 50, y: 50 };
+  const along = (room: number, size: number, v: number) => (size >= room ? (room - size) / 2 : ((room - size) * v) / 100);
+  return { x: left + along(roomW, w, p.x), y: top + along(roomH, h, p.y) };
+}
+
+/**
+ * Cover settings as written to world.json: non-empty strings, the false switches (true is the default) and the
+ * two positions, clamped into the frame. Everything else (empty values, true, broken positions) is dropped.
+ */
+export function cleanCoverSettings(cover: WorldCoverSettings): WorldCoverSettings {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(cover)) {
+    if (k === 'titlePos' || k === 'emblemPos') {
+      const p = coverPosition(v);
+      if (p) out[k] = p;
+    } else if ((typeof v === 'string' && v !== '') || v === false) out[k] = v;
+  }
+  return out as WorldCoverSettings;
+}
+
+/** The emblem's box on the 240 x 320 cover canvas: its chosen place, else the default. */
+export function emblemBox(art: Pick<CoverArt, 'emblemPos'>): { x: number; y: number; size: number } {
+  const { size } = COVER_EMBLEM;
+  if (!art.emblemPos) return { x: COVER_EMBLEM.x, y: COVER_EMBLEM.y, size };
+  return { ...placeOnCover(art.emblemPos, size, size, 240, 320), size };
 }
 
 function starsFor(seed: number, n: number): [number, number, number][] {
@@ -99,6 +155,7 @@ export function coverArt(seed: string, c: WorldCoverSettings = {}, fallbackImage
   const sampled = image && colour(edge) ? withAlpha(edge!, 1) : undefined;
   const spine = colour(c.spineColor) ? withAlpha(c.spineColor!, 1) : sampled ?? mix(withAlpha(top, 1), '#000000', 0.35);
   const font = c.font?.trim();
+  const titlePos = coverPosition(c.titlePos), emblemPos = coverPosition(c.emblemPos);
   return {
     top,
     bottom,
@@ -115,10 +172,17 @@ export function coverArt(seed: string, c: WorldCoverSettings = {}, fallbackImage
     showTitle: c.showTitle !== false,
     showEmblem: c.showEmblem !== false,
     ...(font ? { font } : {}),
+    ...(titlePos ? { titlePos } : {}),
+    ...(emblemPos ? { emblemPos } : {}),
   };
+}
+
+/** What a world's generated cover comes from: cover.seed (kept by Duplicate), else the world id. */
+export function coverSeed(manifest: Pick<WorldManifest, 'id' | 'cover'>): string {
+  return manifest.cover?.seed?.trim() || manifest.id;
 }
 
 /** A world's cover art from its world.json and entries. */
 export function worldCoverArt(world: Pick<World, 'manifest' | 'entries'>): CoverArt {
-  return coverArt(world.manifest.id, world.manifest.cover, coverImageFile(world.entries));
+  return coverArt(coverSeed(world.manifest), world.manifest.cover, coverImageFile(world.entries));
 }

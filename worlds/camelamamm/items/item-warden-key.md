@@ -5,15 +5,15 @@ name: The Warden Key
 aliases:
   - Warden Key
 summary: Bronze key of the Well Wardens that opens the old sluice in the Hollow of Echoes.
-status: intact
-created: ~300 BW
 kind: Key
 origin: Forged by the first Well Wardens
+location: place-singing-well
 owners:
   - char-ozra
   - char-mr-camel
-location: place-singing-well
 powers: Turns only in the hand of someone willing to wait for it.
+status: intact
+created: "~300 BW"
 visual:
   material: Green-bronze, worn smooth.
   size: As long as a hand.
@@ -22,6 +22,15 @@ picture:
   icon: key
   color: "#3d4b2b"
   accent: "#e0c27a"
+  image: images/item-warden-key/front.png
+images:
+  - file: images/item-warden-key/front.png
+    view: front
+    provenance:
+      tool: Grok Bot image generation
+      date: "2026-11-05"
+      rights: Made for the Lore-Forge sample world; MIT like the rest of the repo
+      prompt: Painterly fantasy concept art of The Warden Key, from its visual description
 ---
 
 The key does not turn when forced. It turns when it is ready, which is the only lesson the Well Wardens ever bothered to write down.

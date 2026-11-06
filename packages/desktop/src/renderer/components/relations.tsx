@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { detailField, detailRelations, entryIcon, familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, TYPE_SINGULAR, WorldIndex, type Entry, type IconName, type RelationGroup, type World } from '@lore-forge/core';
+import { detailField, detailRelations, entryIcon, familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, TYPE_SINGULAR, type Entry, type IconName, type RelationGroup, type World } from '@lore-forge/core';
+import { worldIndex } from '../hooks.ts';
 import { ENTRY_DRAG, LinkDialog, type GraphLink, type LinkDraft } from './link-edit.tsx';
 import { FamilyTreeSvg } from './graphs.tsx';
 import { RelationWebFlow } from './web.tsx';
@@ -48,7 +49,7 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
   useEffect(() => { setShown(EMPTY_VIEW); setNotice(''); }, [entry?.id, mode]);
   const tree = useMemo(() => (mode === 'tree' ? familyTree(world, entry?.id, shown) : undefined), [world, entry?.id, mode, shown]);
   const web = useMemo(() => (mode === 'web' && entry ? relationWeb(world, entry.id, shown) : undefined), [world, entry?.id, mode, shown]);
-  const ix = new WorldIndex(world);
+  const ix = worldIndex(world);
   const nameOf = (id: string) => ix.byIdOf(id)?.name ?? id;
 
   const write = (changed: Entry[], what: string) => {
@@ -156,7 +157,7 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
               <li><span class="lg lg-parent" aria-hidden="true" /> parent → child</li>
               <li><Icon name="diamond-ring" /> spouses</li>
               <li><span class="lg lg-sibling" aria-hidden="true" /> siblings</li>
-              <li><Icon name="tombstone" /> dead (shown faded)</li>
+              <li><Icon name="tombstone" /> dead</li>
             </ul>
           </>
         ) : (
@@ -189,11 +190,13 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
             <h3><Icon name={RELATION_GROUPS[g].icon} /> {RELATION_GROUPS[g].label}</h3>
             <ul>
               {ls.map((l, i) => (
-                <li key={i}>
-                  <span class="rel-label">{l.label}</span>{' '}
-                  {l.other ? <EntryLink entry={l.other} onOpen={onOpen} /> : <span class="missing"><Icon name="cancel" /> {l.otherRef} (missing)</span>}
-                  {l.when && <span class="muted"> · {l.when}</span>}
-                  {l.via && <span class="muted"> · from {l.via}</span>}
+                <li key={i} class="rel-row">
+                  <span class="rel-label">{l.label}</span>
+                  <span class="rel-line">
+                    {l.other ? <EntryLink entry={l.other} onOpen={onOpen} /> : <span class="missing"><Icon name="cancel" /> {l.otherRef} (missing)</span>}
+                    {l.when && <span class="rel-meta">{l.when}</span>}
+                    {l.via && <span class="rel-meta">from {l.via}</span>}
+                  </span>
                   <button type="button" class="ghost small icon-only rel-edit" aria-label={`Edit ${l.label} ${l.other?.name ?? l.otherRef}`} title="Edit or delete this link" onClick={() => setDraft({ kind: 'edit', link: l.link })}><Icon name="quill" /></button>
                 </li>
               ))}

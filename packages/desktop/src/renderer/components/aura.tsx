@@ -23,20 +23,63 @@ export function Aura({ calm, local, scene }: { calm?: boolean; local?: boolean; 
   );
 }
 
-/** Simple rune strokes (a 10x16 box), drawn as lines so they need no font. */
-const RUNES = [
-  'M3 1v14M3 3l5 3M3 7l5 3', // fehu
-  'M2 1v14M2 1l6 4v10', // uruz
+/** The 24 runes of the Elder Futhark, as strokes in a 10x16 box (lines, so they need no font). */
+const FUTHARK = [
+  'M3 1v14M3 5l5-4M3 9l5-4', // fehu
+  'M2 15V1l6 4v10', // uruz
   'M3 1v14M3 4l5 4-5 4', // thurisaz
-  'M5 1v14M5 1l-3 4M5 1l3 4', // tiwaz
-  'M2 1v14M8 1v14M2 1l6 6M8 1l-6 6', // mannaz-ish
-  'M5 1v14M1 5l8 6M9 5l-8 6', // algiz-ish
-  'M2 3l6 10M8 3l-6 10', // gebo
+  'M3 1v14M3 1l5 3M3 5l5 3', // ansuz
+  'M2 15V1l5 3-5 3 5 8', // raidho
+  'M8 1L2 8l6 7', // kaunan
+  'M2 2l6 12M8 2l-6 12', // gebo
+  'M3 15V1l5 3-5 3', // wunjo
+  'M2 1v14M8 1v14M2 6l6 4', // hagalaz
+  'M5 1v14M2 5l6 5', // naudiz
+  'M5 1v14', // isaz
+  'M4 2L1 5l3 3M6 8l3 3-3 3', // jera
+  'M5 1v14M5 1l3 3M5 15l-3-3', // eihwaz
+  'M2 1v14M2 1l5 3M2 15l5-3M7 4l2-2M7 12l2 2', // perthro
+  'M5 1v14M5 6L1 1M5 6l4-5', // algiz
+  'M7 1L2 6l6 4-5 5', // sowilo
+  'M5 1v14M5 1L1 6M5 1l4 5', // tiwaz
+  'M2 1v14M2 1l5 3.5L2 8l5 3.5L2 15', // berkano
+  'M2 15V1l3 4 3-4v14', // ehwaz
+  'M2 15V1l6 6M8 15V1L2 7', // mannaz
+  'M3 15V1l5 4', // laguz
   'M5 1l4 7-4 7-4-7z', // ingwaz
+  'M1 2v12l8-12v12z', // dagaz
+  'M5 1l3 4-3 4-3-4zM3 7.5L1 15M7 7.5L9 15', // othala
 ];
-const SCENE_RUNES = Array.from({ length: 11 }, (_, i) => {
+/** A few Ogham letters (strokes on a stem) and a bind rune, in the same 10x16 box. */
+const OGHAM = [
+  'M5 1v14M5 4h4M5 7h4M5 10h4', // beith-like
+  'M5 1v14M1 5h8M1 8h8', // cross strokes
+  'M5 1v14M2 6l6-2M2 10l6-2M2 14l6-2', // slanted strokes
+  'M5 1v14M5 1l4 4M5 1L1 5M5 15l4-4M5 15l-4-4', // bind rune
+];
+/** Old alchemists' signs and a star sigil, in a 16x16 box. */
+const SIGILS = [
+  'M8 2l6 11H2z', // fire
+  'M2 3h12L8 14z', // water
+  'M8 2l6 11H2zM3.5 9.5h9', // air
+  'M2 3h12L8 14zM4.5 7.5h7', // earth
+  'M8 2l5 7H3zM8 9v6M5 12h6', // sulphur
+  'M8 3a5 5 0 1 0 .01 0M8 7.6v.8', // sun
+  'M8 1v14M2 4.5l12 7M2 11.5l12-7', // star
+];
+type Rune = { box: string; kind: '' | ' is-sigil'; d: string };
+/**
+ * The scene's runes: most from the Elder Futhark, each a different one, then a few Ogham letters and sigils.
+ * Places, sizes (about 0.6x to 1.5x), tilts (up to 30 degrees either way) and timings are fixed per rune, so
+ * they do not jump between visits. Kept to under 30, faint and slow.
+ */
+const SCENE_RUNES = ([
+  ...Array.from({ length: 18 }, (_, i): Rune => ({ box: '0 0 10 16', kind: '', d: FUTHARK[(i * 7) % FUTHARK.length]! })),
+  ...OGHAM.slice(0, 3).map((d): Rune => ({ box: '0 0 10 16', kind: '', d })),
+  ...SIGILS.slice(0, 6).map((d): Rune => ({ box: '0 0 16 16', kind: ' is-sigil', d })),
+]).map((r, i) => {
   const h = hash(`rune${i}`);
-  return { d: RUNES[h % RUNES.length]!, style: { '--x': `${4 + (h >>> 3) % 92}%`, '--y': `${20 + (h >>> 9) % 70}%`, '--t': `${22 + (h >>> 5) % 18}s`, '--delay': `-${(h >>> 13) % 30}s`, '--r': `${((h >>> 7) % 40) - 20}deg`, '--k': `${(0.8 + ((h >>> 11) % 6) * 0.12).toFixed(2)}` } };
+  return { ...r, style: { '--x': `${3 + (h >>> 3) % 94}%`, '--y': `${18 + (h >>> 9) % 72}%`, '--t': `${22 + (h >>> 5) % 20}s`, '--delay': `-${(h >>> 13) % 34}s`, '--r': `${((h >>> 7) % 61) - 30}deg`, '--k': `${(0.6 + ((h >>> 11) % 10) * 0.1).toFixed(2)}` } };
 });
 /** Three beams from a high window on the left: angle, width, place and brightness, each with its own dust. */
 const SHAFTS = [
@@ -64,8 +107,8 @@ const EMBERS = Array.from({ length: 16 }, (_, i) => {
 });
 
 /**
- * The library's scene, back to front: slow clouds of colour, three beams of light with dust, drifting runes,
- * candle glows with embers rising from them, mist along the floor and a few large out-of-focus specks of light,
+ * The library's scene, back to front: slow clouds of colour, three beams of light with dust, drifting runes
+ * (Elder Futhark, a little Ogham, old sigils), candle glows with embers rising from them, mist along the floor and a few large out-of-focus specks of light,
  * under a vignette. Each depth is a layer that moves a little with the mouse (parallax), the nearest the most.
  * Only transform and opacity animate. Paused while the window is hidden; still (no drift, no flicker, no
  * parallax, no embers) under reduced motion.
@@ -95,7 +138,7 @@ function LibraryScene() {
       </div>
       <div class="scene-layer depth-2">
         {SCENE_RUNES.map((r, i) => (
-          <svg key={i} class="rune" style={r.style} viewBox="0 0 10 16"><path d={r.d} /></svg>
+          <svg key={i} class={`rune${r.kind}`} style={r.style} viewBox={r.box}><path d={r.d} /></svg>
         ))}
       </div>
       <div class="scene-layer depth-3">

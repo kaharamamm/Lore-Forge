@@ -1,12 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, screen, shell } from 'electron';
 import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { basename, extname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { createWorld, loadWorld, readWorldFiles } from '@lore-forge/core/node';
-import { calendarProblems, storyBook, worldCodex, type BookSettings, type Calendar, type ImageView, type WorldCoverSettings } from '@lore-forge/core';
+import { strFromU8, unzipSync } from 'fflate';
+import { createWorld, deleteModel, duplicateWorld, importModel, listModels, loadWorld, MODEL_EXTS, readModel, readWorldFiles, renameModel, worldSlug } from '@lore-forge/core/node';
+import { calendarProblems, cleanCoverSettings, DEFAULT_TRIM, storyBook, TRIMS, worldCodex, type BookSettings, type TrimSize, type Calendar, type ImageView, type WorldCoverSettings } from '@lore-forge/core';
 import { defaultFontDir, systemFontFamilies, writeDocx, writePublication } from '@lore-forge/pdf';
 import type { CoverImage, CreateWorldOptions, PdfKind, PublishOptions, Settings, SmokeMouse } from '../shared/api.ts';
+import { checkForUpdates, downloadUpdate, installUpdate, setupUpdater, updateState } from './updater.ts';
+import { cleanOrder, orderShelf, placeAfter, planShelf } from '../shared/library.ts';
 
 const SMOKE = process.env['LORE_FORGE_SMOKE'] === '1';
 const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
@@ -16,6 +20,8 @@ let win: BrowserWindow | null = null;
 let smokeWorld: string | null = null;
 /** Smoke test: a throwaway worlds folder and settings, so creating and deleting worlds touches nothing real. */
 let smokeHome: string | null = null;
+/** Smoke only: a fingerprint of the sample world at start, to prove the smoke (and the tour) leave it unchanged. */
+let sampleBefore: string | null = null;
 /** Smoke test: the freedesktop trash goes to a throwaway folder too (shell.trashItem reads XDG_DATA_HOME). */
 const smokeTrash = SMOKE ? join(tmpdir(), `lore-smoke-trash-${process.pid}`) : null;
 if (smokeTrash) process.env['XDG_DATA_HOME'] = smokeTrash;
@@ -76,7 +82,25 @@ async function readSettings(): Promise<Settings> {
 }
 const worldsDir = async (): Promise<string> => (await readSettings()).worldsDir || defaultWorldsDir();
 
-/** Every world on the shelf: recent ones first (from any folder), then the rest of the worlds folder, then the bundled world. */
+/** Merge into settings.json, keeping only values that differ from the defaults. */
+async function saveSettings(next: Settings): Promise<void> {
+  const all = { ...(await readSettings()), ...next };
+  const clean: Settings = {
+    ...(all.worldsDir && resolve(all.worldsDir) !== defaultWorldsDir() ? { worldsDir: resolve(all.worldsDir) } : {}),
+    ...(all.tourDone ? { tourDone: true } : {}),
+    ...(all.autoUpdate === false ? { autoUpdate: false } : {}),
+    ...(all.hideSample ? { hideSample: true } : {}),
+    ...(cleanOrder(all.shelfOrder) ? { shelfOrder: cleanOrder(all.shelfOrder) } : {}),
+  };
+  await mkdir(dataDir(), { recursive: true });
+  await writeFile(settingsFile(), JSON.stringify(clean, null, 2));
+}
+
+/**
+ * Every world on the shelf: recent ones first (from any folder), then the rest of the worlds folder, then the sample
+ * (see shared/library.ts: one Camelamamm, this app's own; none when Library settings hides it). Recent folders that
+ * are gone, and samples of other installs, are dropped from recent-worlds.json for good.
+ */
 async function listWorlds(): Promise<string[]> {
   const root = await worldsDir();
   let inRoot: string[] = [];
@@ -86,9 +110,27 @@ async function listWorlds(): Promise<string[]> {
       .map((d) => join(root, d.name))
       .sort((a, b) => a.localeCompare(b));
   } catch { /* no worlds folder yet */ }
-  const bundled = bundledWorld();
-  const all = [...(await recentWorlds()), ...inRoot, ...(bundled ? [bundled] : [])];
-  return [...new Set(all.map((d) => resolve(d)))];
+  const stored = await storedRecents();
+  const { shelf, recents } = planShelf({
+    recents: stored, inRoot, sample: bundledWorld(), ownResources: app.isPackaged ? process.resourcesPath : null,
+    hideSample: !!(await readSettings()).hideSample,
+    exists: (d) => existsSync(join(d, 'world.json')),
+    info: (d) => {
+      try {
+        const m = JSON.parse(readFileSync(join(d, 'world.json'), 'utf8')) as { id?: unknown; name?: unknown };
+        return typeof m.id === 'string' && typeof m.name === 'string' ? { id: m.id, name: m.name } : null;
+      } catch {
+        return null;
+      }
+    },
+    resolve: (d) => resolve(d),
+  });
+  if (recents.length !== stored.length) {
+    await mkdir(dataDir(), { recursive: true });
+    await writeFile(recentFile(), JSON.stringify(recents, null, 2));
+  }
+  // The order the user arranged wins; new worlds go at the end of it.
+  return orderShelf(shelf, (await readSettings()).shelfOrder);
 }
 
 /** Images picked in a dialog this session: the only outside files the renderer may preview or copy. */
@@ -141,13 +183,17 @@ async function coverImages(dir: string): Promise<CoverImage[]> {
   return out.filter((c) => c.thumb);
 }
 
-async function recentWorlds(): Promise<string[]> {
+/** recent-worlds.json as stored. */
+async function storedRecents(): Promise<string[]> {
   try {
-    const list = JSON.parse(await readFile(recentFile(), 'utf8')) as string[];
-    return list.filter((d) => existsSync(join(d, 'world.json')));
+    const list = JSON.parse(await readFile(recentFile(), 'utf8')) as unknown;
+    return Array.isArray(list) ? list.filter((d): d is string => typeof d === 'string') : [];
   } catch {
     return [];
   }
+}
+async function recentWorlds(): Promise<string[]> {
+  return (await storedRecents()).filter((d) => existsSync(join(d, 'world.json')));
 }
 
 async function remember(dir: string): Promise<void> {
@@ -166,6 +212,14 @@ async function forget(dir: string): Promise<void> {
 function bundledWorld(): string | null {
   const dir = app.isPackaged ? join(process.resourcesPath, 'worlds', 'camelamamm') : join(repoRoot(), 'worlds', 'camelamamm');
   return existsSync(join(dir, 'world.json')) ? dir : null;
+}
+
+/** Every file of a folder, names and bytes, as one hash. */
+async function treeHash(dir: string): Promise<string> {
+  const h = createHash('sha256');
+  const files = (await readdir(dir, { recursive: true, withFileTypes: true })).filter((d) => d.isFile()).map((d) => join(d.parentPath, d.name)).sort();
+  for (const f of files) h.update(relative(dir, f)).update('\0').update(await readFile(f)).update('\0');
+  return h.digest('hex');
 }
 
 function initialWorld(): string | null {
@@ -187,6 +241,54 @@ async function publish(dir: string, kind: PdfKind, file: string, options: Publis
   return writePublication(kind === 'codex' ? worldCodex(world, options) : storyBook(world, options), dir, file, fontDir(), join(__dirname, 'renderer', 'fonts', 'cover'));
 }
 
+/**
+ * The Story Book cover as a PNG for Word: the renderer draws the cover alone (the preview's cover sheet, the same art
+ * and title as the PDF) in a hidden offscreen window, and we capture it, 1240 px wide in the page's proportions. The
+ * page is laid out 620 px wide at 2x through the DevTools protocol, so the capture is not limited by the screen size.
+ * Undefined when the world has no cover art or the capture fails; Word then gets the plain text cover.
+ */
+async function renderCoverPng(dir: string, trim: TrimSize): Promise<Uint8Array | undefined> {
+  const t = TRIMS[trim] ?? TRIMS[DEFAULT_TRIM];
+  const width = 620;
+  const height = Math.round((width * t.height) / t.width);
+  const w = new BrowserWindow({
+    show: false, width: 400, height: 400, frame: false, paintWhenInitiallyHidden: true,
+    webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false },
+  });
+  const dbg = w.webContents.debugger;
+  // Every step is bounded, so a stuck capture falls back to the text cover instead of hanging the export.
+  const within = <T,>(p: Promise<T>, ms = 10_000) =>
+    Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('cover capture timed out')), ms))]);
+  try {
+    await within(w.loadFile(join(__dirname, 'renderer', 'index.html'), { query: { cover: dir, trim } }), 20_000);
+    // Emulating before the page exists stalls; emulate once loaded, then let the cover lay out at the new size.
+    dbg.attach('1.3');
+    await within(dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile: false }));
+    let state: string | null = null;
+    for (let i = 0; i < 200 && !state; i++) {
+      state = (await within(w.webContents.executeJavaScript('window.__coverReady ?? null'))) as string | null;
+      if (!state) await new Promise((ok) => setTimeout(ok, 50));
+    }
+    if (state !== 'ok') return undefined;
+    await within(w.webContents.executeJavaScript('new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(ok, 250))))'));
+    const shot = (await within(dbg.sendCommand('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width, height, scale: 1 } }))) as { data: string };
+    const png = Buffer.from(shot.data, 'base64');
+    return png.length > 0 ? new Uint8Array(png) : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    if (dbg.isAttached()) dbg.detach();
+    w.destroy();
+  }
+}
+
+/** The Story Book for Word with the captured cover as its first page. */
+async function bookDocx(dir: string, options: PublishOptions, path: string) {
+  const doc = storyBook(await loadWorld(dir), options);
+  const cover = await renderCoverPng(dir, doc.print?.trim ?? DEFAULT_TRIM);
+  return { ...(await writeDocx(doc, dir, path, cover ? { cover } : {})), coverPicture: !!cover };
+}
+
 /** Smoke test: prove the bundled PDF path works by exporting both documents. */
 async function smokePdfs(dir: string): Promise<string> {
   const out = process.env['LORE_FORGE_SMOKE_OUT'] ?? (await mkdtemp(join(tmpdir(), 'lore-smoke-')));
@@ -202,8 +304,18 @@ async function smokePdfs(dir: string): Promise<string> {
       const r = await publish(dir, kind, join(out, `${name}.pdf`), options);
       parts.push(`${name}.pdf ${r.pages} pages ${(await stat(r.pdf)).size} bytes`);
     }
-    const d = await writeDocx(storyBook(await loadWorld(dir), { trim: 'a5' }), dir, join(out, 'book-a5.docx'));
-    parts.push(`book-a5.docx ${(await stat(d.docx)).size} bytes`);
+    const d = await bookDocx(dir, { trim: 'a5' }, join(out, 'book-a5.docx'));
+    // The Word file opens with the captured cover: a page-sized picture behind the text, in the first section.
+    const files = unzipSync(new Uint8Array(await readFile(d.docx)));
+    const body = strFromU8(files['word/document.xml']!);
+    const first = body.slice(0, body.indexOf('</w:p>', body.indexOf('<w:sectPr')));
+    const media = Object.entries(files).filter(([k]) => k.startsWith('word/media/'));
+    const png = media.find(([, v]) => v[0] === 0x89 && v[1] === 0x50 && v.length > 20_000);
+    if (!d.coverPicture || !png || !first.includes('<wp:anchor') || !first.includes('behindDoc="1"')) throw new Error(`book-a5.docx: no captured cover on the first page (captured ${d.coverPicture}, ${media.length} pictures)`);
+    const cw = (png[1][16]! << 24) | (png[1][17]! << 16) | (png[1][18]! << 8) | png[1][19]!;
+    const ch = (png[1][20]! << 24) | (png[1][21]! << 16) | (png[1][22]! << 8) | png[1][23]!;
+    if (Math.abs(ch / cw - 595.28 / 419.53) > 0.01) throw new Error(`book-a5.docx: the cover picture is ${cw}x${ch}, not A5-shaped`);
+    parts.push(`book-a5.docx ${(await stat(d.docx)).size} bytes, cover ${cw}x${ch}`);
     return parts.join(', ');
   } finally {
     if (!process.env['LORE_FORGE_SMOKE_OUT']) await rm(out, { recursive: true, force: true });
@@ -222,12 +334,14 @@ async function dataUrl(full: string): Promise<string | null> {
 
 /** world.json "cover" keeps text values and the on/off switches only when they are off (on is the default). */
 function cleanCover(cover: WorldCoverSettings): WorldCoverSettings {
-  return Object.fromEntries(Object.entries(cover).filter(([, v]) => (typeof v === 'string' && v !== '') || v === false)) as WorldCoverSettings;
+  return cleanCoverSettings(cover);
 }
 
 function registerIpc(): void {
   ipcMain.handle('initialWorld', () => initialWorld());
   ipcMain.handle('bundledWorld', () => (app.isPackaged ? bundledWorld() : null));
+  // The sample for the tour: also when running from source, where it is not marked as bundled.
+  ipcMain.handle('sampleWorld', () => bundledWorld());
   ipcMain.handle('recentWorlds', () => recentWorlds());
   ipcMain.handle('pickWorld', async () => {
     const r = await dialog.showOpenDialog(win!, { title: 'Open a Lore-Forge world folder', properties: ['openDirectory'] });
@@ -241,11 +355,7 @@ function registerIpc(): void {
   });
   ipcMain.handle('listWorlds', () => listWorlds());
   ipcMain.handle('settings', async () => ({ ...(await readSettings()), defaultWorldsDir: defaultWorldsDir(), worldsDir: await worldsDir() }));
-  ipcMain.handle('saveSettings', async (_e, next: Settings) => {
-    await mkdir(dataDir(), { recursive: true });
-    const clean: Settings = next.worldsDir && resolve(next.worldsDir) !== defaultWorldsDir() ? { worldsDir: resolve(next.worldsDir) } : {};
-    await writeFile(settingsFile(), JSON.stringify(clean, null, 2));
-  });
+  ipcMain.handle('saveSettings', (_e, next: Settings) => saveSettings(next));
   ipcMain.handle('chooseFolder', async (_e, title: string, start?: string) => {
     if (SMOKE) return null;
     const r = await dialog.showOpenDialog(win!, { title, defaultPath: start, properties: ['openDirectory', 'createDirectory'] });
@@ -267,8 +377,7 @@ function registerIpc(): void {
   ipcMain.handle('readPickedImage', async (_e, path: string) => (picked.has(path) ? dataUrl(path) : null));
   ipcMain.handle('createWorld', async (_e, o: CreateWorldOptions) => {
     const parent = o.parent || (await worldsDir());
-    const slug = o.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'world';
-    const dir = join(parent, slug);
+    const dir = join(parent, worldSlug(o.name));
     if (existsSync(join(dir, 'world.json'))) throw new Error(`A world called "${o.name}" is already in that folder.`);
     let image: string | undefined;
     if (o.image && picked.has(o.image)) {
@@ -279,10 +388,32 @@ function registerIpc(): void {
     await createWorld(dir, o.name, { cover: cleanCover({ ...o.cover, ...(o.color ? { color: o.color } : {}), ...(image ? { image } : {}) }) });
     return dir;
   });
+  // A copy always goes into the worlds folder, so the read-only bundled world can be copied and edited.
+  ipcMain.handle('duplicateWorld', async (_e, dir: string, name: string) => {
+    if (!existsSync(join(dir, 'world.json'))) throw new Error('That folder is not a Lore-Forge world.');
+    const copy = resolve(await duplicateWorld(dir, await worldsDir(), name));
+    // The copy goes right after its original on the shelf, which keeps the order from then on.
+    await saveSettings({ shelfOrder: placeAfter(await listWorlds(), resolve(dir), copy) });
+    return { dir: copy, files: await readWorldFiles(copy) };
+  });
+  ipcMain.handle('listModels', (_e, dir: string, entryId: string) => listModels(dir, entryId));
+  ipcMain.handle('importModel', async (_e, dir: string, entryId: string) => {
+    const r = await dialog.showOpenDialog(win!, { title: 'Add a 3D model', properties: ['openFile'], filters: [{ name: '3D models (glTF, OBJ, FBX)', extensions: MODEL_EXTS.map((x) => x.slice(1)) }] });
+    const src = r.filePaths[0];
+    return r.canceled || !src ? null : importModel(dir, entryId, src);
+  });
+  ipcMain.handle('renameModel', (_e, dir: string, file: string, name: string) => renameModel(dir, file, name));
+  ipcMain.handle('deleteModel', (_e, dir: string, file: string) => deleteModel(dir, file));
+  ipcMain.handle('readModel', async (_e, dir: string, file: string) => new Uint8Array(await readModel(dir, file)));
+  ipcMain.handle('updateState', () => updateState());
+  ipcMain.handle('checkForUpdates', () => checkForUpdates());
+  ipcMain.handle('downloadUpdate', () => downloadUpdate());
+  ipcMain.handle('installUpdate', () => installUpdate());
   ipcMain.handle('trashWorld', async (_e, dir: string) => {
     // Only a real world folder goes, and only to the system trash: it can be restored from there.
     if (!existsSync(join(dir, 'world.json'))) throw new Error('That folder is not a Lore-Forge world.');
-    if (app.isPackaged && bundledWorld() && resolve(dir) === resolve(bundledWorld()!)) throw new Error('The bundled world that ships with the app cannot be deleted.');
+    // The sample that comes with the app is never deleted: Remove from library hides it (Library settings brings it back).
+    if (bundledWorld() && resolve(dir) === resolve(bundledWorld()!)) throw new Error('The sample world that comes with the app is not deleted: remove it from the library instead.');
     try {
       // The smoke box has no desktop trash (gio), so the smoke run moves the folder into its throwaway trash instead.
       if (smokeTrash) {
@@ -350,7 +481,8 @@ function registerIpc(): void {
       filters: [{ name: 'Word document', extensions: ['docx'] }],
     });
     if (r.canceled || !r.filePath) return null;
-    return writeDocx(storyBook(world, options), dir, r.filePath);
+    const { coverPicture: _c, ...out } = await bookDocx(dir, options, r.filePath);
+    return out;
   });
   ipcMain.handle('saveBook', async (_e, dir: string, book: BookSettings) => {
     // Patch only "book" in the raw file, so every other key in world.json stays exactly as it was.
@@ -412,6 +544,9 @@ function registerIpc(): void {
       { name: 'Ilık Rüzgar', description: 'Çöl kervanlarının şarkısı.' },
       { name: 'Northern Tales', book: { title: 'Songs of the Fjords', author: 'Émile Brontë' } },
       { name: 'The Glass Garden', description: 'A quiet story about lighthouse keepers.' },
+      // Long titles: the shelf fits them (smaller font, balanced lines) instead of cutting them off.
+      { name: 'The Extraordinary Chronicles of the Seventeen Sunken Kingdoms' },
+      { name: 'Kartaltepe Mahallesinin Unutulmuş Masalları' },
     ];
     const colours = ['#7a2e2e', '#8a5a1c', '#2f5d3a', '#1f4f6b', '#3b3478', '#5c2a5e', '#6b4a2b'];
     for (let i = 0; i < count; i++) {
@@ -425,10 +560,12 @@ function registerIpc(): void {
         await writeFile(join(dir, 'world.json'), JSON.stringify(raw, null, 2) + '\n', 'utf8');
       }
     }
-    await mkdir(dataDir(), { recursive: true });
-    await writeFile(settingsFile(), JSON.stringify({ worldsDir: shelf }, null, 2));
+    await saveSettings({ worldsDir: shelf });
     return shelf;
   });
+  // Smoke only: add the test model (a small .glb) to an entry without the file dialog.
+  ipcMain.handle('smokeImportModel', (_e, dir: string, entryId: string) =>
+    SMOKE ? importModel(dir, entryId, join(repoRoot(), 'packages', 'desktop', 'test', 'fixtures', 'cube.glb'), 'Test cube') : null);
   ipcMain.handle('smokeShow', (_e, show: boolean) => {
     if (!SMOKE || !win) return;
     if (show) win.showInactive();
@@ -441,15 +578,21 @@ function registerIpc(): void {
     if (!dbg.isAttached()) dbg.attach('1.3');
     for (const ev of events) {
       const at = { x: Math.round(ev.x), y: Math.round(ev.y) };
-      if (ev.type === 'move') await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...at });
+      if (ev.type === 'move') await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...at, ...(ev.held ? { button: 'left', buttons: 1 } : {}) });
+      else if (ev.type === 'down' || ev.type === 'up') await dbg.sendCommand('Input.dispatchMouseEvent', { type: ev.type === 'down' ? 'mousePressed' : 'mouseReleased', ...at, button: 'left', buttons: ev.type === 'down' ? 1 : 0, clickCount: 1 });
       else await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mouseWheel', ...at, deltaX: 0, deltaY: ev.deltaY });
     }
   });
   ipcMain.on('smokeReport', (_e, summary: unknown) => {
     if (!SMOKE) return;
     const dir = initialWorld();
+    const sample = bundledWorld();
     void (dir ? smokePdfs(dir) : Promise.resolve('no world, PDFs skipped')).then(
-      (pdfs) => {
+      async (pdfs) => {
+        if (sample && sampleBefore && (await treeHash(sample)) !== sampleBefore) {
+          console.error(`SMOKE FAIL the sample world ${sample} changed during the smoke`);
+          return smokeExit(1);
+        }
         console.log(`SMOKE OK ${JSON.stringify(summary)} PDF: ${pdfs}`);
         smokeExit(0);
       },
@@ -475,9 +618,12 @@ function createWindow(): void {
     title: 'Lore-Forge',
     icon: join(__dirname, 'icon.png'),
     backgroundColor: '#14161b',
-    show: !SMOKE,
+    show: false,
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: !SMOKE },
   });
+  // The app always opens maximized; the size above is what un-maximizing goes back to. Maximized before the first
+  // show, so the window never flashes at the smaller size. (The smoke window stays hidden and sets its own sizes.)
+  if (!SMOKE) win.once('ready-to-show', () => { win?.maximize(); win?.show(); });
   win.setMenuBarVisibility(false);
   // Links in lore text open in the system browser, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -511,6 +657,8 @@ function createWindow(): void {
 
 // Ubuntu 24.04's AppArmor blocks Chromium's sandbox for unpackaged Electron; allow an explicit dev opt-out.
 if (process.env['LORE_FORGE_NO_SANDBOX'] === '1') app.commandLine.appendSwitch('no-sandbox');
+// The smoke run renders a 3D model under xvfb, whose software GL Chromium blocklists for WebGL.
+if (SMOKE) app.commandLine.appendSwitch('ignore-gpu-blocklist');
 
 app.whenReady().then(async () => {
   const dir = SMOKE ? initialWorld() : null;
@@ -519,6 +667,8 @@ app.whenReady().then(async () => {
     await cp(dir, smokeWorld, { recursive: true });
   }
   if (SMOKE) {
+    const sampleDir = bundledWorld();
+    if (sampleDir) sampleBefore = await treeHash(sampleDir);
     smokeHome = await mkdtemp(join(tmpdir(), 'lore-smoke-home-'));
     // One "uploaded before" cover picture (a copy of a world image), so the recent pictures list has something to show.
     const sample = smokeWorld && join(smokeWorld, 'images', 'place-saltmere', 'establishing.png');
@@ -530,6 +680,7 @@ app.whenReady().then(async () => {
   }
   registerIpc();
   createWindow();
+  setupUpdater({ smoke: SMOKE, window: () => win, autoCheck: async () => (await readSettings()).autoUpdate !== false });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

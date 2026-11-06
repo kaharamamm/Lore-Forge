@@ -42,4 +42,4 @@ export { bookChapters, storyBook, writtenChapters, CHRONICLE_APPENDIX, LORE_AND_
 export { toMarkdown } from './publish/markdown.ts';
 export { familyTree, TREE_LAYOUT, type FamilyTree, type TreeNode, type TreeEdge } from './views/family-tree.ts';
 export { relationWeb, WEB_LAYOUT, type RelationWeb, type WebOptions, type WebNode, type WebEdge } from './views/relation-web.ts';
-export { timelineModel, yearLabel, yearTicks, involvesEntry, type TimelineModel, type TimelineLane, type TimelineGroup, type EraBand } from './views/timeline-model.ts';
+export { timelineModel, yearLabel, yearTicks, monthTicks, packRows, involvesEntry, type TimelineModel, type TimelineLane, type TimelineGroup, type EraBand } from './views/timeline-model.ts';

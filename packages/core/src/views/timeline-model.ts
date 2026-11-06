@@ -100,6 +100,38 @@ export function yearLabel(day: number, cal: Calendar): string {
   return era.id === cal.defaultEra ? String(y) : `${y} ${era.id}`;
 }
 
+/** Month starts between two absolute days, for the axis when a month is wide enough to name. */
+export function monthTicks(model: TimelineModel, cal: Calendar, fromDay: number, toDay: number): { day: number; name: string; first: boolean }[] {
+  const months = monthsOf(cal);
+  const out: { day: number; name: string; first: boolean }[] = [];
+  const lo = Math.max(fromDay, model.min), hi = Math.min(toDay, model.max);
+  for (let y = Math.floor(lo / model.daysPerYear); y * model.daysPerYear <= hi; y++) {
+    let day = y * model.daysPerYear;
+    months.forEach((m, i) => {
+      if (day >= lo && day <= hi) out.push({ day, name: m.name, first: i === 0 });
+      day += m.days;
+    });
+  }
+  return out;
+}
+
+/**
+ * Gantt packing: the row each span goes on so that spans on one row never overlap (with `gap` days between
+ * them). Spans are placed by start, each on the first row that is free. Returns the row per span, in input order.
+ */
+export function packRows(spans: readonly { from: number; to: number }[], gap = 0): { rows: number[]; count: number } {
+  const ends: number[] = [];
+  const rows: number[] = new Array(spans.length);
+  const order = spans.map((s, i) => i).sort((a, b) => spans[a]!.from - spans[b]!.from || spans[a]!.to - spans[b]!.to);
+  for (const i of order) {
+    const s = spans[i]!;
+    let r = ends.findIndex((end) => end + gap < s.from);
+    if (r < 0) { r = ends.length; ends.push(s.to); } else ends[r] = s.to;
+    rows[i] = r;
+  }
+  return { rows, count: ends.length };
+}
+
 /** Year ticks at a round step so labels are at least `minGapPx` apart at `pxPerYear`. */
 export function yearTicks(model: TimelineModel, pxPerYear: number, minGapPx = 80): { day: number; years: number }[] {
   const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];

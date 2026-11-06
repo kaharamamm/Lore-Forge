@@ -24,6 +24,7 @@ export function toMarkdown(doc: Doc, imageHref: (file: string) => string = (f) =
       case 'heading':
         if (b.toc) out.push(`<a id="${anchor(b)}"></a>`, '');
         out.push(`${'#'.repeat(Math.min(b.level + 1 + depth, 6))} ${b.text}`, '');
+        if (b.stamp) out.push(`<p align="right"><i>${b.stamp}</i></p>`, '');
         break;
       case 'para':
         out.push(b.style === 'lead' ? `*${b.text}*` : b.text.replace(/\n/g, '  \n'), '');

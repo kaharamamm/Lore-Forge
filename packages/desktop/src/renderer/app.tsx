@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   analyzeStory, applyFields, builtinRules, chapterPath, check, checkWorld, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, isStoryFact, newEntryId, normalizeName, parseWorld,
-  proposalEntry, relationWeb, searchEntries, eraUsage, serializeChapter, serializeEntry, serializeIntended, serializeStoryIgnored, sortChapters, sortWarnings, STORY_IGNORED_FILE, storyFact, timelineModel, TYPE_SINGULAR, WorldIndex,
+  proposalEntry, relationWeb, searchEntries, eraUsage, worldCoverArt, serializeChapter, serializeEntry, serializeIntended, serializeStoryIgnored, sortChapters, sortWarnings, STORY_IGNORED_FILE, storyFact, timelineModel, TYPE_SINGULAR, WorldIndex,
   type BookSettings, type Calendar, type Entry, type EntryType, type FactRef, type IconName, type Proposal, type ProposalFields, type StoryAnalysis, type StoryChapter, type StoryIgnore, type Warning, type World, type WorldCoverSettings,
 } from '@lore-forge/core';
 import type { PdfKind, PublishOptions } from '../shared/api.ts';
 import { EntryEditor } from './components/editor.tsx';
 import { RelationsView, type RelationMode } from './components/relations.tsx';
 import { Sidebar } from './components/sidebar.tsx';
-import { StartScreen } from './components/start.tsx';
+import { DuplicateBook, StartScreen } from './components/start.tsx';
+import { Tour, type TourStep } from './components/tour.tsx';
+import { UpdateToast } from './components/updates.tsx';
+import { viewers } from './components/models.tsx';
 import { TimelineView } from './components/timeline.tsx';
 import { PreviewDialog, previewDoc, sheetsOf } from './components/preview.tsx';
 import { ToastStack, useToasts } from './components/toasts.tsx';
@@ -17,8 +20,9 @@ import { Icon } from './components/icon.tsx';
 import { Aura } from './components/aura.tsx';
 import { ErasLink, WorldSettings } from './components/world-settings.tsx';
 import { transition } from './motion.ts';
+import { sameWarnings, useEvent, useSame, useSettledWorld } from './hooks.ts';
 import { WorldHome } from './components/home.tsx';
-import { forgetImages, Portrait, WorldBookCover, WorldDir } from './components/cover.tsx';
+import { forgetImages, Portrait, portraitFile, WorldBookCover, WorldDir } from './components/cover.tsx';
 import { ConfirmDialog } from './components/confirm.tsx';
 import { PaneResizer, SaveIndicator, sidebarMax, useSidebarWidth, type SaveState } from './components/chrome.tsx';
 import { ChapterList, StoryView, type StoryActions } from './components/story.tsx';
@@ -28,6 +32,8 @@ type View = 'home' | 'editor' | 'timeline' | 'relations' | 'story';
 const SAVE_DELAY_MS = 400;
 /** Story analysis waits this long after the last keystroke in a chapter. */
 const STORY_DELAY_MS = 300;
+/** Pause in typing in an entry after which the story analysis runs again. */
+const CHECK_DELAY_MS = 250;
 
 const SMOKE = new URLSearchParams(location.search).has('smoke');
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
@@ -219,7 +225,7 @@ export function App() {
       // Every popup fits the window at every size: its box inside the window, its main control visible and the
       // topmost thing at its centre (clickable) without scrolling anything. The window goes back to its size after.
       const fitted = new Set<string>();
-      const popupFit = async (what: string, boxSel: string, mainSel: string) => {
+      const popupFit = async (what: string, boxSel: string, mainSel: string, opts: { centred?: boolean; width?: [number, number] } = {}) => {
         if (fitted.has(what)) return;
         fitted.add(what);
         const was = [innerWidth, innerHeight] as const;
@@ -246,6 +252,9 @@ export function App() {
           if (!inView(r)) bad.push(`${width}x${height}: the popup (${px(r)}) is not inside the window`);
           if (!inView(m) || m.width < 4 || m.height < 4 || !hit || !(main.contains(hit) || hit.contains(main))) bad.push(`${width}x${height}: ${mainSel} (${px(m)}) is not visible and clickable (${hit?.className || hit?.tagName})`);
           if ((document.scrollingElement?.scrollTop ?? 0) !== 0) bad.push(`${width}x${height}: the page scrolled`);
+          // Centred on both axes (within 2px), and a comfortable width for its size.
+          if (opts.centred && (Math.abs(r.left + r.width / 2 - innerWidth / 2) > 2 || Math.abs(r.top + r.height / 2 - innerHeight / 2) > 2)) bad.push(`${width}x${height}: the popup (${px(r)}) is not centred`);
+          if (opts.width && (r.width < opts.width[0] || r.width > opts.width[1])) bad.push(`${width}x${height}: the popup is ${Math.round(r.width)}px wide, not ${opts.width[0]}-${opts.width[1]}`);
         }
         await window.lore.smokeResize(was[0], was[1]);
         await until(() => innerWidth === was[0] && innerHeight === was[1], 2000);
@@ -266,22 +275,70 @@ export function App() {
         dom['portraitImages'] = (await until(() => count('.portrait img') > 0)) ? count('.portrait img') : 0;
         expect(dom['portraitImages'] > 0, 'entries with reference images show them as portraits');
         expect(emojiIn($('.home')).length === 0, 'no emoji on the home page');
+        // Eras and open warnings are chips like the entry counts; no warnings means no chip, and the old text line is gone.
+        {
+          const eras = w.manifest.calendar.eras.length, open = check(w).filter((x) => !x.intended).length;
+          const era = $('.home-stats .t-era a'), warn = $('.home-stats .home-warn a');
+          expect(!$('.home-facts') && !/no warnings|\d+ eras? ·/.test($('.home-intro')?.textContent ?? ''), 'the old "eras · warnings" line is gone');
+          expect(!!era && era.textContent?.trim() === `${eras} Eras` && !!era.querySelector('.icon') && era.previousElementSibling === null && era.parentElement?.previousElementSibling?.classList.contains('t-note') === true, `an Eras chip after Notes (${era?.textContent})`);
+          expect(open ? !!warn && warn.querySelector('strong')?.textContent === String(open) && /Warnings?$/.test(warn.textContent?.trim() ?? '') : !warn, `a warnings chip only when there are open warnings (${open}, chip ${warn?.textContent ?? 'none'})`);
+          const chipH = (a: Element | null) => a?.getBoundingClientRect().height ?? 0;
+          expect(Math.abs(chipH(era) - chipH($('.home-stats .t-note a'))) < 1 && (!warn || Math.abs(chipH(warn) - chipH(era)) < 1), 'the Eras and Warnings chips match the other chips');
+          if (warn) { warn.click(); await tick(); expect(document.activeElement?.id === 'warnings-title', 'the warnings chip opens the warnings'); }
+        }
         expect(paneFit().length === 0, `home layout: ${paneFit().join('; ')}`);
         const leyla = w.entries.find((e) => e.id === 'char-leyla') ?? w.entries.find((e) => e.type === 'character');
         if (leyla) {
           setSelectedId(leyla.id);
           setView('editor');
           await tick();
+          // Renaming an entry to another's name warns straight away, in the entry and in the Warnings panel, while
+          // the field still has focus; putting the name back clears it.
+          {
+            const other = w.entries.find((e) => e.id !== leyla.id)!;
+            const nameIn = $<HTMLInputElement>('.editor [data-field="name"] input')!;
+            const dup = () => [...document.querySelectorAll('.live-warnings li')].filter((li) => li.textContent?.includes(`"${other.name}" names both`)).length;
+            const summary = () => $('.warnings-panel .summary')?.textContent ?? '';
+            const before = summary();
+            nameIn.focus();
+            nameIn.value = other.name;
+            nameIn.dispatchEvent(new Event('input', { bubbles: true }));
+            expect(await until(() => dup() > 0 && summary() !== before, 150), `renaming to "${other.name}" warns at once, while typing (${summary()})`);
+            nameIn.value = leyla.name;
+            nameIn.dispatchEvent(new Event('input', { bubbles: true }));
+            nameIn.blur();
+            // (The panel's list animates removed rows out, so its counts are what is checked here.)
+            expect(await until(() => dup() === 0 && summary() === before, 500), `putting the name back clears the warning (${before} before, ${summary()} after)`);
+          }
           dom['editorMentions'] = count('.prose-mirror mark.mention');
           dom['statusPills'] = count('.lifecycle [role=radio]');
           expect(count('.lifecycle [role=radio] svg.icon') === dom['statusPills'], 'status pills have icons');
           await document.fonts.load('700 16px Cinzel', 'Şafak İlsa');
+          expect(portraitFile(leyla) ? !!$('#entry-title > .portrait') && !$('#entry-title > .title-icon') : !!$('#entry-title > .title-icon'), 'the editor title shows the entry\'s round picture when it has one, else its type icon');
+          {
+            const plain = w.entries.find((e) => !portraitFile(e));
+            if (plain) {
+              setSelectedId(plain.id);
+              expect(await until(() => $('#entry-title')?.textContent?.includes(plain.name) === true && !!$('#entry-title > .title-icon') && !$('#entry-title > .portrait')), `an entry without a picture keeps its type icon by the title (${plain.name})`);
+              setSelectedId(leyla.id);
+              await until(() => $('#entry-title')?.textContent?.includes(leyla.name) === true);
+            }
+          }
           dom['cinzel'] = document.fonts.check('700 16px Cinzel', 'Şafak') && getComputedStyle($('#entry-title')!).fontFamily.includes('Cinzel') ? 1 : 0;
           expect(dom['cinzel'] === 1, 'Cinzel headings load');
           expect(emojiIn($('.lifecycle')).length + emojiIn($('.editor-head')).length === 0, 'no emoji in the editor');
           dom['relationSelects'] = count('[data-field^="relations"] button.select[role=combobox]');
           expect(count('select') === 0 && count('.select .select-chevron') >= dom['relationSelects']!, 'dropdowns are the custom Select, with a chevron');
           // Status: exactly one is always selected; clicking the selected one keeps it.
+          {
+            const edge = (el: Element) => { const c = getComputedStyle(el); return parseFloat(c.borderLeftWidth) > parseFloat(c.borderTopWidth); };
+            const lc = $('.lifecycle')!;
+            expect(!edge(lc) && !!lc.querySelector('legend > svg.icon'), 'Status and dates is a card without a coloured edge rail, its legend has an icon');
+            const railed = [...document.querySelectorAll('.editor .entry-chip, .editor .warning, .editor fieldset')].filter(edge);
+            expect(railed.length === 0, `no coloured edge rails in the entry editor (${railed.map((e) => e.className).join(', ')})`);
+            expect(parseFloat(getComputedStyle($('.editor')!).borderTopWidth) === 0, 'the editor has no coloured strip along its top');
+            expect(count('.editor-head .editor-meta .meta-chip code') === 1 && $('.editor-head .meta-chip-path')?.textContent === w.files?.[leyla.id], 'the id and file show as chips under the title');
+          }
           expect(count('.lifecycle [aria-checked="true"]') === 1, 'one status selected');
           $('.lifecycle [aria-checked="true"]')?.click();
           await tick();
@@ -334,6 +391,36 @@ export function App() {
           await tick();
           dom['treeNodes'] = count('.family-tree .node');
           expect(count('.family-tree .node .portrait') === dom['treeNodes'], 'family tree cards have portraits');
+          {
+            const card = document.querySelector<SVGRectElement>('.family-tree .node rect');
+            expect(count('.family-tree .node-stripe') === 0 && !!card && parseFloat(getComputedStyle(card).strokeWidth) <= 1.5, `family tree cards have no coloured stripe or thick border (${card ? getComputedStyle(card).strokeWidth : 'none'})`);
+          }
+          // Every line starts and ends on a card's border (within 2px), in the family tree and in the web.
+          const offBorder = (p: DOMPoint, r: DOMRect) => {
+            const ox = Math.max(r.left - p.x, 0, p.x - r.right), oy = Math.max(r.top - p.y, 0, p.y - r.bottom);
+            return ox || oy ? Math.hypot(ox, oy) : Math.min(p.x - r.left, r.right - p.x, p.y - r.top, r.bottom - p.y);
+          };
+          const ends = (path: SVGGeometryElement) => {
+            const m = path.getScreenCTM()!, len = path.getTotalLength();
+            return [path.getPointAtLength(0), path.getPointAtLength(len)].map((p) => new DOMPoint(p.x, p.y).matrixTransform(m)) as [DOMPoint, DOMPoint];
+          };
+          const attached = (edges: Element[], line: (g: Element) => SVGGeometryElement | null, box: (id: string) => Element | null, from: string, to: string) => {
+            const bad: string[] = [];
+            for (const g of edges) {
+              const path = line(g), a = box(g.getAttribute(from)!), b = box(g.getAttribute(to)!);
+              if (!path || !a || !b) { bad.push(`${g.getAttribute(from)}->${g.getAttribute(to)}: missing`); continue; }
+              const [p1, p2] = ends(path);
+              const d1 = offBorder(p1, a.getBoundingClientRect()), d2 = offBorder(p2, b.getBoundingClientRect());
+              if (d1 > 2 || d2 > 2) bad.push(`${g.getAttribute(from)}->${g.getAttribute(to)}: ${d1.toFixed(1)}/${d2.toFixed(1)}px`);
+            }
+            return bad;
+          };
+          {
+            const treeEdges = [...document.querySelectorAll('.family-tree .edges > g[data-from]')];
+            const bad = attached(treeEdges, (g) => g.querySelector<SVGGeometryElement>('.edge'), (id) => $(`.family-tree [data-node-id="${CSS.escape(id)}"] > rect`), 'data-from', 'data-to');
+            expect(bad.length === 0, `family tree lines end on the cards' borders (${treeEdges.length} lines): ${bad.join('; ')}`);
+            dom['treeEdges'] = treeEdges.length;
+          }
           const treeT = () => $('.family-tree > g')?.getAttribute('transform') ?? '';
           const fitT = treeT();
           $<HTMLButtonElement>('.zoom-frame .zoom-in')?.click();
@@ -351,6 +438,15 @@ export function App() {
             const before = viewport();
             $<HTMLButtonElement>('.relation-web .react-flow__controls-zoomin')?.click();
             expect(await until(() => viewport() !== before), 'web zooms in');
+            await tick(400);
+            const webEdges = [...document.querySelectorAll('.relation-web .web-edge')];
+            const bad = attached(webEdges, (g) => g.querySelector<SVGGeometryElement>('path.edge'), (id) => $(`.relation-web .react-flow__node[data-id="${CSS.escape(id)}"]`), 'data-source', 'data-target');
+            expect(webEdges.length > 0 && bad.length === 0, `every web link starts and ends on a card's border, within 2px (${webEdges.length} links): ${bad.join('; ')}`);
+            const labels = [...document.querySelectorAll<SVGGElement>('.relation-web .edge-label-group')];
+            expect(labels.length > 0 && labels.every((l) => !!l.querySelector('.edge-label-bg')), 'web link labels sit on the line, on a backing');
+            expect([...document.querySelectorAll<HTMLElement>('.relation-web .web-handle')].every((h) => getComputedStyle(h).visibility === 'hidden'), 'the web cards show no handle dots');
+            const railed = [...document.querySelectorAll<HTMLElement>('.relation-web .web-node')].filter((n) => { const c = getComputedStyle(n); return c.boxShadow.includes('inset') || parseFloat(c.borderLeftWidth) > 1.5; });
+            expect(count('.relation-web .web-node') > 0 && railed.length === 0, `web cards have no coloured left rail or thick border (${railed.length})`);
           }
           dom['webNodes'] = count('.relation-web .node');
           dom['webEdges'] = count('.relation-web .web-edge');
@@ -375,8 +471,40 @@ export function App() {
           const top = (t: string) => [...document.querySelectorAll<HTMLButtonElement>('.topbar button')].some((b) => (b.textContent ?? '').includes(t) || b.getAttribute('aria-label') === t);
           const gear = $<HTMLButtonElement>('.topbar .top-actions > .top-settings');
           const back = $<HTMLButtonElement>('.topbar .world-title > .nav-back'), unit = $<HTMLButtonElement>('.topbar .world-title .world-home-btn');
-          expect(JSON.stringify(tabLabels) === JSON.stringify(['Home', 'Editor', 'Timeline', 'Relationships', 'Story']) && !!gear?.querySelector('svg') && gear.getAttribute('aria-label') === 'World settings' && !gear.textContent?.trim(),
-            `the view tabs, and World settings as a gear in the top-right actions: ${JSON.stringify(tabLabels)}`);
+          expect(JSON.stringify(tabLabels) === JSON.stringify(['Home', 'Editor', 'Timeline', 'Relationships', 'Story']) && !!gear?.querySelector('svg') && gear.getAttribute('aria-label') === 'World settings' && gear.querySelector('.btn-label')?.textContent === 'World settings',
+            `the view tabs, and World settings as a gear with its name in the top-right actions: ${JSON.stringify(tabLabels)}`);
+          {
+            // The words show on wide windows and fold away on narrow ones, where the tooltip and the accessible name stay.
+            const shown = (b: Element | null) => (b?.querySelector('.btn-label')?.getBoundingClientRect().width ?? 0) > 0;
+            const was = [innerWidth, innerHeight] as const;
+            for (const [width, height, wide] of [[2560, 1440, true], [1920, 1080, true], [1280, 720, true], [1024, 640, false]] as const) {
+              await window.lore.smokeResize(width, height);
+              await until(() => innerWidth === width, 2000);
+              window.dispatchEvent(new Event('resize'));
+              await tick(150);
+              expect(shown(gear) === wide && shown(back) === wide && !!gear!.title && !!back!.title && gear!.getAttribute('aria-label') === 'World settings',
+                `at ${width}px the World settings and Library buttons ${wide ? 'show their names' : 'fold to icons with a tooltip'}`);
+              // One bar: a single row, every control the same height on one centre line, the views centred (when the
+              // sides leave room), World settings at the far right, nothing overlapping.
+              const bar = $('.topbar')!.getBoundingClientRect();
+              const parts = ['.topbar .nav-back', '.topbar .tabs', '.topbar .publish-actions', '.topbar .top-settings'].map((q) => $(q)!.getBoundingClientRect());
+              const [b, t, p, g] = parts as [DOMRect, DOMRect, DOMRect, DOMRect];
+              const mid = (r: DOMRect) => r.top + r.height / 2;
+              const sameLine = parts.every((r) => Math.abs(mid(r) - mid(t)) <= 1 && Math.abs(r.height - t.height) <= 1);
+              const order = b.right <= t.left && t.right <= p.left && p.right <= g.left && g.right <= bar.right && bar.right - g.right < 24;
+              const centred = width < 1900 || Math.abs(t.left + t.width / 2 - bar.width / 2) <= 2;
+              const tabsShown = [...document.querySelectorAll('.topbar .tabs .tab-label')].every((l) => l.getBoundingClientRect().width > 0);
+              expect(bar.height < t.height * 2 + 4 && sameLine && order && centred && tabsShown && document.documentElement.scrollWidth <= innerWidth,
+                `at ${width}px the top bar is one row: same height and centre line ${sameLine}, in order ${order}, views centred ${centred}, view names shown ${tabsShown} (bar ${Math.round(bar.height)}px, views ${Math.round(t.height)}px)`);
+              const icon = $('.topbar .tabs .v-relations .icon')!;
+              expect(getComputedStyle(icon).color !== getComputedStyle($('.topbar .tabs .v-story .icon')!).color && getComputedStyle($('.topbar .p-codex .icon')!).color !== getComputedStyle($('.topbar .p-book .icon')!).color,
+                'each view and each export has its own accent colour');
+            }
+            await window.lore.smokeResize(was[0], was[1]);
+            await until(() => innerWidth === was[0], 2000);
+            window.dispatchEvent(new Event('resize'));
+            await tick(150);
+          }
           expect(!$('.topbar .view-nav') && count('.topbar [aria-label="World settings"]') === 1 && !top('About and credits'), 'one World settings button in the top bar, no laurel About button');
           expect(!!back && !!unit && back.getBoundingClientRect().right <= unit.getBoundingClientRect().left + 1 && back.getBoundingClientRect().left < 40 && !!unit.querySelector('.mini-cover') && unit.querySelector('.world-name')?.textContent === w.manifest.name,
             'Back sits at the far top-left, then the mini cover and the title as one button');
@@ -396,7 +524,8 @@ export function App() {
           }
           gear!.click();
           expect(await until(() => !!$('.world-settings')), 'the top-bar World settings button opens World settings');
-          await popupFit('World settings (eras)', '.world-settings', '.ws-save');
+          expect(!/saved in world\.json/.test($('.world-settings .dialog-head')?.textContent ?? ''), 'World settings has no "The calendar of …, saved in world.json" line');
+          await popupFit('World settings (eras)', '.world-settings', '.ws-save', { centred: true });
           key(window, 'Escape');
           expect(await until(() => !$('.world-settings')), 'Escape closes World settings');
         }
@@ -408,6 +537,46 @@ export function App() {
         typeInto($<HTMLInputElement>('#search')!, '');
         [...document.querySelectorAll<HTMLButtonElement>('.topbar .tabs button')].find((b) => b.textContent?.trim() === 'Editor')!.click();
         expect(await until(() => !!$(`.editor`) && $('.editor h2, .editor input')?.closest('.editor') !== null), 'the Editor tab shows the selected entry');
+        {
+          // Images | 3D model: the test cube goes into models/<entry-id>/, renders, renames and deletes.
+          const tab = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.media-tab')].find((b) => b.textContent?.trim() === label);
+          expect(!!tab('Images') && !!tab('3D model') && tab('Images')!.getAttribute('aria-selected') === 'true' && !!$('.ref-images'), 'entries have Images | 3D model tabs, Images first');
+          tab('3D model')!.click();
+          expect(await until(() => !!$('.models-empty')), 'an entry without models shows the empty 3D model tab');
+          const model = await window.lore.smokeImportModel(d, target.id);
+          tab('Images')!.click();
+          await until(() => !!$('.ref-images'));
+          tab('3D model')!.click();
+          expect(await until(() => count('.model-chip') === 1 && !!$('.model-stage')), `the imported model is listed (${model})`);
+          expect(await until(() => !!$('.model-stage.is-ready, .model-stage.is-error'), 20000) && !!$('.model-stage.is-ready'), `the 3D viewer loads the test cube: ${$('.model-error')?.textContent ?? ''}`);
+          const view = viewers.get($('.model-viewer')!);
+          await tick(300);
+          const probe = view?.probe();
+          dom['modelTriangles'] = probe?.triangles ?? 0;
+          dom['modelPixels'] = probe?.drawn ?? 0;
+          expect(!!probe && probe.meshes === 1 && probe.triangles === 12 && probe.drawn > 500, `the cube is drawn (${JSON.stringify(probe)})`);
+          expect(count('script[src="./viewer.js"]') === 1 && !!$('.model-viewer canvas'), 'three.js is loaded on demand, once, into a canvas');
+          const spin = [...document.querySelectorAll<HTMLButtonElement>('.model-tools button')].find((b) => b.textContent?.includes('Auto-rotate'))!;
+          spin.click();
+          expect(await until(() => spin.getAttribute('aria-pressed') === 'true'), 'auto-rotate turns on');
+          [...document.querySelectorAll<HTMLButtonElement>('.model-tools button')].find((b) => b.textContent?.includes('Reset view'))!.click();
+          [...document.querySelectorAll<HTMLButtonElement>('.models-bar button')].find((b) => b.textContent?.includes('Rename'))!.click();
+          const input = await until(() => !!$('.model-rename input')) && $<HTMLInputElement>('.model-rename input')!;
+          if (input) {
+            input.value = 'Gold cube';
+            $<HTMLFormElement>('.model-rename')!.requestSubmit();
+          }
+          expect(await until(() => ($('.model-chip-name')?.textContent ?? '') === 'Gold cube'), 'a model can be renamed');
+          const listed = await window.lore.listModels(d, target.id);
+          expect(listed.length === 1 && listed[0]!.file === `models/${target.id}/Gold cube.glb`, `the renamed file keeps its extension (${listed[0]?.file})`);
+          [...document.querySelectorAll<HTMLButtonElement>('.models-bar button')].find((b) => b.textContent?.includes('Delete'))!.click();
+          expect(await until(() => !!$('.confirm-dialog')), 'deleting a model asks first');
+          $<HTMLButtonElement>('.confirm-dialog .confirm-go')!.click();
+          expect(await until(() => !!$('.models-empty') && !$('.confirm-dialog')), 'the model is deleted');
+          expect((await window.lore.listModels(d, target.id)).length === 0, 'the model file is gone');
+          tab('Images')!.click();
+          await until(() => !!$('.ref-images'));
+        }
         $<HTMLButtonElement>('.topbar .top-settings')!.click();
         {
           // World settings: the default era comes first, before the list of eras; About lives in the library only.
@@ -445,7 +614,7 @@ export function App() {
         dom['timelineMarks'] = count('.tl-mark');
         // Timeline zoom (d3-zoom): Ctrl+wheel zooms, a drag pans along time, Fit brings it back.
         {
-          const scale = () => $('.tl-scale')?.textContent ?? '';
+          const scale = () => $('.tl-scroll')?.dataset['ppy'] ?? '';
           const firstLeft = () => $('.tl-mark')?.style.left ?? '';
           const tl = $('.tl-scroll')!;
           const r = tl.getBoundingClientRect();
@@ -459,9 +628,194 @@ export function App() {
           window.dispatchEvent(new MouseEvent('mousemove', { ...at, clientX: at.clientX + 120 }));
           window.dispatchEvent(new MouseEvent('mouseup', { ...at, clientX: at.clientX + 120 }));
           expect(await until(() => firstLeft() !== left), 'dragging pans the timeline');
+          {
+            // Mid-drag the lanes are not drawn again: one CSS offset moves them, and the drop draws them in place.
+            const held = firstLeft();
+            $('.tl-lane .tl-track')!.dispatchEvent(new MouseEvent('mousedown', { ...at, button: 0 }));
+            for (let i = 1; i <= 30; i++) window.dispatchEvent(new MouseEvent('mousemove', { ...at, clientX: at.clientX - i * 2 }));
+            const pan = parseFloat(tl.style.getPropertyValue('--pan'));
+            expect(firstLeft() === held && Math.abs(pan) > 20, `a pan moves the drawn lanes by an offset, without re-rendering (left ${held} -> ${firstLeft()}, offset ${pan}px)`);
+            window.dispatchEvent(new MouseEvent('mouseup', { ...at, clientX: at.clientX - 60 }));
+            expect(await until(() => firstLeft() !== held && parseFloat(tl.style.getPropertyValue('--pan') || '0') === 0), 'the drop draws the lanes at their new place and clears the offset');
+          }
           $<HTMLButtonElement>('.tl-fit')!.click();
           expect(await until(() => scale() === before), 'timeline Fit restores the scale');
           expect(count('.tl-mark') === dom['timelineMarks'], 'every lane still drawn after zooming');
+          // Panning stops at the first and last year (24px pad), at every zoom and window size; a span narrower
+          // than the track stays pinned to its start. Drag, Shift+wheel and a sideways swipe all far past both ends.
+          const edges = () => ({ from: Number(tl.dataset['from']), to: Number(tl.dataset['to']), view: tl.clientWidth - ($('.tl-label')?.offsetWidth ?? 0) });
+          const drag = async (dx: number) => {
+            const tr = $('.tl-lane .tl-track')!.getBoundingClientRect();
+            const p = { clientX: tr.left + tr.width / 2, clientY: tr.top + 10, bubbles: true, view: window };
+            $('.tl-lane .tl-track')!.dispatchEvent(new MouseEvent('mousedown', { ...p, button: 0 }));
+            for (let i = 1; i <= 4; i++) window.dispatchEvent(new MouseEvent('mousemove', { ...p, clientX: p.clientX + (dx * i) / 4 }));
+            window.dispatchEvent(new MouseEvent('mouseup', { ...p, clientX: p.clientX + dx }));
+          };
+          const wheel = (dx: number, shift: boolean) => tl.dispatchEvent(new WheelEvent('wheel', { ...(shift ? { deltaY: -dx, shiftKey: true } : { deltaX: -dx }), clientX: r.left + r.width / 2, clientY: r.top + 80, bubbles: true, cancelable: true, view: window }));
+          const near = (a: number, b: number) => Math.abs(a - b) <= 2;
+          /** After a resize the span may run past the track's end, but no empty space may open on either side. */
+          const filled = async (how: string) => {
+            const ok = () => { const e = edges(); return e.to - e.from <= e.view - 48 ? near(e.from, 24) : e.from <= 26 && e.to >= e.view - 26; };
+            const good = await until(ok);
+            const e = edges();
+            expect(good, `${how}, no empty space past either end (from ${e.from}, to ${e.to}, track ${e.view})`);
+          };
+          const clamped = async (how: string, side: 'start' | 'end') => {
+            await tick(120);
+            const e = edges();
+            const fits = e.to - e.from <= e.view - 48;
+            const ok = side === 'start' || fits ? near(e.from, 24) : near(e.to, e.view - 24);
+            expect(ok, `${how} past the ${side} stops at the ${fits ? 'pinned start' : side} (from ${e.from}, to ${e.to}, track ${e.view})`);
+          };
+          for (const [zoomName, clicks] of [['fit', 0], ['zoomed in', 3], ['zoomed out', -3]] as const) {
+            $<HTMLButtonElement>('.tl-fit')!.click();
+            await tick(80);
+            for (let i = 0; i < Math.abs(clicks); i++) { $<HTMLButtonElement>(clicks > 0 ? '.tl-zoom-in' : '.tl-zoom-out')!.click(); await tick(40); }
+            await drag(20000); await clamped(`${zoomName}: dragging`, 'start');
+            await drag(-20000); await clamped(`${zoomName}: dragging`, 'end');
+            wheel(20000, true); await clamped(`${zoomName}: Shift+wheel`, 'start');
+            wheel(-20000, true); await clamped(`${zoomName}: Shift+wheel`, 'end');
+            wheel(20000, false); await clamped(`${zoomName}: a sideways swipe`, 'start');
+            wheel(-20000, false); await clamped(`${zoomName}: a sideways swipe`, 'end');
+          }
+          // Zooming out stops where the span fills the track: no empty time past the first or last year, with the
+          // button or Ctrl+wheel.
+          {
+            $<HTMLButtonElement>('.tl-fit')!.click();
+            await tick(80);
+            const fitPpy = Number(scale());
+            const inside = (how: string) => {
+              const e = edges();
+              expect(near(e.from, 24) && near(e.to, e.view - 24) && Math.abs(Number(scale()) - fitPpy) <= fitPpy * 0.001, `${how} stays inside the first and last year (from ${e.from}, to ${e.to}, track ${e.view}, ${scale()} vs ${fitPpy} px/year)`);
+            };
+            for (let i = 0; i < 4; i++) { $<HTMLButtonElement>('.tl-zoom-out')!.click(); await tick(40); }
+            await tick(120);
+            inside('zoom out from Fit');
+            for (let i = 0; i < 2; i++) { $<HTMLButtonElement>('.tl-zoom-in')!.click(); await tick(40); }
+            await drag(-20000); await tick(80);
+            for (let i = 0; i < 4; i++) { $<HTMLButtonElement>('.tl-zoom-out')!.click(); await tick(40); }
+            await tick(120);
+            inside('zoom out from the end, zoomed in');
+            tl.dispatchEvent(new WheelEvent('wheel', { deltaY: 3000, ctrlKey: true, clientX: r.left + r.width * 0.8, clientY: r.top + 80, bubbles: true, cancelable: true, view: window }));
+            await tick(160);
+            inside('Ctrl+wheel zoom out');
+          }
+          $<HTMLButtonElement>('.tl-fit')!.click();
+          await tick(80);
+          for (let i = 0; i < 3; i++) { $<HTMLButtonElement>('.tl-zoom-in')!.click(); await tick(40); }
+          await drag(-20000); await clamped('zoomed in again, dragging', 'end');
+          // Zoomed in and parked at the end: a wider window pulls the end back to the track's edge.
+          for (const [width, height] of [[1280, 720], [2560, 1440]] as const) {
+            await window.lore.smokeResize(width, height);
+            for (let i = 0; i < 40 && (window.innerWidth !== width || window.innerHeight !== height); i++) await tick(50);
+            await tick(200);
+            await filled(`resized to ${width}x${height} while parked at the end`);
+            await drag(20000); await clamped(`at ${width}x${height}, dragging`, 'start');
+            await drag(-20000); await clamped(`at ${width}x${height}, dragging`, 'end');
+          }
+          $<HTMLButtonElement>('.tl-fit')!.click();
+          await tick(120);
+          // The Gantt: an era ribbon and column per era, plain group titles, wide bars with icon,
+          // title and dates.
+          const tlm = timelineModel(w, check(w))!;
+          expect(count('.tl-era') === tlm.eras.length && count('.tl-band') === tlm.eras.length && tlm.eras.length > 0, `an era ribbon and column per era (${count('.tl-era')}, ${count('.tl-band')} of ${tlm.eras.length})`);
+          expect(count('.tl-strip') === 0 && count('.tl-group-head .tl-track > *') === 0, 'group titles carry no strip lines');
+          expect(!!$('.tl-bar .tl-bar-body .icon') && !!$('.tl-bar .tl-bar-title') && !!$('.tl-bar.has-dates .tl-bar-dates'), 'wide bars show an icon, a title and their dates');
+          expect([...document.querySelectorAll<HTMLElement>('.tl-bar')].every((b) => b.offsetHeight >= 30), 'bars are tall enough for a title and dates');
+          // Zoomed in far enough, the axis names the calendar's months under the years.
+          const monthNames = new Set((w.manifest.calendar.months ?? []).map((m) => m.name));
+          for (let i = 0; i < 30 && !$('.tl-head .tl-label')?.textContent?.includes('months'); i++) { $<HTMLButtonElement>('.tl-zoom-in')!.click(); await tick(30); }
+          await tick(120);
+          const minorText = [...document.querySelectorAll('.tl-axis .tl-tick:not(.is-major)')].map((t) => t.textContent ?? '');
+          expect(monthNames.size > 0 && minorText.some((t) => monthNames.has(t)), `months on the axis when zoomed in (${minorText.slice(0, 4).join(', ')})`);
+          // The overview: its frame covers everything at Fit; a click or drag in it, or Home/End, moves the view,
+          // and it never goes past the first or last year.
+          $<HTMLButtonElement>('.tl-fit')!.click();
+          await tick(120);
+          const mini = $('.tl-mini')!;
+          const frame = () => $('.tl-mini-view')!.getBoundingClientRect();
+          const mr = () => mini.getBoundingClientRect();
+          expect(!!mini && frame().width >= mr().width * 0.9, `the overview frame covers the whole span at Fit (${Math.round(frame().width)} of ${Math.round(mr().width)}px)`);
+          // Right after Fit, dragging the overview's frame (or anywhere in it) far past either end moves nothing out
+          // of the first and last year.
+          {
+            const m = mr(), y = m.top + m.height / 2;
+            for (const [at, to] of [[0.5, 1.6], [0.5, -0.6], [0.2, 3], [0.95, -2]] as const) {
+              $<HTMLButtonElement>('.tl-fit')!.click();
+              await tick(80);
+              mini.dispatchEvent(new PointerEvent('pointerdown', { clientX: m.left + m.width * at, clientY: y, button: 0, pointerId: 9, bubbles: true }));
+              for (let i = 1; i <= 6; i++) mini.dispatchEvent(new PointerEvent('pointermove', { clientX: m.left + m.width * (at + ((to - at) * i) / 6), clientY: y, pointerId: 9, bubbles: true }));
+              await tick(120);
+              const e = edges();
+              const ok = near(e.from, 24) && near(e.to, e.view - 24) && Math.abs(frame().left - mr().left) <= 3 && Math.abs(frame().right - mr().right) <= 3;
+              mini.dispatchEvent(new PointerEvent('pointerup', { clientX: m.left + m.width * to, clientY: y, pointerId: 9, bubbles: true }));
+              await tick(120);
+              const after = edges();
+              expect(ok && near(after.from, 24) && near(after.to, after.view - 24), `after Fit, dragging the overview from ${at} to ${to} stays inside the first and last year (from ${e.from}, to ${e.to}, track ${e.view}; after ${after.from}..${after.to}; frame ${Math.round(frame().left)}..${Math.round(frame().right)} of ${Math.round(mr().left)}..${Math.round(mr().right)})`);
+            }
+          }
+          for (let i = 0; i < 4; i++) { $<HTMLButtonElement>('.tl-zoom-in')!.click(); await tick(40); }
+          await tick(120);
+          expect(frame().width < mr().width * 0.5, 'the overview frame shrinks when zoomed in');
+          const press = (at: number, to = at) => {
+            const m = mr(), x = (f: number) => m.left + m.width * f, y = m.top + m.height / 2;
+            mini.dispatchEvent(new PointerEvent('pointerdown', { clientX: x(at), clientY: y, button: 0, pointerId: 7, bubbles: true }));
+            mini.dispatchEvent(new PointerEvent('pointermove', { clientX: x(to), clientY: y, pointerId: 7, bubbles: true }));
+            mini.dispatchEvent(new PointerEvent('pointerup', { clientX: x(to), clientY: y, pointerId: 7, bubbles: true }));
+          };
+          press(0.995); await clamped('a click at the end of the overview', 'end');
+          expect(Math.abs(frame().right - mr().right) <= 3, `the overview frame sits at the end (${Math.round(frame().right)} vs ${Math.round(mr().right)})`);
+          press(0.5, -2); await clamped('dragging the overview', 'start');
+          expect(Math.abs(frame().left - mr().left) <= 3, `the overview frame sits at the start (${Math.round(frame().left)} vs ${Math.round(mr().left)})`);
+          press(0.5); await tick(120);
+          const mid = edges();
+          expect(mid.from < 24 - 10 && mid.to > mid.view - 24 + 10, `a click in the middle of the overview shows the middle (from ${mid.from}, to ${mid.to})`);
+          mini.focus();
+          mini.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+          await clamped('End in the overview', 'end');
+          mini.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+          await clamped('Home in the overview', 'start');
+          const fromBefore = edges().from;
+          mini.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+          expect(await until(() => edges().from < fromBefore - 20), 'ArrowRight in the overview moves later');
+          mini.blur();
+          $<HTMLButtonElement>('.tl-fit')!.click();
+          await tick(120);
+          // The toolbar carries no hint line and no scale readout.
+          expect(!$('.timeline .view-head p') && !$('.tl-scale') && !/px per year|dated entries/.test($('.timeline')!.textContent ?? ''), 'the timeline has no hint line and no px-per-year readout');
+          // Type chips: on by default; off hides that type's group, on brings it back.
+          {
+            const chip = $<HTMLButtonElement>('.type-filters .tl-chip.t-character')!;
+            expect(!!chip && chip.getAttribute('aria-pressed') === 'true' && !!$('.tl-group.t-character'), 'the Characters chip starts on');
+            chip.click();
+            expect(await until(() => !$('.tl-group.t-character') && chip.getAttribute('aria-pressed') === 'false'), 'turning the Characters chip off hides the characters');
+            chip.click();
+            expect(await until(() => !!$('.tl-group.t-character') && chip.getAttribute('aria-pressed') === 'true'), 'turning it on brings them back');
+          }
+          // Entries with a picture show it: a tall picture card for a span, a round picture for a moment.
+          expect(await until(() => !!$('.tl-mark.has-image')), 'entries with a picture show it on the timeline');
+          {
+            const card = $<HTMLElement>('.tl-bar.has-image');
+            expect(!card || (card.offsetHeight >= 70 && card.closest('.tl-lane')!.classList.contains('is-tall')), `a picture card is tall, in a tall lane (${card?.offsetHeight}px)`);
+            const plain = $<HTMLElement>('.tl-bar:not(.has-image)');
+            expect(!plain || plain.offsetHeight >= 40, `cards are tall enough for a title and dates (${plain?.offsetHeight}px)`);
+          }
+          // Stacked layout: each type's entries packed side by side on as few rows as fit, none overlapping, every one
+          // still drawn and reachable from the keyboard; Lanes brings one lane per entry back.
+          {
+            $<HTMLButtonElement>('.tl-layout-stacked')!.click();
+            expect(await until(() => !!$('.tl-stack-row')), 'Stacked packs the entries into rows');
+            const rows = [...document.querySelectorAll<HTMLElement>('.tl-stack-row')];
+            expect(count('.tl-mark') === dom['timelineMarks'] && rows.length < dom['timelineMarks']!, `Stacked keeps every entry on fewer rows (${count('.tl-mark')} marks on ${rows.length} rows)`);
+            const clash = rows.flatMap((row) => {
+              const rs = [...row.querySelectorAll<HTMLElement>(':scope .tl-mark')].map((m) => m.getBoundingClientRect()).sort((a, b) => a.left - b.left);
+              return rs.slice(1).filter((b, i) => b.left < rs[i]!.right - 1).map(() => row);
+            });
+            expect(clash.length === 0, `no two entries overlap on a stacked row (${clash.length})`);
+            expect(count('.tl-stack-row .tl-mark[tabindex="0"]') === dom['timelineMarks'], 'stacked entries are keyboard stops');
+            $<HTMLButtonElement>('.tl-layout-lanes')!.click();
+            expect(await until(() => !$('.tl-stack-row') && count('.tl-lane') === dom['timelineMarks']), 'Lanes brings one lane per entry back');
+          }
         }
         {
           // The timeline fills the pane down to the bottom, at each window size.
@@ -469,9 +823,17 @@ export function App() {
             await window.lore.smokeResize(width, height);
             for (let i = 0; i < 40 && (window.innerWidth !== width || window.innerHeight !== height); i++) await tick(50);
             await tick(150);
-            const gap = $('.main')!.getBoundingClientRect().bottom - $('.tl-scroll')!.getBoundingClientRect().bottom;
+            const gap = $('.main')!.getBoundingClientRect().bottom - $('.tl-frame')!.getBoundingClientRect().bottom;
             expect(gap >= 0 && gap <= 32, `timeline at ${width}x${height} reaches the bottom of the pane (gap ${Math.round(gap)}px)`);
           }
+        }
+        // The Eras chip on the world home opens the Timeline.
+        setView('home');
+        {
+          const era = (await until(() => !!$('.home-stats .t-era a'))) ? $('.home-stats .t-era a') : null;
+          era?.click();
+          expect(await until(() => !!$('.main-fill .tl-scroll') && !$('.home')), 'the Eras chip opens the Timeline');
+          await tick(150);
         }
         dom['timelineBands'] = count('.tl-band');
         dom['timelineWarnings'] = count('.tl-warn');
@@ -492,11 +854,26 @@ export function App() {
             // Print book: trim-shaped pages, the cover art then front matter, chapter openers with a drop cap.
             const bookOnDisk = async (ok: (ws: World) => boolean) => { for (let i = 0; i < 60; i++) { if (ok(parseWorld(await window.lore.readWorld(dirRef.current!)))) return true; await tick(50); } return false; };
             expect(count('.preview .sheet.is-print.trim-6x9') > 1 && !!$('.preview .sheet-cover.is-print.trim-6x9'), 'the book preview uses 6x9 print pages, cover included');
-            expect(['title', 'copyright'].every((r) => count(`.preview .doc-front-${r}`) === 1) && count('.preview .doc-front-half-title') === 0, 'title and copyright pages, no half-title');
+            expect(count('.preview .doc-front-title') === 1 && count('.preview .doc-front-half-title') === 0, 'a title page, no half-title');
+            expect(count('.preview .doc-front-copyright') === 0, 'no copyright page when there is no copyright text or publisher');
             // The cover keeps its page shape (it used to shrink to a strip) and carries the book title.
             const cv = $('.preview .sheet-cover.has-art')!.getBoundingClientRect();
             expect(cv.height > cv.width * 1.3 && !!$('.preview .sheet-cover-text .sheet-title'), `the cover sheet keeps its page shape and shows the title (${Math.round(cv.width)}x${Math.round(cv.height)})`);
             expect(count('.preview .doc-opener') > 0 && count('.preview .doc-dropcap') > 0, 'chapter openers with a drop cap');
+            // The chapter date is at the top right of the opener, above its label.
+            const stamp = $('.preview .doc-stamp');
+            expect(!!stamp && getComputedStyle(stamp).textAlign === 'right' && stamp.getBoundingClientRect().bottom <= $('.preview .doc-opener')!.getBoundingClientRect().top + 1, 'the chapter date sits at the top right, above the title');
+            // Raised initial (the default): no indent, on the first line's baseline, flush with the rest of its word.
+            const capP = $('.preview .doc-dropcap')!;
+            const cap = capP.querySelector<HTMLElement>('.doc-cap')!;
+            const after = document.createRange();
+            const firstText = cap.nextSibling!;
+            after.setStart(firstText, 0);
+            after.setEnd(firstText, 1);
+            const capBox = cap.getBoundingClientRect(), nextBox = after.getBoundingClientRect();
+            expect(capP.classList.contains('cap-raised') && getComputedStyle(capP).textIndent === '0px', `the first paragraph has no indent (${getComputedStyle(capP).textIndent})`);
+            expect(Math.abs(nextBox.left - capBox.right) < 2.5, `no gap after the raised initial (${(nextBox.left - capBox.right).toFixed(1)} px)`);
+            expect(capBox.height > nextBox.height * 2 && Math.abs(capBox.bottom - nextBox.bottom) < capBox.height * 0.25, 'the raised initial is big and stands on the first line');
             expect(!!$('.preview .save-docx'), 'Save Word button');
             const ded = $<HTMLInputElement>('.preview textarea[name="book-dedication"]')!;
             typeInto(ded, 'For the caravans.');
@@ -521,6 +898,33 @@ export function App() {
             expect(await until(() => count('.preview .sheet.trim-a5') > 0), 'A5 trim reshapes the pages');
             expect(await bookOnDisk((ws) => ws.manifest.book?.trim === 'a5' && ws.manifest.book?.author === w.manifest.book?.author), 'the trim is saved and the other book settings kept');
             dom['bookFrontPages'] = count('.preview .doc-front');
+            // The style bar: every change shows in the pages at once and is saved in world.json "book".
+            expect(!!$('.preview .book-toolbar[aria-label="Book style"]') && count('.preview .book-toolbar .bt-group') === 5, 'the Story Book style bar has its five groups');
+            const sheetFont = () => parseFloat(getComputedStyle($('.preview .sheet.is-print:not(.is-front)')!).fontSize);
+            const before = sheetFont();
+            const size = $<HTMLInputElement>('.preview input[name="book-body-size"]')!;
+            typeInto(size, '13');
+            expect(await until(() => sheetFont() > before * 1.15), `a bigger text size shows in the pages (${before} -> ${sheetFont()} px)`);
+            expect(await bookOnDisk((ws) => ws.manifest.book?.bodySize === 13), 'the text size is saved in world.json');
+            const color = $<HTMLInputElement>('.preview input[name="book-chapter-color"]')!;
+            typeInto(color, '#7a1f3d');
+            expect(await until(() => getComputedStyle($('.preview .doc-opener')!).color === 'rgb(122, 31, 61)'), 'the chapter title colour shows at once');
+            expect(await choose($('.preview .chapter-font-select')!, 'Cinzel Decorative'), 'a chapter title font can be chosen');
+            expect(await until(() => getComputedStyle($('.preview .doc-opener')!).fontFamily.includes('Cinzel Decorative')), 'the chapter title font shows at once');
+            ($('.preview .bt-cap-dropped') as HTMLButtonElement).click();
+            expect(await until(() => !!$('.preview .doc-dropcap.cap-dropped .doc-cap') && getComputedStyle($('.preview .doc-cap')!).getPropertyValue('initial-letter').startsWith('2')), 'Dropped: a two-line initial');
+            ($('.preview .bt-cap-none') as HTMLButtonElement).click();
+            expect(await until(() => count('.preview .doc-dropcap') === 0), 'None: no initial');
+            ($('.preview .bt-dates') as HTMLButtonElement).click();
+            expect(await until(() => count('.preview .doc-stamp') === 0), 'hiding the dates removes them from the pages');
+            expect(await bookOnDisk((ws) => ws.manifest.book?.dropCap === 'none' && ws.manifest.book?.dateStamps === false && ws.manifest.book?.chapterFont === 'Cinzel Decorative' && ws.manifest.book?.chapterColor === '#7a1f3d'), 'the style is saved in world.json');
+            ($('.preview .bt-reset') as HTMLButtonElement).click();
+            expect(await until(() => count('.preview .doc-stamp') > 0 && count('.preview .doc-dropcap.cap-raised') > 0), 'Reset style brings back the dates and the raised initial');
+            expect(await bookOnDisk((ws) => ['bodySize', 'chapterColor', 'chapterFont', 'dropCap', 'dateStamps'].every((k) => !(k in (ws.manifest.book ?? {}))) && ws.manifest.book?.trim === 'a5'), 'Reset style clears the look from world.json and keeps the other book settings');
+            expect(await choose($('.preview .trim-select')!, 'a4'), 'A4 can be chosen');
+            expect(await until(() => count('.preview .sheet.trim-a4') > 0 && !!$('.preview .sheet-cover.trim-a4')), 'A4 reshapes the pages and the cover');
+            expect(await choose($('.preview .trim-select')!, 'a5'), 'back to A5');
+            expect(await bookOnDisk((ws) => ws.manifest.book?.trim === 'a5'), 'A5 saved again');
           }
           setPreview(null);
           await tick();
@@ -546,6 +950,10 @@ export function App() {
         // A new chapter: type a sentence and a contradicting one.
         $<HTMLButtonElement>('.story-chapters .pane-head button')!.click();
         expect(await until(() => count('.story-chapters .chapter-link') === dom['chapters']! + 1 && ($<HTMLTextAreaElement>('#story-text')?.value ?? 'x') === ''), 'New chapter adds an empty chapter');
+        {
+          const cur = $('.story-chapters .chapter-link[aria-current="page"]');
+          expect(!!cur && !getComputedStyle(cur).boxShadow.includes('inset') && getComputedStyle(cur).borderTopColor === getComputedStyle(cur).borderLeftColor, `the open chapter is a tile without an edge rail (${cur ? getComputedStyle(cur).boxShadow : 'none open'})`);
+        }
         const area = $<HTMLTextAreaElement>('#story-text')!;
         const text = 'King Camel was born in 1998. Later, King Camel fought at the Battle of the Dunes in 1990.';
         area.value = text;
@@ -718,7 +1126,7 @@ export function App() {
         const tileId = tile.dataset['tileId'] ?? '';
         tile.querySelector<HTMLButtonElement>('.tile-paint')!.click();
         expect(await until(() => !!$('.picture-editor')), 'the picture editor opens');
-        await popupFit('picture and icon picker', '.picture-editor', '.picture-editor .dialog-actions .primary');
+        await popupFit('picture and icon picker', '.picture-editor', '.picture-editor .dialog-actions .primary', { centred: true });
         {
           // The icon grid has a search box: it filters by name and keyword, shows a count and an empty state.
           const q = $<HTMLInputElement>('.picture-editor .icon-search input')!;
@@ -803,7 +1211,7 @@ export function App() {
           expect(await choose(sel, first), 'the connect dropdown picks an entry');
           $<HTMLFormElement>('.connect-form')!.requestSubmit();
           expect(await until(() => !!$('.link-dialog #link-type')), 'Connect opens the relationship dialog');
-          await popupFit('relationship dialog', '.link-dialog', '.link-dialog .link-save');
+          await popupFit('relationship dialog', '.link-dialog', '.link-dialog .link-save', { centred: true });
           $<HTMLButtonElement>('.link-dialog .link-save')!.click();
           await until(() => !$('.link-dialog'));
         };
@@ -850,6 +1258,34 @@ export function App() {
           dom['searchHits'] = want.length;
           setQuery('');
           expect(await until(() => !$('.search-results') && count('.type-group') > 0), 'clearing the search shows the type groups again');
+        {
+          const rails = [...document.querySelectorAll<HTMLElement>('.type-group')].filter((g) => parseFloat(getComputedStyle(g).borderLeftWidth) > parseFloat(getComputedStyle(g).borderTopWidth));
+          const cur = $('.type-group .entry-link[aria-current="page"]');
+          expect(rails.length === 0 && (!cur || !getComputedStyle(cur).boxShadow.includes('inset')), `sidebar groups and the open entry have no coloured edge rail (${rails.length} groups, ${cur ? getComputedStyle(cur).boxShadow : 'none open'})`);
+          // "+ New" can be closed without creating anything: Escape, ×, leaving it empty, or a click outside.
+          {
+            const total = () => worldRef.current?.entries.length ?? -1;
+            const had = total();
+            const open = async () => { $<HTMLButtonElement>('.type-group.t-place .type-head button')!.click(); return until(() => document.activeElement?.id === 'new-place'); };
+            const gone = (how: string) => until(() => !$('.new-entry')).then((ok) => expect(ok && total() === had, `${how} closes "+ New" without adding an entry`));
+            expect(await open(), '"+ New" opens a name box, focused');
+            document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+            await gone('Escape');
+            await open();
+            $<HTMLButtonElement>('.new-entry-cancel')!.click();
+            await gone('the × button');
+            expect(await open(), 'opened again, the name box is focused again');
+            // (A hidden smoke window gets no real blur, so the event is sent: focusout, which onBlur listens to.)
+            $<HTMLInputElement>('#new-place')!.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+            await gone('leaving the empty box');
+            await open();
+            typeInto($<HTMLInputElement>('#new-place')!, 'Half a name');
+            $('.sidebar .search')!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            await gone('a click outside (with a name typed)');
+          }
+          const groups = [...document.querySelectorAll<HTMLElement>('.type-group')];
+          expect(groups.length > 0 && groups.every((g) => getComputedStyle(g).backgroundImage !== 'none' && parseFloat(getComputedStyle(g).borderTopWidth) > 0 && parseFloat(getComputedStyle(g.querySelector('.type-head')!).borderBottomWidth) > 0), 'each sidebar type group is a soft panel with a hairline under its heading');
+        }
         }
         // World settings: the calendar's eras and months, from world home (the top bar is checked above).
         {
@@ -914,6 +1350,10 @@ export function App() {
           expect(!!$('.start > .aura .light-shaft') && count('.light-shaft') >= 2 && count('.light-shaft .dust') > 5 && count('.scene .rune') > 5 && count('.scene .candle') === 2
             && count('.scene .ember') > 5 && count('.scene .bokeh') > 3 && count('.scene .nebula') > 0 && count('.scene .mist') > 0 && !!$('.scene .vignette'),
             'the library has light shafts with dust, runes, candles with embers, colour clouds, mist and bokeh under a vignette');
+          const runeShapes = new Set([...document.querySelectorAll('.scene .rune path')].map((p) => p.getAttribute('d')));
+          const runeSizes = new Set([...document.querySelectorAll<HTMLElement>('.scene .rune')].map((r) => r.style.getPropertyValue('--k')));
+          expect(count('.scene .rune') >= 24 && count('.scene .rune') <= 30 && count('.scene .rune.is-sigil') >= 4 && count('.scene .is-glyph') === 0 && runeShapes.size >= 24 && runeSizes.size >= 5,
+            `only runes drift in the library, many different ones in varied sizes, capped (${count('.scene .rune')} runes, ${runeShapes.size} shapes, ${runeSizes.size} sizes, ${count('.scene .rune.is-sigil')} sigils, ${count('.scene .is-glyph')} writing things)`);
           expect(['.light-shaft', '.dust', '.rune', '.candle', '.ember', '.bokeh', '.nebula', '.mist'].every((sel) => anim(sel).every((n) => n && n !== 'none'))
             && getComputedStyle($('.ember')!, '::before').animationName === 'ember-sway', 'the scene animates');
           const sceneFrames = ['shaft-sway', 'dust-float', 'rune-drift', 'candle-flicker', 'candle-breathe', 'nebula-drift', 'ember-rise', 'ember-sway', 'mist-drift', 'bokeh-drift', 'mote-drift'];
@@ -947,7 +1387,7 @@ export function App() {
         // New book: name and colour, created in the worlds folder, opened, then moved to the trash.
         $<HTMLButtonElement>('.new-book .world-book')!.click();
         expect(await until(() => !!$('#new-world-name')), 'New book opens the create dialog');
-        await popupFit('New book', '.library-dialog', '.create-book button[type="submit"]');
+        await popupFit('New book', '.library-dialog', '.create-book button[type="submit"]', { centred: true });
         typeInto($<HTMLInputElement>('#new-world-name')!, 'Smoke Book');
         {
           // Emblem picker, a square colour field and Shuffle; random only as the first look.
@@ -963,6 +1403,10 @@ export function App() {
           typeInto($<HTMLInputElement>('.color-popover input[aria-label="Hex colour"]')!, '#2f5d3a');
           key($('.color-popover')!, 'Escape');
           await tick();
+          {
+            const cover = $('.create-preview .world-cover')!.getBoundingClientRect(), spine = $('.create-preview .create-spine')!.getBoundingClientRect();
+            expect(cover.height > 100 && Math.abs(spine.height - cover.height) <= 2 && Math.abs(spine.bottom - cover.bottom) <= 2, `the new book's spine is as tall as its cover (${Math.round(spine.height)} vs ${Math.round(cover.height)}px)`);
+          }
           const emblemBox = $<HTMLInputElement>('.create-book .show-emblem')!;
           expect(emblemBox.checked && $<HTMLInputElement>('.create-book .show-title')!.checked && !!$('.create-preview .cover-emblem'), 'Show title and Show emblem start on');
           emblemBox.click();
@@ -1003,7 +1447,7 @@ export function App() {
         expect(await until(() => !!$('.home-cover .world-cover .cover-art')), 'world home shows the book cover');
         $<HTMLButtonElement>('.home-cover')!.click();
         expect(await until(() => !!$('.cover-editor .cover-editor-preview .cover-art')), 'clicking the cover opens the cover editor');
-        await popupFit('Book cover editor', '.cover-editor', '.cover-save');
+        await popupFit('Book cover editor', '.cover-editor', '.cover-save', { centred: true });
         const emblem = [...document.querySelectorAll<HTMLButtonElement>('.cover-editor .cover-emblems .icon-choice')].find((b) => b.getAttribute('aria-pressed') !== 'true' && b.title !== 'No emblem')!;
         const emblemName = emblem.title.replace(/ /g, '-');
         emblem.click();
@@ -1110,6 +1554,41 @@ export function App() {
           key($('.color-popover')!, 'Escape');
           await tick();
           expect(!!$('.cover-editor .spine-auto'), 'a chosen spine colour can go back to automatic');
+          {
+            // Title and emblem places: X/Y numbers and sliders, clamped so both stay inside the gold frame at every
+            // corner; a drag on the preview moves the emblem and stops at the border; Reset position goes back.
+            const frame = () => { const c = $('.cover-editor-preview .world-cover')!.getBoundingClientRect(); const k = c.width / 240; return { l: c.left + 16 * k, t: c.top + 16 * k, r: c.right - 16 * k, b: c.bottom - 16 * k }; };
+            const inside = (sel: string) => { const f = frame(), el = $(sel); if (!el) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.left >= f.l - 0.5 && r.right <= f.r + 0.5 && r.top >= f.t - 0.5 && r.bottom <= f.b + 0.5; };
+            const setNum = (sel: string, v: number) => { const i = $<HTMLInputElement>(sel)!; i.value = String(v); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new FocusEvent('blur')); i.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); };
+            const num = (sel: string) => $<HTMLInputElement>(sel)!.valueAsNumber;
+            expect(!!$('.cover-editor .position-title .position-x') && !!$('.cover-editor .position-emblem .position-y-number') && $<HTMLButtonElement>('.cover-editor .position-title .position-reset')!.disabled, 'the Title and Emblem groups have X/Y sliders and numbers, and Reset position is off until a place is chosen');
+            for (const [x, y] of [[0, 0], [100, 100], [0, 100], [100, 0], [-40, 250]] as const) {
+              for (const which of ['title', 'emblem']) {
+                setNum(`.position-${which} .position-x-number`, x);
+                await tick();
+                setNum(`.position-${which} .position-y-number`, y);
+                await tick();
+              }
+              await tick(60);
+              expect(inside('.cover-editor-preview .cover-title.is-placed') && inside('.cover-editor-preview .cover-emblem'), `title and emblem stay inside the frame at X ${x}, Y ${y}`);
+            }
+            expect(num('.position-title .position-x-number') === 0 && num('.position-title .position-y-number') === 100, `positions outside 0 to 100 are clamped (title ${num('.position-title .position-x-number')}, ${num('.position-title .position-y-number')}; emblem ${num('.position-emblem .position-x-number')}, ${num('.position-emblem .position-y-number')})`);
+            $<HTMLButtonElement>('.cover-editor .position-emblem .position-reset')!.click();
+            await tick();
+            expect($<HTMLButtonElement>('.cover-editor .position-emblem .position-reset')!.disabled, 'Reset position puts the emblem back');
+            const g = $('.cover-editor-preview .cover-emblem')!;
+            const gr = g.getBoundingClientRect();
+            const pointer = (target: Element, type: string, x: number, y: number) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0, pointerId: 1 }));
+            pointer(g, 'pointerdown', gr.left + gr.width / 2, gr.top + gr.height / 2);
+            pointer($('.cover-editor-preview')!, 'pointermove', gr.left + 2000, gr.top + gr.height / 2 + 10);
+            pointer($('.cover-editor-preview')!, 'pointerup', gr.left + 2000, gr.top + gr.height / 2 + 10);
+            await tick(60);
+            expect(num('.position-emblem .position-x-number') === 100 && inside('.cover-editor-preview .cover-emblem'), `dragging the emblem far right stops it at the border (X ${num('.position-emblem .position-x-number')})`);
+            setNum('.position-title .position-x-number', 20);
+            await tick();
+            setNum('.position-title .position-y-number', 30);
+            await tick();
+          }
         }
         {
           // Unsaved changes: Escape and a click outside ask first; Keep editing keeps the draft.
@@ -1120,7 +1599,7 @@ export function App() {
           expect(await until(() => !$('.confirm-dialog') && !!$('.cover-editor') && $('.cover-editor .font-button .font-name')?.textContent === 'Uncial Antiqua'), 'Keep editing keeps the editor and the draft');
           $('.cover-editor-backdrop')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
           expect(await until(() => !!$('.confirm-dialog')), 'a click outside with unsaved changes asks too');
-          await popupFit('unsaved changes confirm', '.confirm-dialog', '.confirm-go');
+          await popupFit('unsaved changes confirm', '.confirm-dialog', '.confirm-go', { centred: true });
           $<HTMLButtonElement>('.confirm-dialog .confirm-cancel')!.click();
           await until(() => !$('.confirm-dialog'));
           expect(JSON.stringify((await fromDisk()).manifest.cover) === onDiskBefore, 'nothing is written before Save');
@@ -1155,6 +1634,13 @@ export function App() {
           expect(pictures.some((p) => p.kind === 'world' && p.path === c.image), 'the saved cover picture is listed among the world pictures');
         }
         expect(await until(() => !!$('.home-cover .cover-title.has-font')), 'world home shows the new cover');
+        {
+          const c = (await fromDisk()).manifest.cover ?? {};
+          expect(c.titlePos?.x === 20 && c.titlePos.y === 30 && c.emblemPos?.x === 100, `title and emblem places are saved to world.json: ${JSON.stringify({ t: c.titlePos, e: c.emblemPos })}`);
+          const home = $('.home-cover .world-cover')!.getBoundingClientRect(), t = $('.home-cover .cover-title.is-placed')?.getBoundingClientRect();
+          const k = home.width / 240;
+          expect(!!t && t.left >= home.left + 16 * k - 0.5 && t.top >= home.top + 16 * k - 0.5 && t.left < home.left + home.width / 2 && t.top < home.top + home.height / 2, 'world home draws the title at its saved place, inside the frame');
+        }
         expect(!!$('.home-cover .cover-page') && getComputedStyle($('.home-cover .world-cover')!).transformOrigin.startsWith('0px'), 'the home cover is hinged on its left edge over a page');
         $<HTMLButtonElement>('.home-library')!.click();
         const book = () => $('.shelf .world-card[data-name="Smoke Book"]');
@@ -1167,7 +1653,16 @@ export function App() {
           expect(cards.every((c) => !!c.querySelector('.book-cover .cover-art')), 'every book on the shelf has its cover');
           const shelfBox = $('.library .shelf')!.getBoundingClientRect();
           const first = $('.shelf .world-card')!.getBoundingClientRect();
-          expect(first.left - shelfBox.left <= 24, `the first book starts at the shelf edge (${Math.round(first.left - shelfBox.left)}px)`);
+          const lastBook = [...document.querySelectorAll('.shelf .world-card')].filter((c) => (c as HTMLElement).offsetTop === ($('.shelf .world-card') as HTMLElement).offsetTop).pop()!.getBoundingClientRect();
+          expect(first.left - shelfBox.left <= 24, `the first book starts at the left edge of the shelf (${Math.round(first.left - shelfBox.left)}px in)`);
+          {
+            // Rows run the full width: a row that wraps leaves no more than one book's room (plus the space kept for
+            // a cover to open at the end of the row) on its right.
+            const firstTop = ($('.shelf .world-card') as HTMLElement).offsetTop;
+            const wraps = [...document.querySelectorAll<HTMLElement>('.shelf .world-card')].some((c) => c.offsetTop > firstTop);
+            const pr = parseFloat(getComputedStyle($('.library .shelf')!).paddingRight);
+            if (wraps) expect(shelfBox.right - lastBook.right <= first.width + pr + 8, `full rows reach across the shelf (${Math.round(shelfBox.right - lastBook.right)}px left on the right, padding ${Math.round(pr)}px)`);
+          }
           // Pointing at a book pulls it out with its cover; pointing at another puts the first back; leaving puts it back.
           const [a, b] = cards;
           if (a && b) {
@@ -1364,7 +1859,7 @@ export function App() {
               expect(await until(() => z.classList.contains('is-out')), 'the book at the right edge comes out');
               await settleAll();
               const zr = (z.querySelector<HTMLElement>('.book-cover') ?? z.querySelector<HTMLElement>('.lid-face'))!.getBoundingClientRect();
-              expect(z.classList.contains('opens-left') && zr.right <= shelfBox.right + 2 && zr.left >= shelfBox.left - 2, `a book at the right edge opens to the left, inside the shelf (${Math.round(shelfBox.right - zr.right)}px)`);
+              expect(zr.right <= shelfBox.right + 2 && zr.left >= shelfBox.left - 2, `a book at the right edge opens inside the shelf (${z.classList.contains('opens-left') ? 'to the left' : 'shifted'}, ${Math.round(shelfBox.right - zr.right)}px)`);
               z.dispatchEvent(new PointerEvent('pointerleave'));
               await until(() => count('.shelf .is-out') === 0);
               await tick(600);
@@ -1373,7 +1868,11 @@ export function App() {
             // Reduced motion: no turn, the spine crossfades to a flat cover.
             const css = [...document.styleSheets].flatMap((sh) => [...sh.cssRules]).filter((x) => x instanceof CSSMediaRule && x.conditionText.includes('prefers-reduced-motion')).map((x) => x.cssText).join(' ');
             expect(/\.shelf-book\.is-out \.book-spine \{ opacity: 0; \}/.test(css) && /\.shelf-book\.is-out \.book-body \{ --turn: 0deg; \}/.test(css) && /\.shelf-book\.is-out \.book-pull, \.shelf-book\.is-out\.opens-left \.book-pull \{ transform: none; \}/.test(css), 'reduced motion crossfades instead of turning');
-            // Keyboard focus (the unfocused smoke window gets no real focus events, so send them as Tab would).
+            // Keyboard focus (the unfocused smoke window gets no real focus events, so send them as Tab would). The
+            // real pointer is parked off the shelf first: a book turning under it makes Chromium send pointer moves,
+            // and a move over another book puts back a book that only these fake events focused.
+            await window.lore.smokeMouse([{ type: 'move', x: 2, y: 2 }]);
+            await tick(300);
             const aBtn = a.querySelector<HTMLButtonElement>('.world-book')!;
             const bBtn = b.querySelector<HTMLButtonElement>('.world-book')!;
             aBtn.dispatchEvent(new FocusEvent('focus'));
@@ -1390,7 +1889,7 @@ export function App() {
         expect(!book()!.querySelector('.world-book button'), 'no button inside the open-book button');
         book()!.querySelector<HTMLButtonElement>('.book-delete')!.click();
         expect(await until(() => !!$('.confirm-dialog') && document.activeElement?.classList.contains('confirm-cancel') === true && document.activeElement.textContent?.trim() === 'Keep it'), 'delete asks first in a themed dialog, with Keep it focused');
-        await popupFit('delete confirm', '.confirm-dialog', '.confirm-go');
+        await popupFit('delete confirm', '.confirm-dialog', '.confirm-go', { centred: true });
         {
           const dlg = $('.confirm-dialog')!;
           expect(!!dlg.querySelector('.confirm-mark svg') && !!dlg.querySelector('.confirm-cover') && dlg.querySelector('.confirm-name')?.textContent?.includes('Smoke Book') === true
@@ -1419,17 +1918,177 @@ export function App() {
         expect(!(await window.lore.listWorlds()).includes(made), 'the trashed world is not listed any more');
         expect(!(await window.lore.recentWorlds()).includes(made), 'the trashed world is dropped from recent worlds');
         {
+          // Duplicate: the sample (read-only when installed) becomes an editable copy. Nothing opens: the copy lands
+          // right after its original on the shelf and glows for a moment. From inside a world, Duplicate goes back
+          // to the library and shows the copy the same way. A copy looks exactly like its original.
+          const sampleDir = await window.lore.sampleWorld();
+          const shelfKeys = () => [...document.querySelectorAll<HTMLElement>('.shelf .shelf-book:not(.new-book)')].map((c) => c.dataset['key']!);
+          const bookOf = (k: string) => [...document.querySelectorAll<HTMLElement>('.shelf .shelf-book')].find((c) => c.dataset['key'] === k);
+          const sampleBook = () => (sampleDir ? bookOf(sampleDir) : undefined);
+          expect(!!sampleDir && !!sampleBook(), 'the sample world is on the shelf');
+          sampleBook()!.dispatchEvent(new PointerEvent('pointerenter'));
+          await until(() => sampleBook()!.classList.contains('is-out'));
+          const dupBtn = sampleBook()!.querySelector<HTMLButtonElement>('.book-duplicate');
+          expect(!!dupBtn && (dupBtn.getAttribute('aria-label') ?? '').startsWith('Duplicate'), 'books have a Duplicate button next to Delete');
+          dupBtn!.click();
+          expect(await until(() => $<HTMLInputElement>('#duplicate-name')?.value === 'Camelamamm (copy)'), 'Duplicate asks for a name, prefilled with "(copy)"');
+          await popupFit('duplicate dialog', '.library-dialog', '.duplicate-book .primary', { centred: true });
+          // The copy's first frame: its look when its book is put on the shelf (before it is painted) and on the next frame.
+          const bookLook = (b: HTMLElement) => ['--h', '--w', '--d', '--spine', '--spine-ink'].map((v) => b.style.getPropertyValue(v)).join(' ');
+          const firstFrame = (name: string) => new Promise<{ first: string; next: string }>((done) => {
+            const seen = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('.shelf-book')].find((b) => b.dataset['name'] === name);
+            const mo = new MutationObserver(() => {
+              const b = seen(document);
+              if (!b) return;
+              mo.disconnect();
+              const first = bookLook(b);
+              requestAnimationFrame(() => done({ first, next: bookLook(b) }));
+            });
+            mo.observe(document.body, { childList: true, subtree: true });
+            setTimeout(() => { mo.disconnect(); done({ first: '', next: '' }); }, 15000);
+          });
+          const copyFrame = firstFrame('Camelamamm (copy)');
+          $<HTMLFormElement>('.duplicate-book')!.requestSubmit();
+          const freshKey = () => document.querySelector<HTMLElement>('.shelf .shelf-book[data-fresh]')?.dataset['key'];
+          expect(await until(() => !$('.duplicate-book') && !!freshKey(), 15000), `the copy glows on the shelf: ${$('.duplicate-book .error-line')?.textContent ?? ''}`);
+          const copy = freshKey()!;
+          expect(!dirRef.current && !$('.home') && !!$('#library-shelf') && document.title === 'Lore-Forge', `duplicating does not open the copy (${document.title})`);
+          expect(shelfKeys().indexOf(copy) === shelfKeys().indexOf(sampleDir!) + 1, `the copy sits right after its original (${shelfKeys().indexOf(sampleDir!)} and ${shelfKeys().indexOf(copy)})`);
+          const settings = await window.lore.settings();
+          const order = settings.shelfOrder ?? [];
+          expect(order.indexOf(copy) === order.indexOf(sampleDir!) + 1 && order.indexOf(copy) > 0, 'that place is saved in the shelf order');
+          expect((document.querySelector('.shelf-moved')?.textContent ?? '').includes('Made a copy'), 'the copy is announced');
+          const peek = async (x: string) => { const files = await window.lore.peekWorld(x); return files ? parseWorld(files) : null; };
+          const [orig, twin] = await Promise.all([peek(sampleDir!), peek(copy)]);
+          expect(copy.startsWith(settings.worldsDir) && !!orig && !!twin && twin.manifest.id !== orig.manifest.id && twin.manifest.name === 'Camelamamm (copy)' && twin.entries.length === orig.entries.length,
+            `the copy is a new world in the worlds folder with a new id and every entry (${copy})`);
+          dom['duplicateEntries'] = twin?.entries.length ?? 0;
+          expect(!!orig && !!twin && JSON.stringify(worldCoverArt(twin)) === JSON.stringify(worldCoverArt(orig)), 'the copy has the very same cover as its original');
+          await tick(300);
+          const spineLook = (k: string) => { const b = bookOf(k); return b ? ['--h', '--w', '--d', '--spine', '--spine-ink'].map((v) => b.style.getPropertyValue(v)).join(' ') : ''; };
+          expect(!!spineLook(copy) && spineLook(copy) === spineLook(sampleDir!), `its book on the shelf looks the same: spine colours and size (${spineLook(copy)} vs ${spineLook(sampleDir!)})`);
+          {
+            const { first, next } = await copyFrame;
+            const want = bookLook(sampleBook()!);
+            expect(!!first && first === want && next === want, `the copy has its original's colours and size from its first frame (${first} / ${next} vs ${want})`);
+          }
+          expect(await until(() => !freshKey(), 5000), 'the glow fades after a moment');
+          await tick(400);
+          {
+            // About 3 s on, nothing is left lit: no glow, no book out, no focus ring on a book.
+            const why = (b: HTMLElement) => {
+              const cs = getComputedStyle(b.querySelector('.book-spine')!);
+              return [b.hasAttribute('data-fresh') && 'data-fresh', b.classList.contains('is-out') && 'out', cs.animationName !== 'none' && `animation ${cs.animationName}`, cs.outlineStyle !== 'none' && `outline ${cs.outlineStyle}`,
+                !!b.querySelector(':focus-visible') && 'focus ring', cs.filter !== 'none' && `filter ${cs.filter}`].filter(Boolean).join('+');
+            };
+            const lit = [...document.querySelectorAll<HTMLElement>('.shelf .shelf-book:not(.new-book)')].filter((b) => why(b));
+            expect(lit.length === 0, `no book stays highlighted after the copy is shown (${lit.map((b) => `${b.dataset['name']}: ${why(b)}`).join(', ')})`);
+          }
+          // From inside the copy: Duplicate goes back to the library.
+          bookOf(copy)!.querySelector<HTMLElement>('.world-book')!.click();
+          expect(await until(() => !!$('.home') && document.title.startsWith('Camelamamm (copy)'), 15000), `the copy opens from the shelf (${document.title})`);
+          expect(count('.home-cover .cover-art') === 1, 'the copy keeps its cover');
+          $<HTMLButtonElement>('.home-duplicate')!.click();
+          expect(await until(() => $<HTMLInputElement>('#duplicate-name')?.value === 'Camelamamm (copy) (copy)'), 'world home has Duplicate too');
+          const nameBox = $<HTMLInputElement>('#duplicate-name')!;
+          nameBox.value = 'Smoke Twin';
+          nameBox.dispatchEvent(new Event('input', { bubbles: true }));
+          await tick();
+          const twinFrame = firstFrame('Smoke Twin');
+          $<HTMLFormElement>('.duplicate-book')!.requestSubmit();
+          expect(await until(() => !$('.home') && !!$('#library-shelf') && bookOf(freshKey() ?? '')?.dataset['name'] === 'Smoke Twin', 15000), `duplicating from inside a world goes back to the library and shows the copy (${document.title})`);
+          const twin2 = freshKey()!;
+          {
+            const { first, next } = await twinFrame;
+            const want = bookLook(bookOf(copy)!);
+            expect(!!first && first === want && next === want, `a copy made inside a world has the right colours from its first frame in the library (${first} / ${next} vs ${want})`);
+          }
+          expect(shelfKeys().indexOf(twin2) === shelfKeys().indexOf(copy) + 1 && !dirRef.current, 'that copy sits right after the world it was made from');
+          // Tidy up: the copies would otherwise show up in the library tests below.
+          for (const x of (await window.lore.listWorlds()).filter((x) => x !== sampleDir && /camelamamm|smoke.twin/i.test(x))) await window.lore.trashWorld(x);
+          await window.lore.saveSettings({ shelfOrder: [] });
+          window.dispatchEvent(new Event('focus'));
+          await tick(300);
+        }
+        {
+          // The sample can leave the library: Remove from library only hides it (nothing is deleted), and Show sample
+          // world in Library settings brings it back. There is only ever one Camelamamm on the shelf.
+          const sampleDir = await window.lore.sampleWorld();
+          const sampleBook = () => [...document.querySelectorAll<HTMLElement>('.shelf .shelf-book')].find((c) => c.dataset['key'] === sampleDir);
+          const camels = () => [...document.querySelectorAll<HTMLElement>('.shelf .shelf-book')].filter((c) => c.dataset['name'] === 'Camelamamm').length;
+          expect(await until(() => !!sampleBook()) && camels() === 1, `one Camelamamm on the shelf (${camels()})`);
+          const del = sampleBook()!.querySelector<HTMLButtonElement>('.book-delete');
+          expect(!!del && /^Remove Camelamamm from the library$/.test(del.getAttribute('aria-label') ?? ''), `the sample has a Remove from library button (${del?.getAttribute('aria-label')})`);
+          del!.click();
+          expect(await until(() => /from the library\?/.test($('.confirm-dialog #confirm-title')?.textContent ?? '') && ($('.confirm-dialog .confirm-go')?.textContent ?? '').includes('Remove from library') && !/trash/i.test($('.confirm-dialog')?.textContent ?? '')),
+            `removing the sample asks to remove it from the library, not to trash it (${$('.confirm-dialog #confirm-title')?.textContent})`);
+          $<HTMLButtonElement>('.confirm-dialog .confirm-go')!.click();
+          expect(await until(() => !sampleBook() && !$('.confirm-dialog'), 5000), 'Remove from library takes the sample off the shelf');
+          expect((await window.lore.settings()).hideSample === true && (await window.lore.peekWorld(sampleDir!)) !== null && !(await window.lore.listWorlds()).includes(sampleDir!), 'the sample is only hidden: its folder stays');
+          $<HTMLButtonElement>('.start-actions button[aria-label="Library settings"]')!.click();
+          expect(await until(() => !!$('.library-settings .show-sample') && !$<HTMLInputElement>('.library-settings .show-sample')!.checked), 'Library settings shows the sample as hidden');
+          $<HTMLInputElement>('.library-settings .show-sample')!.click();
+          await tick();
+          $<HTMLButtonElement>('.library-settings .settings-save')!.click();
+          expect(await until(() => !$('.library-dialog') && !!sampleBook(), 5000), 'Show sample world puts the sample back on the shelf');
+          expect(!(await window.lore.settings()).hideSample, 'Show sample world is saved');
+        }
+        {
           // The library's own dialogs fit too.
           $<HTMLButtonElement>('.start-actions button[aria-label="Library settings"]')!.click();
           expect(await until(() => !!$('.library-dialog')), 'Library settings opens');
-          await popupFit('Library settings', '.library-dialog', '.library-dialog .dialog-actions .primary');
-          $<HTMLButtonElement>('.library-dialog .dialog-actions .primary')!.click();
-          await until(() => !$('.library-dialog'));
+          await popupFit('Library settings', '.library-dialog', '.library-dialog .dialog-actions .primary', { centred: true });
+          {
+            // Grouped sections with their labels in one column; the folder is a field with Browse…; Cancel and Save
+            // sit at the bottom right, outside the scrolling body.
+            const dlg = $('.library-settings')!;
+            const heads = [...dlg.querySelectorAll('.settings-heading')].map((h) => h.textContent);
+            expect(heads.join('|') === 'Where new worlds go|Sample world', `Library settings has two sections (${heads.join(', ')})`);
+            const labels = [...dlg.querySelectorAll<HTMLElement>('.settings-row > .settings-label')].map((l) => Math.round(l.getBoundingClientRect().left));
+            expect(new Set(labels).size === 1, `the settings labels line up (${labels.join(', ')})`);
+            const input = $<HTMLInputElement>('.library-settings #worlds-dir')!, browse = $('.library-settings .folder-browse')!;
+            expect(input.readOnly && input.value.length > 0 && browse.getBoundingClientRect().left >= input.getBoundingClientRect().right - 1 && Math.abs(browse.getBoundingClientRect().top - input.getBoundingClientRect().top) < 6, 'the folder is a field with Browse… beside it');
+            const foot = $('.library-settings > .dialog-actions')!, save = $('.library-settings .settings-save')!, cancel = $('.library-settings .settings-cancel')!;
+            const fr = foot.getBoundingClientRect(), sr = save.getBoundingClientRect(), cr = cancel.getBoundingClientRect();
+            expect(!$('.library-settings .dialog-body')!.contains(foot) && fr.right - sr.right < 40 && cr.right <= sr.left + 1 && Math.abs(cr.top - sr.top) < 2, 'Cancel and Save sit together at the bottom right');
+            // Show sample world off, then Cancel: nothing changes.
+            $<HTMLInputElement>('.library-settings .show-sample')!.click();
+            await tick();
+            expect(/Unsaved/.test($('.library-settings .settings-status')!.textContent ?? ''), 'a change in Library settings is a draft until Save');
+            cancel.click();
+            await until(() => !$('.library-dialog'));
+            expect(!(await window.lore.settings()).hideSample, 'Cancel leaves the settings as they were');
+          }
           $<HTMLButtonElement>('.start-about')!.click();
           expect(await until(() => !!$('.about')), 'About opens from the library');
-          await popupFit('library About', '.about', '.about-head button');
+          await popupFit('library About', '.about', '.about-head button', { centred: true, width: [600, 820] });
+          {
+            // The credits are folded away but still there (the licences require them); the head stays put while the body scrolls.
+            const box = $<HTMLDetailsElement>('.about .credits-box')!;
+            expect(!!box && !box.open && /Credits and licences/.test(box.querySelector('summary')?.textContent ?? '') && count('.about .credits-box .credit') === 10, 'About folds the ten credits into a closed "Credits and licences" section');
+            const firstInBody = $('.about .dialog-body')!.firstElementChild;
+            expect(!!firstInBody?.classList.contains('updates') && !!$('.about .about-tour') && ($('.about .about-tour')!.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, 'Updates and the tour come first in About, the credits after');
+            box.open = true;
+            await tick(100);
+            const cols = getComputedStyle($('.about .credits-box .credit')!).gridTemplateColumns.split(' ').length;
+            expect(cols === 2 || innerWidth <= 700, `the credits are a two-column list (${cols})`);
+            const head = $('.about .about-head')!.getBoundingClientRect().top;
+            const body = $('.about .dialog-body')!;
+            body.scrollTop = body.scrollHeight;
+            await tick(50);
+            const about = $('.about')!.getBoundingClientRect();
+            expect(Math.abs($('.about .about-head')!.getBoundingClientRect().top - head) < 1 && about.bottom <= innerHeight + 1 && about.top >= -1, 'the open credits scroll inside About, under a fixed head, and About stays inside the window');
+            expect(!$('.about .updates .small-print') && !/Updates replace only the app|new worlds go to|All releases/.test($('.about .updates')?.textContent ?? ''), 'Updates in About has no small print about worlds or all releases');
+            box.open = false;
+          }
           dom['credits'] = count('.about .credit');
           expect(($('.about')!.textContent ?? '').includes('CC BY 3.0') && ($('.about')!.textContent ?? '').includes('Open Font License'), 'About lists the icon and font licences');
+          expect(/three\.js/.test($('.about')!.textContent ?? '') && /electron-updater/.test($('.about')!.textContent ?? ''), 'About credits three.js and electron-updater');
+          const upd = await window.lore.updateState();
+          expect(!!$('.about .updates') && ($('.updates-version')?.textContent ?? '').includes(upd.version) && !!$('.about .update-check') && !!$('.about .update-auto input') && !!$('.about .about-tour'),
+            'About has Updates (version, Check now, the automatic switch) and Take the tour');
+          expect(upd.status === 'off' && !!$<HTMLButtonElement>('.about .update-check')?.disabled && !$('.update-toast'), `the updater is off in the smoke run (${upd.status}: ${upd.offReason ?? ''})`);
+          summary['updater'] = `${upd.status} (${upd.offReason ?? ''})`;
           $<HTMLButtonElement>('.about-head button')!.click();
           await until(() => !$('.about'));
           // A big library: generated worlds in a throwaway worlds folder (never the repository's worlds/).
@@ -1473,9 +2132,150 @@ export function App() {
             sizes.push(`${n}: ${books.length} books in ${rows.length} rows, loaded in ${Math.round(loaded)} ms, out in ${Math.round(out)} ms, ${near} covers loaded at the top`);
             if (n === 300) expect(near > 0 && near < books.length && !books.find((b) => b.dataset['key']?.endsWith('of-300-300'))?.hasAttribute('data-near'), `books far below the fold wait to load their covers (${near} of ${books.length})`);
             dom[`shelf${n}Rows`] = rows.length;
-            expect(books.length === want && rows.length > 1 && out < 600 && loaded < 12000, `a shelf of ${n} worlds: ${sizes[sizes.length - 1]}`);
+            expect(books.length === want && (n === 30 || rows.length > 1) && out < 600 && loaded < 12000, `a shelf of ${n} worlds: ${sizes[sizes.length - 1]}`);
           }
           summary['shelfSizes'] = sizes.join('; ');
+          {
+            // Rearranging the shelf (220 books): the New book is first and stays put; the last book is dragged with the
+            // real mouse from the last shelf to the first (the library scrolls up by itself near its top edge), right
+            // after the first book. The drop does not open it, the order is saved and comes back from disk.
+            await reload(220);
+            await settleShelf();
+            const shelfEl = $('.library .shelf')!;
+            const all = () => [...document.querySelectorAll<HTMLElement>('.shelf .shelf-book:not(.new-book)')];
+            const keys = () => all().map((c) => c.dataset['key']!);
+            const spine = (c: Element) => c.querySelector('.book-spine')!.getBoundingClientRect();
+            const before = keys();
+            expect(shelfEl.firstElementChild?.classList.contains('new-book') === true, 'the New book comes first on the first shelf');
+            const moving = all()[before.length - 1]!;
+            const key = moving.dataset['key']!;
+            moving.scrollIntoView({ block: 'center' });
+            await tick(300);
+            const r0 = spine(moving);
+            const sx = r0.left + r0.width / 2, sy = r0.top + r0.height * 0.6;
+            // As with a real mouse, the book comes out on hover before it is picked up (its spine then turns edge-on).
+            await window.lore.smokeMouse([{ type: 'move', x: sx - 1, y: sy }, { type: 'move', x: sx, y: sy }]);
+            expect(await until(() => moving.classList.contains('is-out'), 3000), 'the book comes out under the pointer before the drag');
+            await tick(700);
+            await window.lore.smokeMouse([{ type: 'down', x: sx, y: sy }, { type: 'move', x: sx + 3, y: sy - 3, held: true }, { type: 'move', x: sx + 10, y: sy - 30, held: true }]);
+            expect(await until(() => moving.hasAttribute('data-dragged') && !!$('.shelf-lift')), 'picking up a book lifts a copy of it, and the book waits, faded, in its place');
+            {
+              const liftEl = $<HTMLElement>('.shelf-lift')!, sp = moving.querySelector<HTMLElement>('.book-spine')!, lcs = getComputedStyle(liftEl);
+              expect(count('.shelf-lift') === 1 && Math.abs(liftEl.offsetWidth - sp.offsetWidth) <= 2 && Math.abs(liftEl.offsetHeight - sp.offsetHeight) <= 2 && sp.offsetWidth > 20
+                && lcs.backgroundImage !== 'none' && !/rgba\(0, 0, 0, 0\)|transparent/.test(lcs.backgroundColor) && lcs.opacity === '1',
+                `the lifted copy is a full, opaque spine: ${liftEl.offsetWidth}x${liftEl.offsetHeight} for ${sp.offsetWidth}x${sp.offsetHeight}, ${lcs.backgroundColor}, opacity ${lcs.opacity}`);
+              const lift = liftEl.getBoundingClientRect();
+              expect(sx + 10 >= lift.left - 12 && sx + 10 <= lift.right + 12 && sy - 30 >= lift.top - 12 && sy - 30 <= lift.bottom + 12 && !$('.shelf-drop') && !$('.shelf-ghost'),
+                `the lifted copy follows the pointer, no marker line (${Math.round(lift.left)},${Math.round(lift.top)} ${Math.round(lift.width)}x${Math.round(lift.height)} for ${Math.round(sx + 10)},${Math.round(sy - 30)})`);
+              expect(parseFloat(getComputedStyle(moving.querySelector('.book-pull')!).opacity) < 0.5 && getComputedStyle(moving.querySelector('.book-spine')!).outlineStyle === 'dashed', 'the placeholder is a faded copy with a dashed outline');
+            }
+            await tick(200);
+            expect(count('.shelf .is-out') === 0, 'no book comes out while one is dragged');
+            const wasTop = start.scrollTop;
+            await window.lore.smokeMouse([{ type: 'move', x: sx, y: start.getBoundingClientRect().top + 10, held: true }]);
+            expect(wasTop > 0 && (await until(() => start.scrollTop === 0, 10000)), `held near the top edge, the library scrolls up (from ${Math.round(wasTop)}px, now ${Math.round(start.scrollTop)}px)`);
+            const b1 = spine(all()[0]!), b2 = spine(all()[1]!);
+            const tx = b2.left + 2, ty = b2.top + b2.height / 2;
+            await window.lore.smokeMouse([{ type: 'move', x: tx, y: ty, held: true }]);
+            expect(await until(() => keys()[1] === key, 3000), `the placeholder moves into the gap between the first two books (${keys().slice(0, 3).map((k) => k.split(/[\\/]/).pop()).join(', ')})`);
+            await tick(60);
+            const preview = keys();
+            const sliding = all().slice(2, 8).filter((b) => b.getAnimations().length > 0).length;
+            expect(preview.length === before.length && preview[0] === before[0] && preview[2] === before[1] && preview[preview.length - 1] === before[before.length - 2] && sliding > 0,
+              `the books after it slide aside (${sliding} sliding), across shelves, and its old place on the last shelf closes`);
+            await window.lore.smokeMouse([{ type: 'up', x: tx, y: ty }]);
+            expect(await until(() => count('.shelf-lift') === 0 && !moving.hasAttribute('data-dragged'), 3000), 'on drop the lifted copy settles into the gap and is gone, and the book shows again');
+            await tick(100);
+            const after = keys();
+            expect(after[0] === before[0] && after[1] === key && after[2] === before[1] && after.length === before.length,
+              `the last book lands second on the first shelf (${after.slice(0, 3).map((k) => k.split(/[\\/]/).pop()).join(', ')})`);
+            expect(!dirRef.current && !$('.home') && !$('.library-dialog'), 'dropping a book does not open it');
+            expect(JSON.stringify((await window.lore.settings()).shelfOrder) === JSON.stringify(after), 'the new order is saved in settings');
+            window.dispatchEvent(new Event('focus'));
+            await tick(600);
+            expect(JSON.stringify(await window.lore.listWorlds()) === JSON.stringify(after) && JSON.stringify(keys()) === JSON.stringify(after), 'the saved order comes back from disk');
+            // The New book cannot be picked up.
+            const nb = $('.shelf .new-book .book-spine')!.getBoundingClientRect();
+            const nx = nb.left + nb.width / 2, ny = nb.top + nb.height * 0.4;
+            await window.lore.smokeMouse([{ type: 'move', x: nx, y: ny }, { type: 'down', x: nx, y: ny }, { type: 'move', x: nx, y: ny + 12, held: true }, { type: 'move', x: nx, y: ny + 24, held: true }]);
+            await tick(100);
+            expect(!$('.shelf-lift') && !$('.shelf .new-book[data-dragged]'), 'the New book is not draggable');
+            await window.lore.smokeMouse([{ type: 'up', x: nx, y: ny + 24 }]);
+            await tick(200);
+            if ($('.library-dialog')) { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await until(() => !$('.library-dialog')); }
+            expect(shelfEl.firstElementChild?.classList.contains('new-book') === true && JSON.stringify(keys()) === JSON.stringify(after), 'the New book stays first');
+            {
+              // Escape puts a book being dragged back where it was; the order is not saved and nothing opens.
+              // Each press starts with the pointer parked and every book back on the shelf (an open book covers its neighbours).
+              const rest = async () => { await window.lore.smokeMouse([{ type: 'move', x: 2, y: 2 }]); await until(() => count('.shelf .is-out') === 0, 3000); await tick(700); };
+              await rest();
+              // The book picked up is the one under the pointer (a book out on hover can cover its neighbour); the
+              // target is measured once the drag has put every book back in line.
+              const h0 = spine(all()[5]!);
+              const hx = h0.left + h0.width / 2, hy = h0.top + h0.height * 0.6;
+              await window.lore.smokeMouse([{ type: 'move', x: hx, y: hy }, { type: 'down', x: hx, y: hy }, { type: 'move', x: hx - 10, y: hy, held: true }]);
+              await until(() => !!$('.shelf [data-dragged]'), 3000);
+              await tick(500);
+              const held = $<HTMLElement>('.shelf [data-dragged]') ?? all()[5]!, heldKey = held.dataset['key']!;
+              const t1 = spine(all()[1]!);
+              await window.lore.smokeMouse([{ type: 'move', x: t1.left + 2, y: t1.top + t1.height / 2, held: true }]);
+              expect(await until(() => keys()[1] === heldKey && !!$('.shelf-lift'), 3000), `a second drag moves its placeholder too (at ${keys().indexOf(heldKey)}, lift ${!!$('.shelf-lift')})`);
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+              expect(await until(() => JSON.stringify(keys()) === JSON.stringify(after) && !$('.shelf-lift') && !held.hasAttribute('data-dragged'), 3000), 'Escape sends the book back to its place');
+              await window.lore.smokeMouse([{ type: 'up', x: t1.left + 2, y: t1.top + t1.height / 2 }]);
+              await tick(200);
+              expect(JSON.stringify(keys()) === JSON.stringify(after) && JSON.stringify((await window.lore.settings()).shelfOrder) === JSON.stringify(after) && !dirRef.current && !$('.library-dialog'), 'after Escape the order is unchanged and nothing opens');
+              // Losing the window (blur) or a pointercancel mid-drag leaves nothing on the pointer either.
+              for (const lose of ['blur', 'pointercancel'] as const) {
+                await rest();
+                const g0 = spine(all()[6]!);
+                const gx = g0.left + g0.width / 2, gy = g0.top + g0.height * 0.6;
+                await window.lore.smokeMouse([{ type: 'move', x: gx, y: gy }, { type: 'down', x: gx, y: gy }, { type: 'move', x: gx - 12, y: gy, held: true }, { type: 'move', x: gx - 40, y: gy, held: true }]);
+                expect(await until(() => !!$('.shelf-lift'), 3000), `a drag starts before the ${lose}`);
+                window.dispatchEvent(lose === 'blur' ? new Event('blur') : new PointerEvent('pointercancel', { pointerId: 1 }));
+                expect(await until(() => count('.shelf-lift') === 0 && !$('.shelf [data-dragged]') && JSON.stringify(keys()) === JSON.stringify(after), 3000), `a ${lose} mid-drag removes the lifted copy and puts the book back`);
+                await window.lore.smokeMouse([{ type: 'up', x: gx - 40, y: gy }]);
+                await tick(200);
+                if ($('.library-dialog')) { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await until(() => !$('.library-dialog')); }
+              }
+              expect(!dirRef.current && JSON.stringify((await window.lore.settings()).shelfOrder) === JSON.stringify(after), 'nothing opened or moved after them');
+            }
+            // Keyboard: Alt+Left, Alt+End and Alt+Home move the focused book; focus stays on it; nothing opens.
+            const alt = (k: string) => (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: k, altKey: true, bubbles: true, cancelable: true }));
+            const k3 = all()[3]!.dataset['key']!;
+            all()[3]!.querySelector<HTMLElement>('.world-book')!.focus();
+            const focusedKey = () => document.activeElement?.closest<HTMLElement>('.shelf-book')?.dataset['key'];
+            alt('ArrowLeft');
+            expect(await until(() => keys()[2] === k3 && focusedKey() === k3), 'Alt+Left moves the focused book one place left and keeps focus on it');
+            alt('End');
+            expect(await until(() => keys()[keys().length - 1] === k3 && focusedKey() === k3), 'Alt+End moves it to the end of the last shelf');
+            alt('Home');
+            expect(await until(() => keys()[0] === k3 && focusedKey() === k3), 'Alt+Home moves it to the front of the first shelf');
+            expect(!dirRef.current && /place 1 of/.test($('.shelf-moved')?.textContent ?? ''), `the move is announced and nothing opens (${$('.shelf-moved')?.textContent})`);
+            expect(JSON.stringify((await window.lore.settings()).shelfOrder) === JSON.stringify(keys()), 'keyboard moves are saved too');
+            // While a search filters the shelf, the order cannot be changed.
+            const box = $<HTMLInputElement>('.library-search input')!;
+            box.value = 'Shelf Book 01';
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            await until(() => all().length < 30 && all().length > 0);
+            const filtered = keys();
+            all()[1]!.querySelector<HTMLElement>('.world-book')!.focus();
+            alt('ArrowLeft');
+            await tick(100);
+            expect(JSON.stringify(keys()) === JSON.stringify(filtered) && /Clear the search/.test($('.shelf-moved')?.textContent ?? ''), 'no rearranging while a search filters the shelf');
+            box.value = '';
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            await until(() => all().length === before.length && !!$('.shelf .new-book'));
+            (document.activeElement as HTMLElement | null)?.blur();
+            // Park the pointer in the window's top-left corner, off the shelf at any window size, so no book is left
+            // out under it when the window shrinks for the next part.
+            await window.lore.smokeMouse([{ type: 'move', x: 2, y: 2 }]);
+            await until(() => count('.shelf .is-out, .shelf .is-closing') === 0, 3000);
+            // Forget the custom order, so the shelves that follow are in the plain order.
+            await window.lore.saveSettings({ shelfOrder: [] });
+            expect((await window.lore.settings()).shelfOrder === undefined, 'an empty order is not kept in settings');
+            await settleShelf();
+          }
           // About 60 books at the smallest window size: more than one shelf, lazily loaded, scrolls to the last one.
           await window.lore.smokeResize(1024, 640);
           await tick(200);
@@ -1491,7 +2291,8 @@ export function App() {
           // Every row stands on its own plank: the plank gradient repeats once per row height.
           const rowGap = rows[1]![0]!.offsetTop - rows[0]![0]!.offsetTop;
           const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-          expect(Math.abs(rowGap - 17.6 * rem) < 2, `rows are one plank apart (${rowGap}px)`);
+          const bk = parseFloat(getComputedStyle(shelfEl).getPropertyValue('--bk')) || 1;
+          expect(Math.abs(rowGap - (bk * 15.4 + 2.2) * rem) < 2, `rows are one plank apart (${rowGap}px, book scale ${bk})`);
           await window.lore.smokeShow(true);
           await until(() => !document.hidden, 3000);
           const hero = $('.start-hero h1')!.getBoundingClientRect();
@@ -1500,7 +2301,7 @@ export function App() {
           {
             const r = last.querySelector('.book-spine')!.getBoundingClientRect();
             const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height * 0.6);
-            expect(start.scrollTop > 0 && r.bottom <= innerHeight && r.top >= 0 && !!hit && last.contains(hit), `the last book is reached by scrolling the library (scrolled ${Math.round(start.scrollTop)}px, book at ${Math.round(r.top)}-${Math.round(r.bottom)} of ${innerHeight})`);
+            expect(start.scrollTop > 0 && r.bottom <= innerHeight && r.top >= 0 && !!hit && last.contains(hit), `the last book is reached by scrolling the library (scrolled ${Math.round(start.scrollTop)}px of ${start.scrollHeight - start.clientHeight}, book at ${Math.round(r.top)}-${Math.round(r.bottom)} of ${innerHeight}, wheel over ${document.elementFromPoint(hero.left + 20, 400)?.className})`);
             expect(await until(() => last.hasAttribute('data-near')), 'scrolled into view, the last book loads its cover');
             expect(document.documentElement.scrollTop === 0 && document.body.scrollTop === 0, 'only the library scrolls, not the page');
           }
@@ -1534,16 +2335,80 @@ export function App() {
           await until(() => count('.shelf .is-out, .shelf .is-closing') === 0, 3000);
           await until(() => shelfEl.getAnimations({ subtree: true }).every((an) => an.playState !== 'running'), 3000);
           await tick(100);
-          expect(atRest(), 'leaving a lower shelf returns every book to rest');
+          expect(atRest(), `leaving a lower shelf returns every book to rest (${cards().filter((c, i) => Math.abs(c.querySelector('.book-spine')!.getBoundingClientRect().left - restAt[i]!) >= 1.5 || (c.style.getPropertyValue('--push') || '0px') !== '0px').map((c) => `${c.dataset['name']} ${Math.round(c.querySelector('.book-spine')!.getBoundingClientRect().left - restAt[cards().indexOf(c)]!)}px`).slice(0, 4).join('; ')})`);
+          // Full width at every size: the first row fills the shelf, the shelf fills the library, and every title fits
+          // (cover titles: no word sticking out, at most three lines; spines: no overflow).
+          {
+            const widths: string[] = [];
+            for (const [width, height] of [[1024, 640], [1920, 1080], [2560, 1440]] as const) {
+              await window.lore.smokeResize(width, height);
+              await until(() => innerWidth === width && innerHeight === height, 2000);
+              window.dispatchEvent(new Event('resize'));
+              start.scrollTop = 0;
+              await tick(500);
+              await document.fonts.ready;
+              const cs = getComputedStyle(start);
+              const content = start.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+              const ss = getComputedStyle(shelfEl);
+              const inner = shelfEl.clientWidth - parseFloat(ss.paddingLeft) - parseFloat(ss.paddingRight);
+              const first = rowsOf()[0]!;
+              const span = first[first.length - 1]!.offsetLeft + first[first.length - 1]!.offsetWidth - first[0]!.offsetLeft;
+              const shelfShare = shelfEl.getBoundingClientRect().width / content;
+              const rowShare = span / inner;
+              const leftGap = first[0]!.offsetLeft - parseFloat(ss.paddingLeft);
+              const rightGap = shelfEl.clientWidth - parseFloat(ss.paddingRight) - (first[first.length - 1]!.offsetLeft + first[first.length - 1]!.offsetWidth);
+              const bookH = first[0]!.querySelector('.book-spine')!.getBoundingClientRect().height;
+              widths.push(`${width}x${height}: ${first.length} per row, shelf ${Math.round(shelfShare * 100)}% of the library, row ${Math.round(rowShare * 100)}% of the shelf, book ${Math.round(bookH)}px`);
+              expect(shelfShare >= 0.9 && rowShare >= 0.9 && leftGap < 3 && rightGap < first[0]!.offsetWidth + 24 && bookH <= 300, `the shelf uses the full width at ${widths[widths.length - 1]} (gaps ${Math.round(leftGap)}/${Math.round(rightGap)}px)`);
+              // Every title on screen fits; the long ones too, taken off the shelf.
+              const near = cards().filter((c) => c.getBoundingClientRect().top < innerHeight);
+              const overflow = (el: Element | null) => !!el && ((el as HTMLElement).scrollWidth > (el as HTMLElement).clientWidth + 1 || (el as HTMLElement).scrollHeight > (el as HTMLElement).clientHeight + 1);
+              // An ellipsis is the last resort: allowed only once the title is at its smallest size in one line.
+              const badSpines = near.filter((c) => { const t = c.querySelector<HTMLElement>('.spine-title'); return !!t && !t.classList.contains('is-clamped') && overflow(t); }).map((c) => c.dataset['name']);
+              expect(badSpines.length === 0, `spine titles fit at ${width}x${height}: ${badSpines.join(', ')}`);
+              for (const name of ['The Extraordinary Chronicles of the Seventeen Sunken Kingdoms', 'Kartaltepe Mahallesinin Unutulmuş Masalları', 'Northern Tales']) {
+                const c = cards().find((x) => x.dataset['name'] === name);
+                if (!c) { expect(false, `the book ${name} is on the shelf`); continue; }
+                c.scrollIntoView({ block: 'center' });
+                c.dispatchEvent(new PointerEvent('pointerenter'));
+                await until(() => c.classList.contains('is-out'));
+                await tick(200);
+                const t = c.querySelector<HTMLElement>('.book-cover .cover-title')!;
+                const lh = parseFloat(getComputedStyle(t).lineHeight);
+                const clamped = t.classList.contains('is-clamped');
+                const lines = Math.round((clamped ? t.clientHeight : t.scrollHeight) / lh);
+                // Ordinary titles fit whole; only a title too long for three lines at the smallest size ends in an ellipsis.
+                expect(t.scrollWidth <= t.clientWidth && lines <= 3 && (name === 'Northern Tales' ? !clamped : true),
+                  `the hovered title "${name}" fits at ${width}x${height} (${t.scrollWidth}/${t.clientWidth}px wide, ${lines} lines${clamped ? ', ellipsis' : ''}, ${getComputedStyle(t).fontSize})`);
+                if (clamped) widths.push(`"${name.slice(0, 24)}…" ends in an ellipsis at ${width}x${height}`);
+                c.dispatchEvent(new PointerEvent('pointerleave'));
+                await until(() => count('.shelf .is-out') === 0);
+                await settleShelf();
+              }
+            }
+            summary['shelfWidths'] = widths.join('; ');
+            await window.lore.smokeResize(1024, 640);
+            await until(() => innerWidth === 1024, 2000);
+            window.dispatchEvent(new Event('resize'));
+            await tick(300);
+          }
           // Search: live filtering, best match first, accent and Turkish i tolerant.
           const box = $<HTMLInputElement>('.library-search input')!;
           expect(box.placeholder === 'Search books...' && !!$('.start-hero .library-search') && !!$('.library-search .search-mark'), 'the search box sits in the library header');
+          {
+            // The header is the mark, the name, the search and the actions: no subtitle and no visible shelf hint; the
+            // name is optically centred on the mark (its capitals, within 2px).
+            const mark = $('.start-hero .start-mark')!.getBoundingClientRect(), name = $('.start-hero h1')!.getBoundingClientRect();
+            const off = Math.abs(mark.top + mark.height / 2 - (name.top + name.height / 2));
+            expect(!$('.start-hero p') && !/Write the worlds|Point at a book/.test($('.start')!.innerText) && $('.shelf-hint')!.getBoundingClientRect().width <= 1, 'the library header has no subtitle and the shelf no visible hint');
+            expect(off <= 2 && name.height < parseFloat(getComputedStyle($('.start-hero h1')!).fontSize), `the Lore-Forge title is centred on its mark (${off.toFixed(1)}px off)`);
+          }
           const type = async (q: string) => { box.value = q; box.dispatchEvent(new Event('input', { bubbles: true })); await tick(120); };
           const names = () => cards().map((c) => c.dataset['name']);
           const countText = () => $('.shelf-count')!.textContent ?? '';
           await type('shelf book');
           const shelfBooks = names().filter((n) => n?.startsWith('Shelf Book')).length;
-          expect(cards().length === shelfBooks && shelfBooks === 55 && countText() === `55 of ${total} books` && !$('.shelf .new-book'), `typing filters the shelf (${cards().length} shown, "${countText()}")`);
+          expect(cards().length === shelfBooks && shelfBooks === 53 && countText() === `53 of ${total} books` && !$('.shelf .new-book'), `typing filters the shelf (${cards().length} shown, "${countText()}")`);
           expect(rowsOf().length > 1, 'the filtered shelf still wraps onto several shelves');
           await type('sehir');
           expect(names().join() === 'Şehir Masalları', `"sehir" finds Şehir (${names().join()})`);
@@ -1558,7 +2423,7 @@ export function App() {
           await type('fjords');
           expect(names().join() === 'Northern Tales', `the subtitle matches (${names().join()})`);
           await type('glass');
-          expect(names().join() === 'The Glass Garden,Shelf Book 006', `a title match comes before a description match (${names().join()})`);
+          expect(names().join() === 'The Glass Garden,Shelf Book 008', `a title match comes before a description match (${names().join()})`);
           await type('zzqx');
           expect(cards().length === 0 && !!$('.shelf-empty') && /No book on the shelf matches/.test($('.shelf-empty')!.textContent ?? '') && countText() === `0 of ${total} books`, 'nothing matching shows a friendly empty state');
           $<HTMLButtonElement>('.shelf-empty button')!.click();
@@ -1583,6 +2448,47 @@ export function App() {
           expect(await until(() => !!$('.home') && document.title.startsWith('Camelamamm'), 8000), 'Enter opens the only matching book: Camelamamm loads');
           dom['camelTiles'] = count('.home .entry-tile');
           expect(dom['camelTiles'] >= 20, `Camelamamm's home shows its entries (${dom['camelTiles']})`);
+          // The tour: from the library through the sample world. Esc skips; Back and Next move; Finish saves tourDone.
+          await window.lore.smokeShow(true);
+          await window.lore.smokeResize(1920, 1080);
+          await until(() => innerWidth === 1920, 2000);
+          window.dispatchEvent(new Event('resize'));
+          $<HTMLButtonElement>('.home-library')!.click();
+          await until(() => !!$('.start-tour'));
+          expect((await window.lore.settings()).tourDone !== true && !$('.tour'), 'the tour does not start by itself in the smoke run');
+          $<HTMLButtonElement>('.start-tour')!.click();
+          expect(await until(() => !!$('.tour-card') && !($<HTMLButtonElement>('.tour-next')?.disabled ?? true)), 'Take the tour starts the tour');
+          $<HTMLButtonElement>('.tour-next')!.click();
+          await until(() => $('.tour')?.dataset['step'] === '1');
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          expect(await until(() => !$('.tour')) && (await window.lore.settings()).tourDone === true, 'Esc skips the tour, and it is not shown again');
+          $<HTMLButtonElement>('.start-tour')!.click();
+          await until(() => !!$('.tour-card'));
+          const steps = Number(/of (\d+)/.exec($('.tour-count')?.textContent ?? '')?.[1] ?? 0);
+          expect(steps >= 5 && steps <= 8, `the tour has 5 to 8 steps (${steps})`);
+          const seen: string[] = [];
+          for (let i = 0; i < steps; i++) {
+            expect(await until(() => $('.tour')?.dataset['step'] === String(i) && !($<HTMLButtonElement>('.tour-next')?.disabled ?? true), 10000), `tour step ${i + 1} is ready`);
+            await tick(350);
+            const spot = $('.tour-spot')!.getBoundingClientRect();
+            const card = $('.tour-card')!.getBoundingClientRect();
+            const inside = card.left >= 0 && card.top >= 0 && card.right <= innerWidth + 1 && card.bottom <= innerHeight + 1;
+            const title = $('.tour-title')?.textContent ?? '';
+            seen.push(title);
+            expect(spot.width > 10 && spot.height > 10 && inside && !$('.tour-spot.is-none'), `tour step ${i + 1} "${title}" points at something and its card is inside the window (spot ${Math.round(spot.left)},${Math.round(spot.top)} ${Math.round(spot.width)}x${Math.round(spot.height)}${$('.tour-spot.is-none') ? ' none' : ''}, card ${Math.round(card.left)},${Math.round(card.top)} ${Math.round(card.width)}x${Math.round(card.height)}, window ${innerWidth}x${innerHeight})`);
+            if (i === 3) {
+              $<HTMLButtonElement>('.tour-back')!.click();
+              expect(await until(() => $('.tour')?.dataset['step'] === '2' && !!$('.home-hero')), 'Back returns to the previous step and its place');
+              await until(() => !($<HTMLButtonElement>('.tour-next')?.disabled ?? true));
+              $<HTMLButtonElement>('.tour-next')!.click();
+              await until(() => $('.tour')?.dataset['step'] === '3' && !($<HTMLButtonElement>('.tour-next')?.disabled ?? true));
+            }
+            $<HTMLButtonElement>('.tour-next')!.click();
+          }
+          expect(await until(() => !$('.tour')), 'Finish closes the tour');
+          expect(seen.length === steps && /library/i.test(seen[0] ?? '') && seen.some((t) => /Story/.test(t)) && seen.some((t) => /Warnings/.test(t)), `the tour covers the library, the sample, an entry, warnings and story (${seen.join(' / ')})`);
+          summary['tour'] = seen.join(' / ');
+          await window.lore.smokeShow(false);
         }
       } catch (e) {
         fails.push(String((e as Error).stack ?? e));
@@ -1593,12 +2499,21 @@ export function App() {
     });
   }, [open]);
 
-  const analysis = useStoryAnalysis(world);
-  const warnings = useMemo(() => {
-    if (!world) return [];
-    const base = checkWorld(world, builtinRules);
-    return analysis?.warnings.length ? sortWarnings([...base, ...analysis.warnings]) : base;
-  }, [world, analysis]);
+  // The rules take well under a millisecond, so they follow every edit: a rename to a taken name, or a death
+  // before birth, warns at once. Only the story analysis (most of a check's time) waits for a pause in typing
+  // in an entry, or for the field to lose focus. The list keeps its identity while its content is unchanged,
+  // so a keystroke that changes no warning redraws none of the lists that show them.
+  const [checked, settleNow] = useSettledWorld(world, CHECK_DELAY_MS);
+  useEffect(() => {
+    document.addEventListener('focusout', settleNow);
+    return () => document.removeEventListener('focusout', settleNow);
+  }, []);
+  const analysis = useStoryAnalysis(checked);
+  const ruleWarnings = useMemo(() => (world ? checkWorld(world, builtinRules) : []), [world]);
+  const warnings = useSame(
+    useMemo(() => (analysis?.warnings.length ? sortWarnings([...ruleWarnings, ...analysis.warnings]) : ruleWarnings), [ruleWarnings, analysis]),
+    sameWarnings,
+  );
 
   /** Debounced write; the latest content for a path wins. */
   const schedule = useCallback((key: string, write: () => Promise<void>) => {
@@ -1795,13 +2710,16 @@ export function App() {
     }, 30);
   };
 
-  const actions: WarningActions = {
-    onJump: jump,
-    onMark: (w: Warning, note: string) => world && setIntended([...world.intended.filter((m) => m.warningId !== w.id), { warningId: w.id, ...(note ? { note } : {}), markedAt: new Date().toISOString().slice(0, 10) }]),
-    onUnmark: (w: Warning) => world && setIntended(world.intended.filter((m) => m.warningId !== w.id)),
-  };
+  // Stable, so the warnings panel can skip drawing again while only an entry is being typed in.
+  const onJump = useEvent(jump);
+  const onMark = useEvent((w: Warning, note: string) => world && setIntended([...world.intended.filter((m) => m.warningId !== w.id), { warningId: w.id, ...(note ? { note } : {}), markedAt: new Date().toISOString().slice(0, 10) }]));
+  const onUnmark = useEvent((w: Warning) => world && setIntended(world.intended.filter((m) => m.warningId !== w.id)));
+  const actions: WarningActions = useMemo(() => ({ onJump, onMark, onUnmark }), []);
 
   /** Back to the library: write what is pending, then close the world (Back returns to it). */
+  // A copy just made from inside a world: the library it goes back to shows it, next to its original.
+  const [fresh, setFresh] = useState<string | null>(null);
+  useEffect(() => { if (world) setFresh(null); }, [world]);
   const closeWorld = () => flush().then(() => { setWorld(null); setDir(null); dirRef.current = null; setSettings(false); setDoomed(null); document.title = 'Lore-Forge'; });
 
   /** One step back or forward. Windows can report a mouse button both as a DOM event and an app command; count it once. */
@@ -1876,7 +2794,55 @@ export function App() {
     return () => window.removeEventListener('beforeunload', onUnload);
   });
 
-  if (!world || !dir) return <StartScreen onOpen={(d) => void open(d)} error={loadError} />;
+  // The first-run tour walks through the sample world. It starts by itself once, on the library (not when a world was
+  // opened from the command line, and never in the smoke run); "Take the tour" starts it again.
+  const [touring, setTouring] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  // Whether the sample is off the shelf (Library settings), so the tour points at the shelf instead of its book.
+  const [sampleHidden, setSampleHidden] = useState(false);
+  const startTour = () => { setTourStep(0); setTouring(true); void window.lore.settings().then((x) => setSampleHidden(!!x.hideSample)); };
+  const [sample, setSample] = useState<string | null>(null);
+  const [bundled, setBundled] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
+  const worldRef = useRef(world);
+  worldRef.current = world;
+  useEffect(() => {
+    void Promise.all([window.lore.sampleWorld(), window.lore.bundledWorld(), window.lore.settings(), window.lore.initialWorld()]).then(([s, b, set, first]) => {
+      setSample(s);
+      setBundled(b);
+      if (!SMOKE && s && !set.tourDone && !first) startTour();
+    });
+  }, []);
+  const endTour = () => {
+    setTouring(false);
+    void window.lore.saveSettings({ tourDone: true });
+  };
+  const show = (v: View, mode?: RelationMode) => transition(() => { if (mode) setRelMode(mode); setReveal(undefined); setPreview(null); setView(v); });
+  const inSample = async (): Promise<World | null> => (sample && dirRef.current === sample ? worldRef.current : sample ? open(sample) : null);
+  const tourSteps: TourStep[] = sample ? [
+    { title: 'Your library', text: 'Every world is a book on this shelf. Point at one to take it out; click to open it. Search by title, author or description with Ctrl+F.', anchor: '#library-shelf', go: () => (dirRef.current ? closeWorld() : undefined) },
+    sampleHidden
+      ? { title: 'The sample world', text: 'Camelamamm is a small desert world that comes with Lore-Forge, with characters, places, events, a story and pictures. It is off your shelf now (Show sample world in Library settings puts it back), but the tour can still open it: Next opens it.', anchor: '#library-shelf', go: () => (dirRef.current ? closeWorld() : undefined) }
+      : { title: 'The sample world', text: 'Camelamamm is a small desert world that comes with Lore-Forge, with characters, places, events, a story and pictures. Next opens it.', anchor: `.shelf-book[data-key="${CSS.escape(sample)}"]`, go: () => (dirRef.current ? closeWorld() : undefined) },
+    { title: 'World home', text: 'Each world opens on its home page: the cover (click it to change it), what is in the world, and a card for every entry.', anchor: '.home-hero', go: async () => { await inSample(); show('home'); } },
+    { title: 'An entry', text: 'Entries are characters, places, factions, items, events and lore. Each has facts, links to others, a visual description, and Images or 3D model tabs.', anchor: '.editor', go: async () => {
+      const w = await inSample();
+      const e = w?.entries.find((x) => x.images?.length) ?? w?.entries[0];
+      if (e) transition(() => { setSelectedId(e.id); setReveal(undefined); setPreview(null); setView('editor'); });
+    } },
+    { title: 'Relationships and timeline', text: 'The tabs up here show the world as a timeline, a family tree and a relationship web, all built from the links in the entries.', anchor: '.tabs', go: async () => { await inSample(); show('relations', 'web'); } },
+    { title: 'Warnings', text: 'Lore-Forge checks the world as you write: someone acting after their death, a broken link, a date outside its era. Click a warning to jump there, or mark it as intended.', anchor: '.warnings-panel', go: async () => { await inSample(); show('relations', 'web'); } },
+    { title: 'Story', text: 'Write chapters here. Lore-Forge spots the people and places you mention, suggests new entries, and checks the story against the lore.', anchor: '.main-story', go: async () => { await inSample(); show('story'); } },
+    { title: 'Make it yours', text: 'The sample stays as it is. Duplicate it to get a copy you can edit, or go back to the library and start a New book of your own.', anchor: '.home-duplicate', go: async () => { await inSample(); show('home'); } },
+  ] : [];
+  const overlays = (
+    <>
+      {touring && tourSteps.length > 0 && <Tour steps={tourSteps} step={Math.min(tourStep, tourSteps.length - 1)} onStep={setTourStep} onClose={endTour} />}
+      <UpdateToast />
+    </>
+  );
+
+  if (!world || !dir) return <><StartScreen onOpen={(d) => { setFresh(null); void open(d); }} error={loadError} onTour={startTour} highlight={fresh} />{overlays}</>;
 
   const savePdf = async (kind: PdfKind, options: PublishOptions) => {
     const label = kind === 'codex' ? 'World Codex' : 'Story Book';
@@ -1939,7 +2905,9 @@ export function App() {
   const selected = world.entries.find((e) => e.id === selectedId);
   const goHome = (to: 'timeline' | 'tree' | 'web' | 'codex' | 'book') => (to === 'codex' || to === 'book' ? setPreview(to) : to === 'timeline' ? goView('timeline') : goView('relations', to));
   const tabs: [View, IconName, string][] = [['home', 'house', 'Home'], ['editor', 'quill-ink', 'Editor'], ['timeline', 'hourglass', 'Timeline'], ['relations', 'spider-web', 'Relationships'], ['story', 'feather', 'Story']];
+  // The overlays sit second in both returns (library and world), so the tour keeps its place when a world opens.
   return (
+    <>
     <WorldDir.Provider value={dir}>
     <ErasLink.Provider value={() => setSettings(true)}>
     <div class="app" style={{ '--sidebar-w': `${sidebarW}px` }}>
@@ -1947,7 +2915,7 @@ export function App() {
       <header class="topbar">
         <div class="world-title">
           {/* Always the way out to the library; Alt+Left and mouse button 4 still step back through history. */}
-          <button type="button" class="ghost icon-only nav-back" onClick={() => void closeWorld()} aria-label="Back to the library" title="Back to the library"><Icon name="plain-arrow" class="point-left" /></button>
+          <button type="button" class="ghost nav-back has-label" onClick={() => void closeWorld()} aria-label="Back to the library" title="Back to the library"><Icon name="plain-arrow" class="point-left" /><span class="btn-label">Library</span></button>
           <h1>
             <button type="button" class="world-home-btn" onClick={() => goView('home')} aria-current={view === 'home' ? 'page' : undefined} title="World home: cover, counts, timeline, family tree and more">
               <span class="mini-book" aria-hidden="true">
@@ -1960,16 +2928,18 @@ export function App() {
         </div>
         <nav class="tabs" aria-label="Views">
           {tabs.map(([v, icon, label], i) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => goView(v)} title={i ? `Ctrl+${i}` : 'Ctrl+H'}><Icon name={icon} /> {label}</button>
+            <button key={v} type="button" class={`view-tab v-${v}`} aria-pressed={view === v} onClick={() => goView(v)} aria-label={label} title={`${label} (${i ? `Ctrl+${i}` : 'Ctrl+H'})`}><Icon name={icon} /><span class="tab-label">{label}</span></button>
           ))}
         </nav>
-        <div class="publish-actions">
-          <button type="button" class="publish" onClick={() => setPreview('codex')} title="Preview every entry with facts, visual description, reference images and art briefs; then save as PDF"><Icon name="book-cover" /> World Codex</button>
-          <button type="button" class="publish" onClick={() => setPreview('book')} title="Preview your events and notes in story order as a book; then save as PDF"><Icon name="open-book" /> Story Book</button>
-        </div>
-        <div class="top-actions">
-          <SaveIndicator save={save} />
-          <button type="button" class="ghost small icon-only top-settings" aria-haspopup="dialog" onClick={() => setSettings(true)} aria-label="World settings" title="World settings: calendar, eras and months"><Icon name="cog" /></button>
+        <div class="top-end">
+          <div class="publish-actions" role="group" aria-label="Export">
+            <button type="button" class="publish p-codex has-label" onClick={() => setPreview('codex')} aria-label="World Codex" title="World Codex: preview every entry with facts, visual description, reference images and art briefs; then save as PDF"><Icon name="book-cover" /><span class="btn-label">World Codex</span></button>
+            <button type="button" class="publish p-book has-label" onClick={() => setPreview('book')} aria-label="Story Book" title="Story Book: preview your events and notes in story order as a book; then save as PDF or Word"><Icon name="open-book" /><span class="btn-label">Story Book</span></button>
+          </div>
+          <div class="top-actions">
+            <SaveIndicator save={save} />
+            <button type="button" class="ghost small top-settings has-label" aria-haspopup="dialog" onClick={() => setSettings(true)} aria-label="World settings" title="World settings: calendar, eras and months"><Icon name="cog" /><span class="btn-label">World settings</span></button>
+          </div>
         </div>
       </header>
       {view === 'story' ? (
@@ -1989,7 +2959,7 @@ export function App() {
               <p>{world.entries.length ? 'Pick an entry on the left to edit it.' : 'This world is empty. Start with a character, a place or an event: use “+ New” on the left.'}</p>
             </div>
           ))}
-        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onChange={updateEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} />}
+        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onChange={updateEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} onDuplicate={() => void flush().then(() => setCopying(true))} sample={dir === bundled} />}
         {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} />}
         {view === 'story' && (() => {
           const chapter = story.find((c) => c.file === chapterFile) ?? story[0];
@@ -2016,9 +2986,12 @@ export function App() {
         );
       })()}
       {settings && <WorldSettings world={world} onSave={saveCalendar} onClose={() => setSettings(false)} />}
+      {copying && <DuplicateBook dir={dir} name={world.manifest.name} onClose={() => setCopying(false)} onDone={(copy) => { setCopying(false); setFresh(copy); void closeWorld(); }} />}
       <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>
     </ErasLink.Provider>
     </WorldDir.Provider>
+    {overlays}
+    </>
   );
 }

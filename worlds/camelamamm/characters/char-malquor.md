@@ -1,7 +1,7 @@
 ---
 id: char-malquor
 type: character
-name: Malquor
+name: Malquora
 aliases:
   - Steward Malquor
 summary: Steward of Water of Camelamamm and secret head of the Dry Hand, who dammed the Singing Well to sell its water.
@@ -32,6 +32,15 @@ picture:
   icon: hooded-assassin
   color: "#2b2f3a"
   accent: "#b8c2cf"
+  image: images/char-malquor/three-quarter.png
+images:
+  - file: images/char-malquor/three-quarter.png
+    view: three-quarter
+    provenance:
+      tool: Grok Bot image generation
+      prompt: Painterly fantasy concept art of Malquor, from its visual description
+      date: "2026-11-05"
+      rights: Made for the Lore-Forge sample world; MIT like the rest of the repo
 ---
 
 Malquor counts things. He counted the buckets drawn from the [[place-singing-well|Singing Well]] for twenty years, and one day he decided that every bucket should cost a coin, and that the coins should be his.

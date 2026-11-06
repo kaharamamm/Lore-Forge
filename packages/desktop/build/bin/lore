@@ -1,0 +1,8 @@
+#!/bin/sh
+# lore: the Lore-Forge command-line tool (lore check, lore codex, ...), installed with the app.
+# It runs the app's own Electron as plain Node, so nothing else needs to be installed.
+# Linux .deb: /usr/bin/lore links here. macOS: link /Applications/Lore-Forge.app/Contents/Resources/bin/lore.
+self=$(readlink -f "$0" 2>/dev/null || echo "$0")
+res=$(cd "$(dirname "$self")/.." && pwd)
+if [ -x "$res/../MacOS/Lore-Forge" ]; then app="$res/../MacOS/Lore-Forge"; else app="$res/../lore-forge"; fi
+LORE_FORGE_FONTS="${LORE_FORGE_FONTS:-$res/fonts}" ELECTRON_RUN_AS_NODE=1 exec "$app" "$res/app.asar/dist/cli.cjs" "$@"

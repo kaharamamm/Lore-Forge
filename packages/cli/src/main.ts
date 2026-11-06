@@ -2,17 +2,20 @@
 import { realpathSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { check, report, snapshot, storyBook, TRIMS, worldCodex, WorldFormatError, type TrimSize, type Warning, type World } from '@lore-forge/core';
-import { loadWorld } from '@lore-forge/core/node';
+import { duplicateWorld, loadWorld } from '@lore-forge/core/node';
 import { writeDocx, writePublication } from '@lore-forge/pdf';
 
 const USAGE = `Usage:
   lore check <worldDir> [--json]     Print consistency warnings. Exit 1 if there are errors.
   lore export <worldDir> [--out <file>]  Write one versioned JSON snapshot (stdout by default).
   lore codex <worldDir> [-o <file.pdf>]  World Codex PDF for artists and AI tools, plus a .md copy (alias: bible).
-  lore book <worldDir> [-o <file.pdf|file.docx>] [--trim 6x9|5.5x8.5|a5]
+  lore book <worldDir> [-o <file.pdf|file.docx>] [--trim 6x9|5.5x8.5|a5|a4|letter]
                                          Print-ready Story Book: PDF plus a .md copy, or a Word .docx.
+  lore duplicate <worldDir> [name] [--into <folder>]
+                                         Copy a world to a new folder with a new name and id
+                                         (default name "<name> (copy)", default folder next to the original).
 
 Exit codes: 0 = no errors, 1 = errors found, 2 = bad usage or unreadable world.`;
 
@@ -35,10 +38,11 @@ function formatWarning(w: Warning, world?: World): string {
 export async function run(argv: string[], out: (s: string) => void = (s) => process.stdout.write(s)): Promise<number> {
   const [given, dir, ...rest] = argv;
   const cmd = given === 'bible' ? 'codex' : given;
-  if (!cmd || !['check', 'export', 'codex', 'book'].includes(cmd) || !dir) {
+  if (!cmd || !['check', 'export', 'codex', 'book', 'duplicate'].includes(cmd) || !dir) {
     out(USAGE + '\n');
     return 2;
   }
+  if (cmd === 'duplicate') return duplicate(dir, rest, out);
   let world;
   try {
     world = await loadWorld(resolve(dir));
@@ -79,7 +83,8 @@ export async function run(argv: string[], out: (s: string) => void = (s) => proc
       out(`Wrote ${file}\n`);
       return 0;
     }
-    const r = await writePublication(doc, resolve(dir), file);
+    // The CLI that ships inside the app finds the app's bundled fonts through these (see the lore wrapper scripts).
+    const r = await writePublication(doc, resolve(dir), file, process.env.LORE_FORGE_FONTS || undefined, process.env.LORE_FORGE_COVER_FONTS || undefined);
     out(`Wrote ${r.pdf} (${r.pages} pages)\nWrote ${r.md}\n${r.notes.map((n) => `Note: ${n}\n`).join('')}`);
     return 0;
   }
@@ -94,7 +99,29 @@ export async function run(argv: string[], out: (s: string) => void = (s) => proc
   return r.counts.error > 0 ? 1 : 0;
 }
 
+async function duplicate(dir: string, rest: string[], out: (s: string) => void): Promise<number> {
+  const i = rest.indexOf('--into');
+  const into = i >= 0 ? rest[i + 1] : dirname(resolve(dir));
+  const name = rest.find((a, j) => !a.startsWith('--') && (i < 0 || (j !== i && j !== i + 1)));
+  if (!into || rest.length > (name ? 1 : 0) + (i >= 0 ? 2 : 0)) {
+    out(USAGE + '\n');
+    return 2;
+  }
+  try {
+    const copy = await duplicateWorld(resolve(dir), resolve(into), name ?? '');
+    const world = await loadWorld(copy);
+    out(`Duplicated ${dir} as "${world.manifest.name}" (id ${world.manifest.id})\nWrote ${copy}\n`);
+    return 0;
+  } catch (e) {
+    out(`lore: cannot duplicate ${dir}: ${(e as Error).message}\n`);
+    return 2;
+  }
+}
+
+// Run when started directly (the app's bundled `lore` starts it through src/cli.ts in the desktop package instead).
 const entry = process.argv[1];
 if (entry && pathToFileURL(realpathSync(entry)).href === import.meta.url) {
-  process.exitCode = await run(process.argv.slice(2));
+  void run(process.argv.slice(2)).then((code) => {
+    process.exitCode = code;
+  });
 }

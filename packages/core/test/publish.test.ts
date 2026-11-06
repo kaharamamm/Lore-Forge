@@ -80,9 +80,10 @@ test('world codex of the example world: sections, art briefs, glossary and open 
 
 test('story book of the example world resolves links and uses the place image for an event without one', async () => {
   const w = await loadWorld(camelamamm);
-  // The sample world has no pictures; give the Singing Well one, so its events (which have none) borrow it.
-  const well = { file: 'images/place-singing-well/establishing.png', view: 'establishing' };
-  const doc = storyBook({ ...w, entries: w.entries.map((e) => (e.id === 'place-singing-well' ? { ...e, images: [well] } : e)) });
+  // Every sample entry has a picture now: take the events' away and give the Singing Well a known one, so the events
+  // there borrow it.
+  const well = { file: 'images/place-singing-well/establishing-test.png', view: 'establishing' };
+  const doc = storyBook({ ...w, entries: w.entries.map((e) => (e.id === 'place-singing-well' ? { ...e, images: [well] } : e.type === 'event' ? { ...e, images: [] } : e)) });
   const md = toMarkdown(doc);
   assert.match(md, /^# Mr Camel and the Singing Well$/m);
   assert.match(md, /Mr Camel did not fight Malquor\. He sat down in front of the old gate with the Warden Key/);

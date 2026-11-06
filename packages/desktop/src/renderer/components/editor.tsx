@@ -1,15 +1,17 @@
 import {
   ageAtDeathText, DETAIL_FIELDS, detailList, detailOf, raceIcon, raceLabel, racesOf, suggestionIcon, upperFirst, type DetailField, type DetailSection, type IconName,
-  DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_ICON, TYPE_SINGULAR, VISUAL_FIELDS, WorldIndex,
+  DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_ICON, TYPE_SINGULAR, VISUAL_FIELDS,
   type Action, type Character, type Entry, type EntryType, type LocationSpan, type LoreEvent, type Participant, type Relation, type RelationGroup, type Warning, type World,
 } from '@lore-forge/core';
+import { worldIndex } from '../hooks.ts';
 import { useRef, useState } from 'preact/hooks';
 import { ChipInput, DateField, entrySuggestion, Field, ListEditor, ListText, OpenEntry, RefField, TextField } from './fields.tsx';
-import { ImageSlots } from './images.tsx';
+import { EntryMedia } from './images.tsx';
 import { ProseField } from './prose.tsx';
 import { TypeBadge } from './type.tsx';
 import { WarningItem, type WarningActions } from './warnings.tsx';
 import { Icon } from './icon.tsx';
+import { Portrait, portraitFile } from './cover.tsx';
 import { Select } from './select.tsx';
 import { SuggestInput } from './suggest.tsx';
 
@@ -35,8 +37,11 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
       <header class="editor-head">
         <div>
           <p class="eyebrow"><TypeBadge type={entry.type} /></p>
-          <h2 id="entry-title" tabIndex={-1}><Icon class="title-icon" name={TYPE_ICON[entry.type]} /> {entry.name || '(no name)'}</h2>
-          <p class="muted">id <code>{entry.id}</code> · {world.files[entry.id]}</p>
+          <h2 id="entry-title" tabIndex={-1}>{portraitFile(entry) ? <Portrait entry={entry} size="md" /> : <Icon class="title-icon" name={TYPE_ICON[entry.type]} />} {entry.name || '(no name)'}</h2>
+          <p class="editor-meta">
+            <span class="meta-chip" title="The entry's id, used in links and files"><Icon name="key" /><span class="meta-chip-label">id</span><code>{entry.id}</code></span>
+            {world.files[entry.id] && <span class="meta-chip" title="Its file in the world folder"><Icon name="open-folder" /><span class="meta-chip-path">{world.files[entry.id]}</span></span>}
+          </p>
         </div>
         <button type="button" class="ghost danger" onClick={onDelete}><Icon name="trash-can" /> Delete entry</button>
       </header>
@@ -90,7 +95,7 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
               </div>
             </div>
           )}
-          <ImageSlots dir={dir} entry={entry} onChange={(images) => base({ images })} />
+          <EntryMedia dir={dir} entry={entry} onChange={(images) => base({ images })} />
         </Section>
       )}
 
@@ -193,7 +198,7 @@ function LifecycleFields({ world, entry, onChange }: { world: World; entry: Entr
   const ongoing = status && lc.ongoing.includes(status) ? lc.statuses.find((x) => x.value === status) : undefined;
   return (
     <fieldset class="lifecycle">
-      <legend>Status and dates</legend>
+      <legend><Icon name="hourglass" /> Status and dates</legend>
       <div class="grid-3">
         <Field label="Status" field="status">
           {(id) => (
@@ -224,7 +229,7 @@ const GROUP_ORDER = Object.keys(RELATION_GROUPS) as RelationGroup[];
 
 /** Relation type limited to what fits this entry (and the chosen target), grouped; custom types still possible. */
 function RelationTypeField({ world, entry, r, field, onChange }: { world: World; entry: Entry; r: Relation; field: string; onChange: (type: string) => void }) {
-  const target = new WorldIndex(world).resolve(r.target);
+  const target = worldIndex(world).resolve(r.target);
   const kinds = relationKindsFor(entry.type, target?.type);
   const current = relationKind(r.type);
   const known = current && kinds.includes(current);
@@ -255,7 +260,7 @@ function RelationTypeField({ world, entry, r, field, onChange }: { world: World;
 
 /** Race or kind as chips with an icon each; suggestions are the races already used in this world, then common ones. More than one is fine. */
 function RaceField({ world, e, set, onOpen }: { world: World; e: Character; set: (p: Partial<Character>) => void; onOpen: (id: string) => void }) {
-  const ix = new WorldIndex(world);
+  const ix = worldIndex(world);
   const races = racesOf(e);
   const linked = (r: string) => ix.resolve(r);
   return (
@@ -300,7 +305,7 @@ function DetailFields({ world, entry, section, onChange, onOpen }: { world: Worl
     const { details: _d, ...rest } = entry;
     onChange((Object.keys(details).length ? { ...rest, details } : rest) as Entry);
   };
-  const ix = new WorldIndex(world);
+  const ix = worldIndex(world);
   const short = fields.filter((f) => f.kind !== 'long');
   const long = fields.filter((f) => f.kind === 'long');
   const one = (f: DetailField) => {

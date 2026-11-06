@@ -21,6 +21,10 @@ interface Props {
   onReload: () => void;
   /** Close the world and go back to the library shelf. */
   onLibrary: () => void;
+  /** Make an editable copy of this world (and open it). */
+  onDuplicate: () => void;
+  /** This is the read-only sample that ships with the app. */
+  sample?: boolean;
 }
 
 /** One line under a card: race or status for people and places, the summary for the rest. */
@@ -31,12 +35,15 @@ function tagline(ix: WorldIndex, e: Entry): string {
 }
 
 /** The world at a glance: its cover, what is in it, and a card for every entry. */
-export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCoverSave, onSettings, onReload, onLibrary }: Props) {
+export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCoverSave, onSettings, onReload, onLibrary, onDuplicate, sample = false }: Props) {
   const ix = useMemo(() => new WorldIndex(world), [world]);
   const [editing, setEditing] = useState<string | null>(null);
   const [coverOpen, setCoverOpen] = useState(false);
   const picking = editing ? world.entries.find((e) => e.id === editing) : undefined;
-  const errors = warnings.filter((w) => kindOf(w) === 'error').length;
+  // Open warnings only: the ones marked as intended are not something to fix.
+  const open = warnings.filter((w) => !w.intended);
+  const errors = open.filter((w) => kindOf(w) === 'error').length;
+  const eras = world.manifest.calendar.eras.length;
   const groups = ENTRY_TYPES.map((t) => [t, world.entries.filter((e) => e.type === t).sort((a, b) => a.name.localeCompare(b.name))] as const);
   const actions: [Parameters<Props['onGo']>[0], IconName, string][] = [
     ['timeline', 'hourglass', 'Timeline'], ['tree', 'family-tree', 'Family tree'], ['web', 'spider-web', 'Relationship web'],
@@ -58,13 +65,20 @@ export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCove
             {groups.map(([t, list]) => (
               <li key={t} class={`t-${t}`}><a href={`#home-${t}`} onClick={(e) => { e.preventDefault(); document.getElementById(`home-${t}`)?.scrollIntoView({ block: 'start' }); }}><Icon name={TYPE_ICON[t]} /> <strong>{list.length}</strong> {TYPE_LABELS[t]}</a></li>
             ))}
+            <li class="t-era"><a href="#timeline" title="Open the Timeline" onClick={(e) => { e.preventDefault(); onGo('timeline'); }}><Icon name="hourglass" /> <strong>{eras}</strong> Eras</a></li>
+            {open.length > 0 && (
+              <li class={`home-warn ${errors ? 'is-error' : 'is-warning'}`}>
+                <a href="#warnings-title" title={`${errors} errors, ${open.length - errors} warnings: show them`} onClick={(e) => { e.preventDefault(); const h = document.getElementById('warnings-title'); h?.scrollIntoView({ block: 'start' }); h?.focus(); }}>
+                  <Icon name="hazard-sign" /> <strong>{open.length}</strong> {open.length === 1 ? 'Warning' : 'Warnings'}
+                </a>
+              </li>
+            )}
           </ul>
-          <p class="muted home-facts">
-            {world.manifest.calendar.eras.length} {world.manifest.calendar.eras.length === 1 ? 'era' : 'eras'} · {warnings.length ? `${warnings.length} warnings${errors ? `, ${errors} errors` : ''}` : 'no warnings'}
-          </p>
+          {sample && <p class="home-sample"><Icon name="locked-chest" /> The sample world that comes with Lore-Forge is read-only. Duplicate it to make a copy you can edit.</p>}
           <div class="home-actions">
             {actions.map(([to, icon, label]) => <button key={to} type="button" class={to === 'codex' || to === 'book' ? 'publish' : 'ghost'} onClick={() => onGo(to)}><Icon name={icon} /> {label}</button>)}
             <button type="button" class="ghost home-settings" onClick={onSettings}><Icon name="cog" /> World settings</button>
+            <button type="button" class={sample ? 'primary home-duplicate' : 'ghost home-duplicate'} onClick={onDuplicate} title="Make a full copy of this world under a new name, and open it"><Icon name="files" /> Duplicate</button>
             <button type="button" class="ghost home-reload" onClick={onReload} title="Read every file of this world again, after editing them outside Lore-Forge"><Icon name="cycle" /> Reload from disk</button>
           </div>
         </div>

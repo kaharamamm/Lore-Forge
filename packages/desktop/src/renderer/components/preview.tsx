@@ -1,11 +1,11 @@
 import { Fragment } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { DEFAULT_TRIM, docSheets, inlineRuns, storyBook, TRIMS, TYPE_ICON, TYPE_LABELS, worldCodex, type Block, type BookSettings, type ChapterGrouping, type Doc, type EntryType, type TrimSize, type World } from '@lore-forge/core';
+import { BOOK_FONTS, bookLook, DEFAULT_TRIM, docSheets, inlineRuns, storyBook, TITLE_FONTS, TRIMS, type BookLook, type DropCapStyle, TYPE_ICON, TYPE_LABELS, worldCodex, type Block, type BookSettings, type ChapterGrouping, type Doc, type EntryType, type TrimSize, type World } from '@lore-forge/core';
 import type { PdfKind, PublishOptions } from '../../shared/api.ts';
 import { Icon } from './icon.tsx';
 import { Aura } from './aura.tsx';
 import { Select } from './select.tsx';
-import { titleFont, useImage, WorldCover } from './cover.tsx';
+import { titleFont, titlePlace, useImage, WorldCover } from './cover.tsx';
 
 const ALL_TYPES: EntryType[] = ['character', 'place', 'faction', 'item', 'event', 'note'];
 const TITLE: Record<PdfKind, string> = { codex: 'World Codex', book: 'Story Book' };
@@ -44,7 +44,8 @@ function DocImage({ dir, file, caption }: { dir: string; file: string; caption: 
   return <img src={src} alt={caption} />;
 }
 
-const TRIM_LABEL: Record<TrimSize, string> = { '6x9': '6 × 9 in (trade paperback)', '5.5x8.5': '5.5 × 8.5 in (digest)', a5: 'A5 (148 × 210 mm)' };
+const TRIM_LABEL: Record<TrimSize, string> = { '6x9': '6 × 9 in (trade paperback)', '5.5x8.5': '5.5 × 8.5 in (digest)', a5: 'A5 (148 × 210 mm)', a4: 'A4 (210 × 297 mm)', letter: 'US Letter (8.5 × 11 in)' };
+const trimClass = (t: TrimSize) => `trim-${t.replace('.', '-')}`;
 type DetailKey = 'title' | 'author' | 'publisher' | 'dedication' | 'epigraph' | 'epigraphSource' | 'copyright';
 const DETAILS: [DetailKey, string, string, boolean][] = [
   ['title', 'Book title', 'The world name', false],
@@ -53,17 +54,17 @@ const DETAILS: [DetailKey, string, string, boolean][] = [
   ['dedication', 'Dedication', 'None (no dedication page)', true],
   ['epigraph', 'Epigraph', 'None (no epigraph page)', true],
   ['epigraphSource', 'Epigraph by', 'Unknown', false],
-  ['copyright', 'Copyright page', 'Copyright © year author. All rights reserved.', true],
+  ['copyright', 'Copyright page', 'Empty: no copyright page (unless a publisher is set)', true],
 ];
 
 const anchorId = (b: Extract<Block, { kind: 'heading' }>, i: number) => `pv-${b.anchor ?? `h-${i}`}`;
 const TITLE_PARTS = ['title', 'sub', 'author', 'publisher'];
 
 /** The first page: the world's cover art with the title, as the PDF draws it. */
-function CoverSheet({ doc, dir }: { doc: Doc; dir: string }) {
+export function CoverSheet({ doc, dir }: { doc: Doc; dir: string }) {
   const c = doc.cover;
   const image = useImage(dir, c.art?.image);
-  const trim = doc.print ? ` is-print trim-${doc.print.trim.replace('.', '-')}` : '';
+  const trim = doc.print ? ` is-print ${trimClass(doc.print.trim)}` : '';
   if (!c.art) {
     return (
       <section class="sheet sheet-cover">
@@ -76,8 +77,10 @@ function CoverSheet({ doc, dir }: { doc: Doc; dir: string }) {
   return (
     <section class={`sheet sheet-cover has-art${trim}`} aria-label="Cover">
       <span class="world-cover"><WorldCover art={c.art} image={image} /></span>
+      {/* A title with a chosen place sits there, as in the PDF; the subtitle and lines stay where they are. */}
+      {c.art.showTitle && c.art.titlePos && <p class={`sheet-title is-placed title-${c.art.titleStyle}${c.art.font ? ' has-font' : ''}`} style={{ color: c.art.titleColor, ...titleFont(c.art), ...titlePlace(c.art) }}>{c.title}</p>}
       <div class="sheet-cover-text">
-        {c.art.showTitle && <p class={`sheet-title title-${c.art.titleStyle}${c.art.font ? ' has-font' : ''}`} style={{ color: c.art.titleColor, ...titleFont(c.art) }}>{c.title}</p>}
+        {c.art.showTitle && !c.art.titlePos && <p class={`sheet-title title-${c.art.titleStyle}${c.art.font ? ' has-font' : ''}`} style={{ color: c.art.titleColor, ...titleFont(c.art) }}>{c.title}</p>}
         <p class="sheet-sub">{c.subtitle}</p>
         {c.lines.map((l, i) => <p key={i} class="sheet-cover-line">{l.replace(/\*\*/g, '')}</p>)}
       </div>
@@ -91,11 +94,25 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
       const H = (`h${b.level + 1}`) as 'h2' | 'h3' | 'h4';
       if (b.opener) {
         const m = /^(Chapter \d+)\.\s+(.*)$/.exec(b.text);
-        return <H id={anchorId(b, i)} class="doc-h doc-h1 doc-opener">{m && <span class="doc-opener-label">{m[1]}</span>}{m ? m[2] : b.text}</H>;
+        // The chapter's date sits at the top right of its first page, as in the PDF and Word.
+        return (
+          <>
+            {b.stamp && <p class="doc-stamp">{b.stamp}</p>}
+            <H id={anchorId(b, i)} class="doc-h doc-h1 doc-opener">{m && <span class="doc-opener-label">{m[1]}</span>}{m ? m[2] : b.text}</H>
+          </>
+        );
       }
       return <H id={anchorId(b, i)} class={`doc-h doc-h${b.level}`}>{b.icon && <><Icon name={b.icon} /> </>}{b.text}{b.mark && <> <Icon class="doc-mark" name={b.mark} /></>}</H>;
     }
-    case 'para': return <p class={`doc-p${b.style ? ` doc-${b.style}` : ''}${b.dropCap ? ' doc-dropcap' : ''}`}><Inline text={b.text} /></p>;
+    case 'para': {
+      if (!b.dropCap || !doc.print) return <p class={`doc-p${b.style ? ` doc-${b.style}` : ''}`}><Inline text={b.text} /></p>;
+      // The initial is its own span (not ::first-letter), so "raised" and "dropped" are drawn the way the PDF draws them.
+      // Emphasis markers stay on the rest of the text; an opening quote goes with the initial.
+      const m = /^([*_]*)([“"‘']*\p{L})/u.exec(b.text);
+      const cap = m?.[2] ?? '';
+      const rest = m ? m[1] + b.text.slice(m[0].length) : b.text;
+      return <p class={`doc-p doc-dropcap cap-${doc.print.look?.dropCap ?? 'raised'}`}><span class="doc-cap">{cap}</span><Inline text={rest} /></p>;
+    }
     case 'front':
       // Title page lines are title, subtitle, author, publisher (empty when unset); each part has its place on the page.
       return (
@@ -150,6 +167,128 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
   }
 }
 
+/** The look fields of world.json "book" the style bar edits. */
+type LookKey = 'bodyFont' | 'bodySize' | 'bodyColor' | 'chapterFont' | 'chapterSize' | 'chapterColor' | 'lineSpacing' | 'margins' | 'dropCap' | 'dateStamps' | 'coverTitleColor' | 'coverTitleSize' | 'authorSize';
+const LOOK_KEYS: LookKey[] = ['bodyFont', 'bodySize', 'bodyColor', 'chapterFont', 'chapterSize', 'chapterColor', 'lineSpacing', 'margins', 'dropCap', 'dateStamps', 'coverTitleColor', 'coverTitleSize', 'authorSize'];
+const SPACINGS = [1, 1.15, 1.3, 1.45, 1.6, 1.8, 2];
+const fontOptions = (list: readonly string[], group?: string) => list.map((f) => ({ value: f, label: f, ...(group ? { group } : {}) }));
+
+/** A labelled number box that commits whole steps and keeps the last good value while typing. */
+function NumberField({ label, name, value, min, max, step, unit, onCommit }: { label: string; name: string; value: number; min: number; max: number; step: number; unit: string; onCommit: (n: number) => void }) {
+  return (
+    <label class="bt-field bt-number">
+      <span class="bt-label">{label}</span>
+      <span class="bt-num">
+        <input type="number" name={name} min={min} max={max} step={step} value={value} aria-label={`${label} (${unit})`}
+          onInput={(e) => { const n = Number(e.currentTarget.value); if (e.currentTarget.value !== '' && n >= min && n <= max) onCommit(n); }} />
+        <span class="bt-unit" aria-hidden="true">{unit}</span>
+      </span>
+    </label>
+  );
+}
+
+function ColorField({ label, name, value, onCommit }: { label: string; name: string; value: string; onCommit: (c: string) => void }) {
+  return (
+    <label class="bt-field bt-color" title={`${label}: ${value}`}>
+      <span class="bt-label">{label}</span>
+      <input type="color" name={name} value={value} aria-label={label} onInput={(e) => onCommit(e.currentTarget.value)} />
+    </label>
+  );
+}
+
+/**
+ * The Story Book style bar: page, text, chapter titles, spacing, initial, dates and cover, like a word processor's
+ * ribbon. Every change shows at once in the pages below and is saved in world.json "book"; the PDF and Word use it.
+ */
+function BookToolbar({ look, trim, coverColor, onTrim, onLook, onReset, custom }: {
+  look: BookLook;
+  trim: TrimSize;
+  coverColor: string;
+  onTrim: (t: TrimSize) => void;
+  onLook: (patch: BookSettings) => void;
+  onReset: () => void;
+  custom: boolean;
+}) {
+  return (
+    <div class="book-toolbar" role="region" aria-label="Book style">
+      <div class="bt-group" role="group" aria-label="Page">
+        <span class="bt-title"><Icon name="book-cover" /> Page</span>
+        <label class="bt-field">
+          <span class="bt-label">Size</span>
+          <Select class="trim-select" aria-label="Page size" value={trim} onChange={(v) => onTrim(v as TrimSize)} options={(Object.keys(TRIMS) as TrimSize[]).map((t) => ({ value: t, label: TRIM_LABEL[t] }))} />
+        </label>
+        <label class="bt-field">
+          <span class="bt-label">Margins</span>
+          <Select class="margins-select" aria-label="Margins" value={look.margins} onChange={(v) => onLook({ margins: v === 'normal' ? undefined : (v as BookLook['margins']) })} options={[{ value: 'narrow', label: 'Narrow' }, { value: 'normal', label: 'Normal' }, { value: 'wide', label: 'Wide' }]} />
+        </label>
+      </div>
+      <div class="bt-group" role="group" aria-label="Text">
+        <span class="bt-title"><Icon name="quill-ink" /> Text</span>
+        <label class="bt-field bt-font">
+          <span class="bt-label">Font</span>
+          <Select class="body-font-select" aria-label="Text font" value={look.bodyFont} onChange={(v) => onLook({ bodyFont: v })} options={fontOptions(BOOK_FONTS)} />
+        </label>
+        <NumberField label="Size" name="book-body-size" value={look.bodySize} min={8} max={16} step={0.5} unit="pt" onCommit={(n) => onLook({ bodySize: n })} />
+        <ColorField label="Colour" name="book-body-color" value={look.bodyColor} onCommit={(c) => onLook({ bodyColor: c })} />
+        <label class="bt-field">
+          <span class="bt-label">Spacing</span>
+          <Select class="spacing-select" aria-label="Line spacing" value={String(SPACINGS.reduce((a, b) => (Math.abs(b - look.lineSpacing) < Math.abs(a - look.lineSpacing) ? b : a)))} onChange={(v) => onLook({ lineSpacing: Number(v) })} options={SPACINGS.map((n) => ({ value: String(n), label: n.toFixed(2).replace(/0$/, '') }))} />
+        </label>
+      </div>
+      <div class="bt-group" role="group" aria-label="Chapter titles">
+        <span class="bt-title"><Icon name="scroll-unfurled" /> Chapter titles</span>
+        <label class="bt-field bt-font">
+          <span class="bt-label">Font</span>
+          <Select class="chapter-font-select" aria-label="Chapter title font" value={look.chapterFont} onChange={(v) => onLook({ chapterFont: v })} options={[...fontOptions(BOOK_FONTS, 'Book fonts'), ...fontOptions(TITLE_FONTS, 'Display fonts')]} />
+        </label>
+        <NumberField label="Size" name="book-chapter-size" value={look.chapterSize} min={12} max={40} step={1} unit="pt" onCommit={(n) => onLook({ chapterSize: n })} />
+        <ColorField label="Colour" name="book-chapter-color" value={look.chapterColor} onCommit={(c) => onLook({ chapterColor: c })} />
+      </div>
+      <div class="bt-group" role="group" aria-label="Chapter openings">
+        <span class="bt-title"><Icon name="spell-book" /> Openings</span>
+        <div class="bt-field">
+          <span class="bt-label" id="bt-cap-label">First letter</span>
+          <div class="bt-seg" role="group" aria-labelledby="bt-cap-label">
+            {([['none', 'None'], ['raised', 'Raised'], ['dropped', 'Dropped']] as [DropCapStyle, string][]).map(([v, label]) => (
+              <button key={v} type="button" class={`bt-cap-${v}`} aria-pressed={look.dropCap === v} onClick={() => onLook({ dropCap: v === 'raised' ? undefined : v })}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div class="bt-field">
+          <span class="bt-label">Dates</span>
+          <button type="button" class="bt-toggle bt-dates" aria-pressed={look.dateStamps} onClick={() => onLook({ dateStamps: look.dateStamps ? false : undefined })}>
+            <Icon name="calendar" /> {look.dateStamps ? 'Shown' : 'Hidden'}
+          </button>
+        </div>
+      </div>
+      <div class="bt-group" role="group" aria-label="Cover">
+        <span class="bt-title"><Icon name="palette" /> Cover</span>
+        <ColorField label="Title colour" name="book-cover-color" value={coverColor} onCommit={(c) => onLook({ coverTitleColor: c })} />
+        <NumberField label="Title size" name="book-cover-size" value={Math.round(look.coverTitleScale * 100)} min={50} max={200} step={5} unit="%" onCommit={(n) => onLook({ coverTitleSize: n === 100 ? undefined : n })} />
+        <NumberField label="Author size" name="book-author-size" value={Math.round(look.authorScale * 100)} min={50} max={200} step={5} unit="%" onCommit={(n) => onLook({ authorSize: n === 100 ? undefined : n })} />
+      </div>
+      <button type="button" class="ghost bt-reset" disabled={!custom} onClick={onReset} title="Back to the default book look"><Icon name="clockwise-rotation" /> Reset style</button>
+    </div>
+  );
+}
+
+/** The look as CSS variables on the preview pages, in units of the default (10.5 pt text, 19 pt titles). */
+export function lookVars(look: BookLook, k: number): Record<string, string> {
+  const fam = (f: string) => `'${f}', ${/Sans|Carlito/.test(f) ? "'DejaVu Sans', system-ui, sans-serif" : "'DejaVu Serif', Georgia, serif"}`;
+  return {
+    '--bk-font': fam(look.bodyFont),
+    '--bk-head-font': fam(look.chapterFont),
+    '--bk-scale': String(look.bodySize / 10.5),
+    '--bk-head-scale': String(look.chapterSize / 19),
+    '--bk-ink': look.bodyColor,
+    '--bk-accent': look.chapterColor,
+    '--bk-lh': String(look.lineSpacing + 0.05),
+    '--bk-margin': String(k),
+    '--bk-cover-scale': String(look.coverTitleScale),
+    '--bk-author-scale': String(look.authorScale),
+  };
+}
+
 interface Props {
   dir: string;
   world: World;
@@ -175,10 +314,32 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
   const [book, setBook] = useState<BookSettings>(world.manifest.book ?? {});
   const bookWorld = useMemo(() => (kind === 'book' ? { ...world, manifest: { ...world.manifest, book: { ...world.manifest.book, ...book } } } : world), [world, kind, book]);
   const editBook = (k: DetailKey, v: string) => setBook((b) => ({ ...b, [k]: v }));
+  // Saves go one after another (each one patches world.json), so quick changes never overwrite each other.
+  const queue = useRef<Promise<void>>(Promise.resolve());
   const persist = (patch: BookSettings) => {
     const saved = world.manifest.book ?? {};
-    if (Object.entries(patch).some(([k, v]) => (saved[k as keyof BookSettings] ?? '') !== v)) void onSaveBook?.(patch);
+    if (Object.entries(patch).some(([k, v]) => (saved[k as keyof BookSettings] ?? '') !== v)) queue.current = queue.current.then(() => onSaveBook?.(patch)).catch(() => {});
   };
+  // Style changes show at once; their save waits until the colour picker or number box has been still for a moment.
+  const pendingLook = useRef<BookSettings>({});
+  const lookTimer = useRef<ReturnType<typeof setTimeout>>();
+  const flushLook = () => {
+    clearTimeout(lookTimer.current);
+    const patch = pendingLook.current;
+    pendingLook.current = {};
+    if (Object.keys(patch).length) persist(patch);
+    return queue.current;
+  };
+  const changeLook = (patch: BookSettings) => {
+    setBook((b) => ({ ...b, ...patch }));
+    pendingLook.current = { ...pendingLook.current, ...patch };
+    clearTimeout(lookTimer.current);
+    lookTimer.current = setTimeout(() => void flushLook(), 350);
+  };
+  useEffect(() => () => void flushLook(), []);
+  const look = useMemo(() => bookLook(book), [book]);
+  const customLook = LOOK_KEYS.some((k) => book[k] !== undefined);
+  const resetLook = () => changeLook(Object.fromEntries(LOOK_KEYS.map((k) => [k, undefined])) as BookSettings);
   const hasStory = (world.story?.length ?? 0) > 0;
   const [busy, setBusy] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
@@ -211,8 +372,8 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
   }, []);
 
   const toggleType = (t: EntryType) => setTypes((ts) => (ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]));
-  const save = async () => { setBusy(true); try { await onSave(kind, options); } finally { setBusy(false); } };
-  const saveDocx = async () => { setBusy(true); try { await onSaveDocx?.(options); } finally { setBusy(false); } };
+  const save = async () => { setBusy(true); try { await flushLook(); await onSave(kind, options); } finally { setBusy(false); } };
+  const saveDocx = async () => { setBusy(true); try { await flushLook(); await onSaveDocx?.(options); } finally { setBusy(false); } };
   const count = world.entries.filter((e) => types.includes(e.type)).length;
 
   return (
@@ -260,11 +421,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
               <>
               <fieldset>
                 <legend>Print</legend>
-                <label class="field">
-                  <span>Trim size</span>
-                  <Select class="trim-select" value={trim} onChange={(v) => { const t = v as TrimSize; setTrim(t); persist({ trim: t }); }} options={(Object.keys(TRIMS) as TrimSize[]).map((t) => ({ value: t, label: TRIM_LABEL[t] }))} />
-                </label>
-                <p class="hint">Margins are mirrored with a wider inside edge for the binding.</p>
+                <p class="hint">Page size, margins, fonts and colours are in the style bar above the pages. Margins are mirrored with a wider inside edge for the binding.</p>
                 <label class="check right-hand">
                   <input type="checkbox" name="right-hand-chapters" checked={rightHand} onChange={() => { const v = !rightHand; setRightHand(v); persist({ rightHandChapters: v || undefined }); }} />
                   <Icon name="open-book" /> Start chapters on right-hand pages
@@ -312,13 +469,19 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
               </>
             )}
           </aside>
-          <div class="preview-pages" tabIndex={0} aria-label="Preview pages">
-            {hasCover && <CoverSheet doc={doc} dir={dir} />}
-            {sheets.map((s, i) => (
-              <section class={doc.print ? `sheet is-print trim-${doc.print.trim.replace('.', '-')}${s[0]?.kind === 'front' ? ' is-front' : ''}` : 'sheet'} key={i}>
-                {s.map((b, j) => <BlockView key={j} b={b} dir={dir} doc={doc} i={doc.blocks.indexOf(b)} />)}
-              </section>
-            ))}
+          <div class="preview-main">
+            {kind === 'book' && (
+              <BookToolbar look={look} trim={trim} coverColor={look.coverTitleColor ?? doc.cover.art?.titleColor ?? '#fbf3df'} custom={customLook}
+                onTrim={(t) => { setTrim(t); persist({ trim: t }); }} onLook={changeLook} onReset={resetLook} />
+            )}
+            <div class={`preview-pages${doc.print ? ` is-book cap-${look.dropCap}` : ''}`} tabIndex={0} aria-label="Preview pages" style={doc.print ? lookVars(look, look.margins === 'narrow' ? 0.75 : look.margins === 'wide' ? 1.3 : 1) : undefined}>
+              {hasCover && <CoverSheet doc={doc} dir={dir} />}
+              {sheets.map((s, i) => (
+                <section class={doc.print ? `sheet is-print ${trimClass(doc.print.trim)}${s[0]?.kind === 'front' ? ' is-front' : ''}` : 'sheet'} key={i}>
+                  {s.map((b, j) => <BlockView key={j} b={b} dir={dir} doc={doc} i={doc.blocks.indexOf(b)} />)}
+                </section>
+              ))}
+            </div>
           </div>
         </div>
       </div>

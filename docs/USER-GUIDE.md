@@ -10,16 +10,17 @@ The start screen is a bookcase. Every world is a book: a 3D spine with its title
 
 - **New book** is the blank book at the end of the shelf: a name, a cover colour or picture, an emblem, and the folder it goes into.
 - **Search books** above the shelf matches titles first, then subtitles and authors, then descriptions, ignoring accents and the Turkish dotted and dotless i. Ctrl+F or `/` focuses it, Esc clears it, Enter opens the only match.
-- **Delete** sits on a book's cover, asks first, and moves the folder to the system trash. Nothing is deleted outright.
+- **Duplicate** and **Delete** sit on a book's cover. Duplicate asks for a name (it suggests "<name> (copy)"), copies the whole world into the worlds folder with a new id, keeps the cover and opens the copy. It works on the read-only sample too, which is how you get your own copy of Camelamamm. Delete asks first and moves the folder to the system trash. Nothing is deleted outright.
+- **Take the tour** shows a short guided tour (eight steps) through the library and the sample world. It starts by itself the first time Lore-Forge opens; **Skip** or Esc ends it, Back and Next (or the arrow keys) move through it, and it does not change the sample. **About** has the same button.
 - **Open a world folder…** opens a world from anywhere on disk; it then stays on the shelf.
 - **Library settings** chooses the folder new books go to.
-- **About** lists the credits and licences.
+- **About** lists the credits and licences, and has **Updates** (see [Updates](#updates)).
 
 Behind the shelf is a quiet animated scene (light through a window, dust, runes, candles and embers). It pauses while the window is hidden and stays still with the system's reduced-motion setting.
 
 ### World Home
 
-Opening a world lands on Home: the book's cover (click it to edit the cover), counts of entries, eras and warnings, links to the timeline, family tree, relationship web and the two exports, and a card for every entry with its picture. The paint button on a card changes that entry's picture: an icon with its colours, or one of its images.
+Opening a world lands on Home: **Duplicate** (as on the shelf), the book's cover (click it to edit the cover), counts of entries, eras and warnings, links to the timeline, family tree, relationship web and the two exports, and a card for every entry with its picture. The paint button on a card changes that entry's picture: an icon with its colours, or one of its images.
 
 The **Book cover** editor sets the background (gradient or plain colour), a picture, the emblem and its colour, the title font and colour, and the spine colours. The title can be hidden on the cover; it always stays on the spine.
 
@@ -36,7 +37,8 @@ A structured form per entry type, in collapsible sections, then the body text.
 - **Entry fields** (Part of, Target, Ruler, Home, …) show the chosen entry as a chip with its picture icon; click it to open that entry, × to clear it. Fields that hold several entries (affiliations, possessions) are rows of chips.
 - **Suggestion lists** (race, gender, kind, relation types, verbs) are themed lists with an icon for every word; the chosen value shows its icon too.
 - **Relationships:** typed and dated relations to other entries. The type list only offers types that fit the two entry types; custom types are still allowed.
-- **Visual description and reference images** for artists and 3D tools (see [Images](FORMAT.md#images)).
+- **Visual description, reference images and 3D models** for artists and 3D tools, under **Images | 3D model** tabs (see [Images](FORMAT.md#images) and [3D models](FORMAT.md#3d-models)).
+  - **3D model:** **Add model…** copies a `.glb`, `.gltf` (with its data embedded), `.obj` or `.fbx` file into the world. Drag to orbit, scroll to zoom, right-drag (or Shift+drag) to pan; **Reset view** frames it again and **Auto-rotate** spins it. An entry can have several models: pick one from the row above the viewer, or rename and delete it there. Files over 25 MB get a warning, since they are slow to load. The viewer needs WebGL; if the graphics driver offers none, it says so instead.
 - **Body:** Markdown with `[[links]]` and `@mentions`. Names and aliases typed in any text link themselves: they are highlighted in their type colour, show a hover card, and open with Ctrl/⌘+click.
 
 ### Warnings Panel
@@ -45,7 +47,7 @@ Updates live while you type. Warnings are grouped into Errors, Warnings, Info an
 
 ### Timeline (Ctrl+2)
 
-Era bands, lifespans and existence spans as bars, events as points, and warning markers, filterable by type. Drag or Shift+scroll moves along time; Ctrl+scroll or −/Fit/+ zooms. Click a bar or name to open it.
+A Gantt chart of the world: era ribbons and coloured era columns (an era's own colour when the calendar sets one), a year axis that names the months once you zoom in far enough, and one lane per dated entry, grouped by type. Lifespans and existence spans are solid cards in their type's colour with their icon, name and dates, and a taller card with the picture behind it when the entry has a picture; events without an end are diamonds (a round picture when they have one); warning markers sit after each one. **Lanes** shows one lane per entry; **Stacked** packs each type's entries side by side on as few rows as fit. Turn types on and off with the chips. Drag or Shift+scroll moves along time, Ctrl+scroll or −/Fit/+ zooms, and it stops at the first and last year. The **Overview** strip at the bottom shows the whole span with a frame around what is on screen: click or drag in it to jump, or use the arrow keys, Page Up/Down, Home and End. Click a bar or name to open it.
 
 ### Relationships (Ctrl+3)
 
@@ -118,16 +120,26 @@ The Story Book assembles what you wrote. It never writes, rewrites or summarises
 
 PDFs embed DejaVu fonts, so Turkish (ş ğ İ ı) and other Latin Extended, Greek and Cyrillic text renders, and characters the fonts lack (such as emoji) are dropped rather than printed as empty boxes. Cover titles can use one of 16 bundled fonts (Cinzel Decorative, Uncial Antiqua, IM Fell English, EB Garamond, Pirata One and others) or an installed system TrueType/OpenType font; a font that cannot draw the title falls back to DejaVu with a note. PNG and JPEG images are embedded; WebP and GIF images are listed by file name.
 
+## Updates
+
+Lore-Forge checks GitHub for a new version a few seconds after it starts and every four hours (switch this off under **About → Updates**; **Check now** checks at once). A notice in the bottom corner offers **Download**, **Later** and **What's new**, then shows the download's progress and **Restart to update**.
+
+- Windows and the AppImage install the update themselves and restart.
+- The `.deb` asks for your password once (`pkexec`, to run `dpkg`), then restarts.
+- macOS builds are not signed, so **Download** opens the new disk image to drag into Applications.
+
+Updates never touch your worlds or settings: they live in the folders below, not in the program's folder. Version 1.0.0 has no updater, so it needs one manual download of a newer version.
+
 ## App Settings and Storage
 
 | Where | What |
 | --- | --- |
 | The world folder | everything about a world (see [World Format](FORMAT.md#world-format)) |
-| `<user data>/settings.json` | the folder new worlds go to |
+| `<user data>/settings.json` | the folder new worlds go to, whether the tour was seen (`tourDone`), automatic update checks (`autoUpdate`) |
 | `<user data>/recent-worlds.json` | worlds opened from outside the worlds folder |
 | `<user data>/recent-cover-uploads.json` | pictures uploaded for covers, offered again |
 | `localStorage` | sidebar width, open or closed editor and warning sections, recent colours |
 
 `<user data>` is the app's user-data folder: `~/.config/Lore-Forge` on Linux, `%APPDATA%\Lore-Forge` on Windows and `~/Library/Application Support/Lore-Forge` on macOS.
 
-New worlds go to the project's `worlds/` folder when running from source and to `<user data>/worlds` in an installed app, unless Library settings chooses another folder. The installed app ships Camelamamm as a read-only world; copy its folder to edit it.
+New worlds go to the project's `worlds/` folder when running from source and to `<user data>/worlds` in an installed app, unless Library settings chooses another folder. The installed app ships Camelamamm as a read-only world; **Duplicate** makes an editable copy.

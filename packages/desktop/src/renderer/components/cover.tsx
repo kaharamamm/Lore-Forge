@@ -1,6 +1,6 @@
 import { createContext } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
-import { coverArt, coverImageFile, entryIcon, hash, ICONS, portraitFile, type CoverArt, type Entry, type IconName, type World, type WorldCoverSettings } from '@lore-forge/core';
+import { coverArt, coverImageFile, coverSeed, emblemBox, entryIcon, hash, ICONS, portraitFile, type CoverArt, type Entry, type IconName, type World, type WorldCoverSettings } from '@lore-forge/core';
 import { Icon, SvgIcon } from './icon.tsx';
 
 export { hash, portraitFile, coverImageFile };
@@ -10,21 +10,49 @@ export const WorldDir = createContext<string | null>(null);
 
 /** One image read per file per session: sidebar, cards and hover cards share it. */
 const images = new Map<string, Promise<string | null>>();
+/** The images already read, so a book drawn again (or a copy of one) has its picture from its first frame. */
+const imagesRead = new Map<string, string | null>();
+const imageKey = (dir: string, file: string) => `${dir}\n${file}`;
+/** Whether this picture is already read (then a book shows it at once, without waiting to be near the view). */
+export const hasImage = (dir: string, file: string | undefined) => !!file && imagesRead.has(imageKey(dir, file));
+/** A Duplicate has the same picture as its original: it takes the original's read, so it never shows without it. */
+export function shareImage(from: string, to: string, file: string | undefined) {
+  if (!file) return;
+  const a = imageKey(from, file), b = imageKey(to, file);
+  if (images.has(a)) images.set(b, images.get(a)!);
+  if (imagesRead.has(a)) imagesRead.set(b, imagesRead.get(a)!);
+}
+/**
+ * The picture as a short blob: URL instead of the data: URL it arrives as. A data URL is the whole file in
+ * base64 (hundreds of KB), and every style or src that holds one makes the browser parse it again: with a
+ * picture on each timeline card that was most of the time it took to open the timeline.
+ */
+async function objectUrl(data: string | null): Promise<string | null> {
+  if (!data?.startsWith('data:')) return data;
+  // The same picture (a world and its copy) gets the same link, so what is worked out per link (the spine's
+  // edge colour) carries over, as it did with the data URL.
+  let url = objectUrls.get(data);
+  if (!url) objectUrls.set(data, (url = fetch(data).then((r) => r.blob()).then((b) => URL.createObjectURL(b), () => data)));
+  return url;
+}
+const objectUrls = new Map<string, Promise<string>>();
+
 export function useImage(dir: string | null, file: string | undefined): string | null {
-  const [src, setSrc] = useState<string | null>(null);
+  const known = () => (dir && file ? imagesRead.get(imageKey(dir, file)) ?? null : null);
+  const [src, setSrc] = useState<string | null>(known);
   useEffect(() => {
-    setSrc(null);
+    setSrc(known());
     if (!dir || !file) return;
-    const key = `${dir}\n${file}`;
-    if (!images.has(key)) images.set(key, window.lore.readImage(dir, file));
+    const key = imageKey(dir, file);
+    if (!images.has(key)) images.set(key, window.lore.readImage(dir, file).then(objectUrl));
     let live = true;
-    void images.get(key)!.then((s) => live && setSrc(s));
+    void images.get(key)!.then((s) => { imagesRead.set(key, s); if (live) setSrc(s); });
     return () => void (live = false);
   }, [dir, file]);
   return src;
 }
 /** Forget cached images (after Reload, files may have changed on disk). */
-export const forgetImages = () => images.clear();
+export const forgetImages = () => { images.clear(); imagesRead.clear(); };
 
 /** The entry's card icon: the one picked for it on the Home page, else the default from core (gender, race, keywords). */
 export function entryEmblem(entry: Entry, raceName?: string): IconName {
@@ -66,6 +94,7 @@ export function Portrait({ entry, raceName, size = 'sm' }: { entry: Entry; raceN
  */
 export function WorldCover({ art, image, title }: { art: CoverArt; image?: string | null; title?: string }) {
   const font = titleFont(art);
+  const emblem = emblemBox(art);
   const id = `cv${hash(`${art.top}${art.bottom}${art.glow}${art.stars[0]?.join() ?? ''}`).toString(36)}`;
   return (
     <>
@@ -86,12 +115,15 @@ export function WorldCover({ art, image, title }: { art: CoverArt; image?: strin
         {art.stars.map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill="#fff" opacity={0.25 + (i % 4) * 0.12} />)}
         <rect class="cover-frame" x="10" y="10" width="220" height="300" rx="6" />
         <rect class="cover-frame thin" x="16" y="16" width="208" height="288" rx="4" />
-        {art.icon && art.showEmblem && <g class="cover-emblem" style={{ color: art.iconColor }}><SvgIcon name={art.icon} x={84} y={70} size={72} /></g>}
+        {art.icon && art.showEmblem && <g class="cover-emblem" style={{ color: art.iconColor }}><SvgIcon name={art.icon} x={emblem.x} y={emblem.y} size={emblem.size} /></g>}
       </svg>
-      {title !== undefined && art.showTitle && <span class={`cover-title title-${art.titleStyle}${font ? ' has-font' : ''}`} style={{ color: art.titleColor, ...font }}>{title}</span>}
+      {title !== undefined && art.showTitle && <span class={`cover-title title-${art.titleStyle}${font ? ' has-font' : ''}${art.titlePos ? ' is-placed' : ''}`} style={{ color: art.titleColor, ...font, ...titlePlace(art) }}>{title}</span>}
     </>
   );
 }
+
+/** A chosen title place as CSS variables (0 to 100 of the room inside the frame; styles.css .is-placed). */
+export const titlePlace = (art: CoverArt): Record<string, string> | undefined => (art.titlePos ? { '--tx': String(art.titlePos.x), '--ty': String(art.titlePos.y) } : undefined);
 
 /** The lettering each title style falls back to when the chosen font is missing. */
 const STYLE_STACK: Record<CoverArt['titleStyle'], string> = { display: 'var(--display)', serif: "'DejaVu Serif', Georgia, serif", sans: "system-ui, 'DejaVu Sans', sans-serif" };
@@ -102,6 +134,8 @@ export function titleFont(art: CoverArt): Record<string, string> | undefined {
 
 /** Left-edge colour per picture, read once per session. */
 const edges = new Map<string, Promise<string | undefined>>();
+/** Edge colours already worked out, for a spine right from its first frame. */
+const edgesRead = new Map<string, string | undefined>();
 function readEdge(src: string): Promise<string | undefined> {
   return new Promise((ok) => {
     const img = new Image();
@@ -128,13 +162,13 @@ function readEdge(src: string): Promise<string | undefined> {
 }
 /** The colour down the left edge of a picture, for the book's spine. */
 export function useEdgeColour(src: string | null | undefined): string | undefined {
-  const [edge, setEdge] = useState<string | undefined>(undefined);
+  const [edge, setEdge] = useState<string | undefined>(() => (src ? edgesRead.get(src) : undefined));
   useEffect(() => {
-    setEdge(undefined);
+    setEdge(src ? edgesRead.get(src) : undefined);
     if (!src) return;
     if (!edges.has(src)) edges.set(src, readEdge(src));
     let live = true;
-    void edges.get(src)!.then((e) => live && setEdge(e));
+    void edges.get(src)!.then((e) => { edgesRead.set(src, e); if (live) setEdge(e); });
     return () => void (live = false);
   }, [src]);
   return edge;
@@ -142,7 +176,7 @@ export function useEdgeColour(src: string | null | undefined): string | undefine
 
 /** A world's cover as set in world.json "cover" (or `cover` while it is being edited), else the generated defaults. */
 export function WorldBookCover({ dir, world, fallbackName, title, cover }: { dir: string | null; world: World | null | undefined; fallbackName?: string; title?: string; cover?: WorldCoverSettings }) {
-  const art = world ? coverArt(world.manifest.id, cover ?? world.manifest.cover, coverImageFile(world.entries)) : coverArt(fallbackName ?? '');
+  const art = world ? coverArt(coverSeed({ id: world.manifest.id, cover: cover ?? world.manifest.cover }), cover ?? world.manifest.cover, coverImageFile(world.entries)) : coverArt(fallbackName ?? '');
   const image = useImage(dir, art.image);
   return <WorldCover art={art} image={image} {...(title !== undefined ? { title } : {})} />;
 }

@@ -75,3 +75,17 @@ test('a clean new world exits 0; bad usage and non-worlds exit 2', async () => {
   assert.equal(notWorld.status, 2);
   assert.match(notWorld.stdout, /no world.json/);
 });
+
+test('lore duplicate copies a world with a new name and id', () => {
+  const into = mkdtempSync(join(tmpdir(), 'lore-dup-'));
+  const r = lore('duplicate', camelamamm, 'Camel Copy', '--into', into);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /Duplicated .* as "Camel Copy" \(id camel-copy\)/);
+  const manifest = JSON.parse(readFileSync(join(into, 'camel-copy', 'world.json'), 'utf8'));
+  assert.equal(manifest.id, 'camel-copy');
+  assert.ok(existsSync(join(into, 'camel-copy', 'images', 'cover.png')));
+  const again = lore('duplicate', join(into, 'camel-copy'));
+  assert.equal(again.status, 0, again.stdout);
+  assert.equal(JSON.parse(readFileSync(join(into, 'camel-copy-copy', 'world.json'), 'utf8')).name, 'Camel Copy (copy)');
+  assert.equal(lore('duplicate', camelamamm, 'a', 'b').status, 2);
+});

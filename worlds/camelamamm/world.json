@@ -51,10 +51,8 @@
   "book": {
     "title": "Mr Camel and the Singing Well",
     "author": "Ahmet Kadir Zengin",
-    "trim": "6x9",
-    "dedication": "For everyone who has ever waited for the kettle to sing.",
-    "epigraph": "Water remembers the way home. So should you.",
-    "epigraphSource": "Saying of the Well Wardens"
+    "trim": "a4",
+    "bodySize": 11
   },
   "cover": {
     "color": "#d9893a",
@@ -62,6 +60,8 @@
     "icon": "camel-head",
     "iconColor": "#f7d98b",
     "font": "Cinzel Decorative",
-    "titleColor": "#fff1d2"
+    "titleColor": "#fff1d2",
+    "image": "images/cover.png",
+    "showEmblem": false
   }
 }

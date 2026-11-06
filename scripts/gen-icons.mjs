@@ -25,6 +25,8 @@ const USED = [
   'anchor', 'ancient-ruins', 'angel-wings', 'battle-axe', 'beer-stein', 'bookshelf', 'bow-arrow', 'bowie-knife', 'breastplate', 'cargo-ship', 'cave-entrance', 'centaur', 'church', 'claw-hammer', 'coronation', 'crown-coin', 'crystal-wand', 'cyclops', 'death-skull', 'desert', 'elf-ear', 'fairy', 'female', 'forest', 'gem-pendant', 'giant', 'goblin-head', 'graveyard', 'great-pyramid', 'greek-temple', 'harp', 'hooded-assassin', 'hut', 'huts-village', 'imp-laugh', 'indian-palace', 'key', 'lighthouse', 'lightning-storm', 'magic-lamp', 'male', 'meeple-group', 'mermaid', 'minotaur', 'mountains', 'oasis', 'ogre', 'party-flags', 'pirate-flag', 'plague-doctor-profile', 'portculis', 'round-potion', 'shop', 'siege-tower', 'skeleton', 'spears', 'stone-bridge', 'stone-tower', 'tornado', 'tower-fall', 'troll', 'two-coins', 'visored-helm', 'well', 'wizard-staff', 'wolf-head', 'wolf-howl',
   // library, images, app icon
   'cog', 'paint-brush', 'cloud-upload', 'anvil', 'open-folder', 'paint-bucket',
+  // 3D models, the tour, updates
+  'cube', 'clockwise-rotation', 'direction-signs', 'cloud-download', 'upgrade',
 ];
 
 const require = createRequire(import.meta.url);

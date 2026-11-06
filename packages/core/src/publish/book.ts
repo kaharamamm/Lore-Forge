@@ -5,7 +5,7 @@ import { WorldIndex } from '../world-index.ts';
 import { chapterDate } from '../story.ts';
 import { imageBlock } from './codex.ts';
 import { worldCoverArt } from '../cover.ts';
-import { anchorOf, bodyBlocks, dateWithEra, DEFAULT_TRIM, markDropCaps, TRIMS, type Block, type Doc } from './doc.ts';
+import { anchorOf, bodyBlocks, bookLook, dateWithEra, DEFAULT_TRIM, markDropCaps, TRIMS, type Block, type Doc } from './doc.ts';
 
 export const LORE_AND_LEGENDS = 'Lore & Legends';
 
@@ -103,7 +103,7 @@ function illustrations(e: LoreEvent | Note, ix: WorldIndex): { img: RefImage; of
 }
 
 /** Event and note pages, chapter headings at `level`. */
-function chronicleBlocks(chapters: BookChapter[], ix: WorldIndex, level: 1 | 2, numbered: boolean): Block[] {
+function chronicleBlocks(chapters: BookChapter[], ix: WorldIndex, level: 1 | 2, numbered: boolean, dates = true): Block[] {
   const m = ix.world.manifest;
   const blocks: Block[] = [];
   const sub = (level + 1) as 2 | 3;
@@ -112,7 +112,7 @@ function chronicleBlocks(chapters: BookChapter[], ix: WorldIndex, level: 1 | 2, 
     for (const { entry: e, date } of ch.pages) {
       blocks.push({ kind: 'heading', level: sub, text: e.name, anchor: anchorOf(e.id), toc: level === 1 });
       const place = e.type === 'event' && e.place ? ix.nameOf(e.place) : undefined;
-      const line = [date && dateWithEra(date, m.calendar), place].filter(Boolean).join(' · ');
+      const line = [dates && date && dateWithEra(date, m.calendar), place].filter(Boolean).join(' · ');
       if (line) blocks.push({ kind: 'para', text: line, style: 'muted' });
       for (const { img, of } of illustrations(e, ix)) {
         const b = imageBlock(img, of);
@@ -139,24 +139,25 @@ export function storyBook(world: World, opts: BookOptions = {}): Doc {
   const title = m.book?.title ?? m.name;
   const chapters = bookChapters(world, opts);
   const written = writtenChapters(world);
+  const look = bookLook(m.book);
   const blocks: Block[] = [];
   let credit: string;
   if (written.length) {
     written.forEach((ch, n) => {
-      blocks.push({ kind: 'heading', level: 1, text: `Chapter ${n + 1}. ${ch.title}`, toc: true, newPage: true, opener: true });
-      const d = ix.date(chapterDate(ch));
-      if (d) blocks.push({ kind: 'para', text: dateWithEra(d, m.calendar), style: 'muted' });
+      // The chapter's date sits at the top right of its opening page, not under the title.
+      const d = look.dateStamps ? ix.date(chapterDate(ch)) : undefined;
+      blocks.push({ kind: 'heading', level: 1, text: `Chapter ${n + 1}. ${ch.title}`, toc: true, newPage: true, opener: true, ...(d ? { stamp: dateWithEra(d, m.calendar) } : {}) });
       blocks.push(...bodyBlocks(ch.body, ix));
     });
     const appendix = opts.appendix !== false && chapters.length > 0;
     if (appendix) {
       blocks.push({ kind: 'heading', level: 1, text: CHRONICLE_APPENDIX, toc: true, newPage: true, opener: true });
       blocks.push({ kind: 'para', text: 'The events and lore pages of the world, in story order.', style: 'muted' });
-      blocks.push(...chronicleBlocks(chapters, ix, 2, false));
+      blocks.push(...chronicleBlocks(chapters, ix, 2, false, look.dateStamps));
     }
     credit = `Assembled by ${GENERATOR} from the story manuscript${appendix ? ' and the world\'s events and notes' : ''}. The text is the author's own; Lore-Forge only orders and typesets it.`;
   } else {
-    blocks.push(...chronicleBlocks(chapters, ix, 1, true));
+    blocks.push(...chronicleBlocks(chapters, ix, 1, true, look.dateStamps));
     if (!chapters.length) blocks.push({ kind: 'para', text: 'This world has no events or notes yet.', style: 'muted' });
     credit = `Assembled by ${GENERATOR} from the world's events and notes. The text is the author's own; Lore-Forge only orders and typesets it.`;
   }
@@ -172,28 +173,34 @@ export function storyBook(world: World, opts: BookOptions = {}): Doc {
       title,
       subtitle,
       lines: author ? [`by ${author}`] : [],
-      art: worldCoverArt(world),
+      art: bookCoverArt(world, look.coverTitleColor),
     },
-    blocks: [...frontMatter(world, title, subtitle, credit, opts), { kind: 'toc' }, ...markDropCaps(blocks)],
-    print: { trim: TRIMS[trim] ? trim : DEFAULT_TRIM, ...(rightHand ? { rightHand: true } : {}) },
+    blocks: [...frontMatter(world, title, subtitle, credit, opts), { kind: 'toc' }, ...(look.dropCap === 'none' ? blocks : markDropCaps(blocks))],
+    print: { trim: TRIMS[trim] ? trim : DEFAULT_TRIM, ...(rightHand ? { rightHand: true } : {}), look },
   };
 }
 
+/** The world's cover art, with the book's own title colour when it has one. */
+function bookCoverArt(world: World, titleColor: string | undefined) {
+  const art = worldCoverArt(world);
+  return titleColor ? { ...art, titleColor } : art;
+}
+
 /**
- * Title page, copyright page, then the dedication and epigraph when world.json has them. No half-title: the cover
- * comes right before, so a page with the title alone only repeated it.
+ * Title page, then the copyright page, dedication and epigraph only when world.json has text for them: a front page
+ * is never printed empty. No half-title: the cover comes right before, so a page with the title alone only repeated it.
  */
 function frontMatter(world: World, title: string, subtitle: string, credit: string, opts: BookOptions): Block[] {
   const b = world.manifest.book ?? {};
   const author = b.author?.trim();
   const year = opts.year ?? new Date().getFullYear();
-  const copyright = b.copyright?.trim()
-    ? b.copyright.trim().split(/\n+/)
-    : [`Copyright © ${year}${author ? ` ${author}` : ''}. All rights reserved.`];
-  const out: Block[] = [
-    { kind: 'front', role: 'title', lines: [title, subtitle, author ? `by ${author}` : '', b.publisher?.trim() ?? ''] },
-    { kind: 'front', role: 'copyright', lines: [...copyright, ...(b.publisher?.trim() ? [`Published by ${b.publisher.trim()}`] : []), credit] },
-  ];
+  const publisher = b.publisher?.trim();
+  const out: Block[] = [{ kind: 'front', role: 'title', lines: [title, subtitle, author ? `by ${author}` : '', publisher ?? ''] }];
+  if (b.copyright?.trim() || publisher) {
+    // A publisher alone still gets the plain notice, so the page reads like a copyright page.
+    const copyright = b.copyright?.trim() ? b.copyright.trim().split(/\n+/) : [`Copyright © ${year}${author ? ` ${author}` : ''}. All rights reserved.`];
+    out.push({ kind: 'front', role: 'copyright', lines: [...copyright, ...(publisher ? [`Published by ${publisher}`] : []), credit] });
+  }
   if (b.dedication?.trim()) out.push({ kind: 'front', role: 'dedication', lines: b.dedication.trim().split(/\n+/) });
   if (b.epigraph?.trim()) out.push({ kind: 'front', role: 'epigraph', lines: [b.epigraph.trim(), ...(b.epigraphSource?.trim() ? [`— ${b.epigraphSource.trim()}`] : [])] });
   return out;

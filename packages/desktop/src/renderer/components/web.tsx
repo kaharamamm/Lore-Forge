@@ -1,5 +1,5 @@
-import { useMemo } from 'preact/hooks';
-import { Background, ConnectionMode, Controls, Handle, MiniMap, Position, ReactFlow, type Connection, type Edge, type EdgeProps, type FitViewOptions, type Node, type NodeProps } from '@xyflow/react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { Background, ConnectionMode, Controls, Handle, MiniMap, Position, ReactFlow, type Connection, type Edge, type EdgeProps, type FitViewOptions, type Node, type NodeProps, useInternalNode } from '@xyflow/react';
 import { LIFECYCLE, raceLabel, relationKind, TYPE_SINGULAR, WEB_LAYOUT, WorldIndex, type Entry, type RelationWeb, type WebEdge as CoreWebEdge, type World } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
 import { Portrait } from './cover.tsx';
@@ -11,7 +11,7 @@ type WebEdge = Edge<WebEdgeData, 'web'>;
 
 const { nodeW: W, nodeH: H } = WEB_LAYOUT;
 
-/** A portrait card. The button inside is the keyboard target; both handles sit at the centre so edges can float. */
+/** A portrait card. The button inside is the keyboard target; the two hidden handles only let React Flow draw the links (each link finds the cards' borders itself). */
 function EntryNodeView({ data }: NodeProps<EntryNode>) {
   const { entry: e, ended, focus } = data;
   const lc = LIFECYCLE[e.type];
@@ -38,30 +38,56 @@ function EntryNodeView({ data }: NodeProps<EntryNode>) {
 /** How far apart (px) the curves of links between the same two cards bow, per step. */
 const BEND = 46;
 
+type Box = { x: number; y: number; w: number; h: number };
+/** Where the ray from the box's centre towards (tx, ty) leaves the box: the point on its border. */
+export function borderPoint(b: Box, tx: number, ty: number): { x: number; y: number } {
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const dx = tx - cx, dy = ty - cy;
+  if (!dx && !dy) return { x: cx, y: cy };
+  const t = Math.min(dx ? b.w / 2 / Math.abs(dx) : Infinity, dy ? b.h / 2 / Math.abs(dy) : Infinity);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
 /**
- * Centre-to-centre curve, cut at both boxes so the arrow stays visible. Links between the same two cards bow out to
- * both sides (bend -0.5 and +0.5 for two). The label sits on the curve's middle; on a bowed curve it is set beside
- * the curve, on the outside, so the labels of a pair never land on each other.
+ * A floating link: it starts on the border of the source card and ends on the border of the target card, wherever
+ * the cards are (dragged or laid out), with the arrow's tip on the border. The geometry comes from the measured
+ * cards (useInternalNode), not from the hidden handles. Links between the same two cards bow out to both sides
+ * (bend -0.5 and +0.5 for two); each end leaves its card towards the curve's control point, so the curve meets the
+ * border head-on. The label sits on the curve's middle, on a small backing so lines never run through the text.
  */
-function WebEdgeView({ id, sourceX, sourceY, targetX, targetY, data }: EdgeProps<WebEdge>) {
-  const dx = targetX - sourceX, dy = targetY - sourceY;
+function WebEdgeView({ id, source, target, data }: EdgeProps<WebEdge>) {
+  const s = useInternalNode<EntryNode>(source), t = useInternalNode<EntryNode>(target);
+  const label = useRef<SVGTextElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  // The label's backing fits the text; measured after each render (it only changes with the text or the font).
+  useLayoutEffect(() => {
+    const b = label.current?.getBBox();
+    if (b && b.width && (Math.abs(b.width - (size?.w ?? 0)) > 0.5 || Math.abs(b.height - (size?.h ?? 0)) > 0.5)) setSize({ w: b.width, h: b.height });
+  });
+  if (!s || !t) return null;
+  const box = (n: NonNullable<typeof s>): Box => ({ x: n.internals.positionAbsolute.x, y: n.internals.positionAbsolute.y, w: n.measured.width ?? W, h: n.measured.height ?? H });
+  const a = box(s), b = box(t);
+  const ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx = b.x + b.w / 2, by = b.y + b.h / 2;
+  const dx = bx - ax, dy = by - ay;
   const len = Math.hypot(dx, dy) || 1;
-  const t = Math.min((W / 2 + 4) / Math.abs(dx || 1e-9), (H / 2 + 4) / Math.abs(dy || 1e-9), 0.45);
-  const x1 = sourceX + dx * t, y1 = sourceY + dy * t, x2 = targetX - dx * t, y2 = targetY - dy * t;
   const bend = (data?.bend ?? 0) * BEND * 2;
-  // px, py: the unit normal the curve bows along; (cx, cy) the control point; (lx, ly) the curve's middle.
-  const px = -dy / len, py = dx / len;
-  const cx = (x1 + x2) / 2 + px * bend, cy = (y1 + y2) / 2 + py * bend;
-  const lx = (x1 + 2 * cx + x2) / 4, ly = (y1 + 2 * cy + y2) / 4;
-  const side = Math.sign(bend);
-  const ox = px * side, oy = py * side;
-  const anchor = !side || Math.abs(ox) < 0.4 ? 'middle' : ox > 0 ? 'start' : 'end';
-  const tx = lx + ox * 6, ty = !side ? ly - 5 : ly + oy * 8 + (Math.abs(ox) < 0.4 ? (oy > 0 ? 9 : -2) : 4);
+  // (cx, cy): the control point, bowed along the unit normal; each end aims at it from its card's centre.
+  const cx = (ax + bx) / 2 + (-dy / len) * bend, cy = (ay + by) / 2 + (dx / len) * bend;
+  const p1 = borderPoint(a, bend ? cx : bx, bend ? cy : by);
+  const p2 = borderPoint(b, bend ? cx : ax, bend ? cy : ay);
+  const d = bend ? `M${p1.x} ${p1.y} Q${cx} ${cy} ${p2.x} ${p2.y}` : `M${p1.x} ${p1.y} L${p2.x} ${p2.y}`;
+  // The middle of the drawn curve (t = 0.5).
+  const lx = bend ? (p1.x + 2 * cx + p2.x) / 4 : (p1.x + p2.x) / 2, ly = bend ? (p1.y + 2 * cy + p2.y) / 4 : (p1.y + p2.y) / 2;
   return (
-    <g class={`web-edge g-${data?.group ?? 'other'}`}>
-      <path id={id} class="edge" d={`M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`} marker-end={data?.arrow ? 'url(#web-arrow)' : undefined} />
-      <path class="edge-hit" d={`M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`}><title>Click to edit or delete this link</title></path>
-      <text class="edge-label" x={tx} y={ty} text-anchor={anchor}>{data?.label}</text>
+    <g class={`web-edge g-${data?.group ?? 'other'}`} data-source={source} data-target={target}>
+      <path id={id} class="edge" d={d} marker-end={data?.arrow ? 'url(#web-arrow)' : undefined} />
+      <path class="edge-hit" d={d}><title>Click to edit or delete this link</title></path>
+      {data?.label && (
+        <g class="edge-label-group" transform={`translate(${lx} ${ly})`}>
+          {size && <rect class="edge-label-bg" x={-size.w / 2 - 5} y={-size.h / 2 - 2} width={size.w + 10} height={size.h + 4} rx={4} />}
+          <text ref={label} class="edge-label" x={0} y={0} text-anchor="middle" dominant-baseline="central">{data.label}</text>
+        </g>
+      )}
     </g>
   );
 }
@@ -106,7 +132,7 @@ export function RelationWebFlow({ world, web, onOpen, onConnect, onHide, onEdit 
     <div class="graph relation-web flow" role="group" aria-label={`Relationship web, ${web.nodes.length - 1} related entries. Drag to pan, Ctrl+scroll to zoom.`}>
       <svg class="flow-defs" aria-hidden="true" width="0" height="0">
         <defs>
-          <marker id="web-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker id="web-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0 0 L10 5 L0 10 z" class="arrow-head" />
           </marker>
         </defs>

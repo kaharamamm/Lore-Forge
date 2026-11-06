@@ -4,6 +4,18 @@
   "private": true,
   "license": "MIT",
   "description": "Renders Lore-Forge publish documents (World Codex, Story Book) to PDF with pdfkit and embedded DejaVu fonts.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaharamamm/Lore-Forge.git",
+    "directory": "packages/pdf"
+  },
+  "homepage": "https://github.com/kaharamamm/Lore-Forge#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "exports": {
     ".": {

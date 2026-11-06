@@ -3,7 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "license": "MIT",
-  "description": "Headless Lore-Forge commands: lore check, export, codex, book.",
+  "description": "Headless Lore-Forge commands: lore check, export, codex, book, duplicate.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaharamamm/Lore-Forge.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/kaharamamm/Lore-Forge#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "lore": "./dist/main.js"
@@ -14,5 +26,8 @@
   "dependencies": {
     "@lore-forge/core": "1.0.0",
     "@lore-forge/pdf": "1.0.0"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

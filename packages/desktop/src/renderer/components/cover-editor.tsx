@@ -1,6 +1,6 @@
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { bundledFont, COVER_EMBLEMS, coverArt, coverImageFile, TITLE_STYLE_LABELS, type IconName, type World, type WorldCoverSettings } from '@lore-forge/core';
+import { bundledFont, COVER_EMBLEM, COVER_EMBLEMS, COVER_SAFE, coverArt, coverImageFile, coverPosition, coverSeed, TITLE_STYLE_LABELS, type CoverPosition, type IconName, type World, type WorldCoverSettings } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
 import { useEdgeColour, useImage, WorldCover } from './cover.tsx';
 import { FontPicker, RecentPictures, useFontAvailable } from './cover-options.tsx';
@@ -11,6 +11,37 @@ import { ConfirmDialog, trapTab } from './confirm.tsx';
 
 export const EMBLEM_CHOICES: IconName[] = [...new Set<IconName>([...COVER_EMBLEMS, ...ICON_CHOICES])];
 const COVER_SWATCHES = ['#7a2e2e', '#8a5a1c', '#2f5d3a', '#1f4f6b', '#3b3478', '#5c2a5e', '#2b2f3a', '#6b4a2b', '#14161b', '#3a2a1e', ...THEME_SWATCHES.slice(0, 6)];
+
+/** Where the sliders start when no place is chosen: the emblem's default spot, and the title near the bottom. */
+export const DEFAULT_POS: Record<'titlePos' | 'emblemPos', CoverPosition> = {
+  emblemPos: { x: 50, y: Math.round(((COVER_EMBLEM.y - COVER_SAFE.top) / (COVER_SAFE.bottom - COVER_SAFE.top - COVER_EMBLEM.size)) * 1000) / 10 },
+  titlePos: { x: 50, y: 85 },
+};
+
+/**
+ * X and Y for the title or the emblem: a slider and a number for each (0 to 100 of the room inside the frame, so
+ * every value stays inside the border), and Reset position back to the default place.
+ */
+function PositionField({ label, which, value, onChange }: { label: string; which: 'title' | 'emblem'; value: CoverPosition | undefined; onChange: (p: CoverPosition | undefined) => void }) {
+  const at = value ?? DEFAULT_POS[which === 'title' ? 'titlePos' : 'emblemPos'];
+  const put = (axis: 'x' | 'y', raw: number) => { if (Number.isFinite(raw)) onChange(coverPosition({ ...at, [axis]: raw })); };
+  return (
+    <div class={`cover-position position-${which}`} role="group" aria-label={`${label} position`}>
+      {(['x', 'y'] as const).map((axis) => (
+        <label key={axis} class="position-axis">
+          <span class="position-name">{axis === 'x' ? 'X' : 'Y'}<span class="sr-only"> {label.toLowerCase()} position</span></span>
+          <input type="range" class={`position-range position-${axis}`} min={0} max={100} step={1} value={at[axis]} aria-label={`${label} ${axis === 'x' ? 'X (left to right)' : 'Y (top to bottom)'}`} onInput={(e) => put(axis, e.currentTarget.valueAsNumber)} />
+          <input type="number" class={`position-number position-${axis}-number`} min={0} max={100} step={1} value={at[axis]} aria-label={`${label} ${axis.toUpperCase()} in percent`}
+            // Typing moves it live while the number is in range; leaving the field clamps anything else to 0–100.
+            onInput={(e) => { const v = e.currentTarget.valueAsNumber; if (v >= 0 && v <= 100) put(axis, v); }}
+            onBlur={(e) => { const v = e.currentTarget.valueAsNumber; if (Number.isFinite(v)) put(axis, v); else e.currentTarget.value = String(at[axis]); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />
+        </label>
+      ))}
+      <button type="button" class="ghost small position-reset" disabled={!value} onClick={() => onChange(undefined)}><Icon name="cycle" /> Reset position</button>
+    </div>
+  );
+}
 
 /** Cover settings in a fixed key order, to tell whether a draft differs from what is saved. */
 const same = (a: WorldCoverSettings, b: WorldCoverSettings) => {
@@ -48,10 +79,11 @@ export function CoverEditor({ dir, world, onSave, onClose }: { dir: string; worl
   const fallback = coverImageFile(world.entries);
   // A freshly picked picture shows from its preview until it is saved into the world folder.
   const settings = picked ? { ...draft, image: 'picked' } : draft;
-  const stored = useImage(dir, picked ? undefined : coverArt(world.manifest.id, settings, fallback).image);
+  const seed = coverSeed({ id: world.manifest.id, cover: settings });
+  const stored = useImage(dir, picked ? undefined : coverArt(seed, settings, fallback).image);
   const image = picked ? picked.src : stored;
   // The spine follows the picture's left edge unless a spine colour is chosen.
-  const art = coverArt(world.manifest.id, settings, fallback, useEdgeColour(image));
+  const art = coverArt(seed, settings, fallback, useEdgeColour(image));
   const fontOk = useFontAvailable(draft.font);
   const set = (patch: Partial<WorldCoverSettings>) => setDraft((d) => Object.fromEntries(Object.entries({ ...d, ...patch }).filter(([, v]) => v !== undefined && v !== '')) as WorldCoverSettings);
   const plain = !!draft.color && draft.color2 === draft.color;
@@ -73,6 +105,30 @@ export function CoverEditor({ dir, world, onSave, onClose }: { dir: string; worl
       setBusy(false);
     }
   };
+  // Drag the title or the emblem on the preview: the pointer's move over the room left inside the frame (the
+  // room minus the element's own size) is the change in percent, so the element follows the pointer and stops at
+  // the border.
+  const drag = useRef<{ key: 'titlePos' | 'emblemPos'; start: CoverPosition; px: number; py: number; roomW: number; roomH: number } | null>(null);
+  const grab = (e: PointerEvent) => {
+    const t = e.target as Element;
+    const el = t.closest('.cover-emblem, .cover-title');
+    const cover = (e.currentTarget as HTMLElement).querySelector('.world-cover');
+    if (!el || !cover || e.button !== 0) return;
+    const key = el.classList.contains('cover-title') ? 'titlePos' : 'emblemPos';
+    const c = cover.getBoundingClientRect(), b = el.getBoundingClientRect();
+    const roomW = c.width * (1 - (2 * COVER_SAFE.left) / 240) - b.width, roomH = c.height * (1 - (2 * COVER_SAFE.top) / 320) - b.height;
+    drag.current = { key, start: draft[key] ?? DEFAULT_POS[key], px: e.clientX, py: e.clientY, roomW, roomH };
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not a live pointer */ }
+    e.preventDefault();
+  };
+  const move = (e: PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const x = d.roomW > 0 ? d.start.x + ((e.clientX - d.px) / d.roomW) * 100 : d.start.x;
+    const y = d.roomH > 0 ? d.start.y + ((e.clientY - d.py) / d.roomH) * 100 : d.start.y;
+    set({ [d.key]: coverPosition({ x: Math.round(x), y: Math.round(y) }) });
+  };
+  const drop = () => { drag.current = null; };
   const pictureMode = picked ? 'upload' : draft.image === 'none' ? 'none' : draft.image ? 'upload' : 'world';
   // In <body>, like every other modal: inside the world's page a panel beside it could paint over its buttons.
   return createPortal(
@@ -84,8 +140,9 @@ export function CoverEditor({ dir, world, onSave, onClose }: { dir: string; worl
           <p class="muted">How {world.manifest.name} looks on the shelf, on Home and on the PDF covers.</p>
         </header>
         <div class="cover-editor-body">
-          <div class="cover-editor-preview" aria-hidden="true">
-            <span class="world-cover"><WorldCover art={art} image={image} title={world.manifest.name} /></span>
+          <div class="cover-editor-preview" onPointerDown={grab} onPointerMove={move} onPointerUp={drop} onPointerCancel={drop}>
+            <span class="world-cover" aria-hidden="true"><WorldCover art={art} image={image} title={world.manifest.name} /></span>
+            <p class="muted font-note">Drag the title or the emblem to move it.</p>
           </div>
           <div class="cover-editor-fields">
             <fieldset class="field cover-group">
@@ -115,6 +172,7 @@ export function CoverEditor({ dir, world, onSave, onClose }: { dir: string; worl
               <IconPicker label="Emblem" class="cover-emblems" choices={EMBLEM_CHOICES} value={art.icon} none="No emblem" onPick={(name) => set({ icon: name ?? 'none' })} />
               <ColorField label="Emblem colour" value={art.iconColor} onChange={(c) => set({ iconColor: c })} />
               <label class="check"><input type="checkbox" class="show-emblem" checked={art.showEmblem} onChange={(e) => set({ showEmblem: e.currentTarget.checked ? undefined : false })} /> Show emblem on cover</label>
+              <PositionField label="Emblem" which="emblem" value={draft.emblemPos} onChange={(p) => set({ emblemPos: p })} />
             </fieldset>
             <fieldset class="field cover-group">
               <legend class="field-label">Title</legend>
@@ -123,6 +181,7 @@ export function CoverEditor({ dir, world, onSave, onClose }: { dir: string; worl
               {draft.font && fontOk === false && <p class="muted font-note" role="status"><Icon name="info" /> “{draft.font}” is not installed on this computer, so covers use the {TITLE_STYLE_LABELS[art.titleStyle]} lettering. The choice is kept for computers that have it.</p>}
               {draft.font && fontOk && !bundledFont(draft.font) && <p class="muted font-note">A system font: the PDF embeds it when it is a TrueType or OpenType file, else it uses DejaVu.</p>}
               <label class="check"><input type="checkbox" class="show-title" checked={art.showTitle} onChange={(e) => set({ showTitle: e.currentTarget.checked ? undefined : false })} /> Show title on cover</label>
+              <PositionField label="Title" which="title" value={draft.titlePos} onChange={(p) => set({ titlePos: p })} />
               <p class="muted font-note">The title always stays on the spine.</p>
             </fieldset>
             <fieldset class="field cover-group">
@@ -139,7 +198,7 @@ export function CoverEditor({ dir, world, onSave, onClose }: { dir: string; worl
           </div>
         </div>
         <div class="dialog-actions cover-editor-actions">
-          <button type="button" class="ghost" onClick={() => { setPicked(null); setDraft({}); }}><Icon name="cycle" /> Reset to default</button>
+          <button type="button" class="ghost" onClick={() => { setPicked(null); setDraft(saved.seed ? { seed: saved.seed } : {}); }}><Icon name="cycle" /> Reset to default</button>
           <span class={`cover-status${dirty ? ' is-dirty' : ''}`} role="status">{dirty ? 'Unsaved changes' : 'No changes'}</span>
           <button type="button" class="ghost cover-cancel" onClick={onClose}>Cancel</button>
           <button type="button" class="primary cover-save" disabled={!dirty || busy} onClick={() => void save()}><Icon name="check-mark" /> Save cover</button>

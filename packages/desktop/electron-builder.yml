@@ -3,8 +3,15 @@ productName: Lore-Forge
 directories:
   output: release
   buildResources: build
-# Download names, e.g. Lore-Forge-1.0.0-win-x64.exe, Lore-Forge-1.0.0-linux-x86_64.AppImage, Lore-Forge-1.0.0-mac-arm64.dmg
+# Versioned file names, e.g. Lore-Forge-1.1.0-win-x64.exe: the self-updater's latest*.yml files point at these.
+# The release workflow also attaches copies under stable names (Lore-Forge-amd64.deb, ...) for the download links.
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+# Where the self-updater looks for new versions (the release workflow uploads the files itself: --publish never).
+publish:
+  provider: github
+  owner: kaharamamm
+  repo: Lore-Forge
+  releaseType: release
 files:
   - dist/**/*
   - package.json
@@ -25,6 +32,9 @@ extraResources:
   # The DejaVu licence must travel with the font files.
   - from: ../../node_modules/dejavu-fonts-ttf/LICENSE
     to: fonts/DejaVu-LICENSE.txt
+  # The lore command-line tool: small wrappers that run dist/cli.cjs with the app's own Electron in Node mode.
+  - from: build/bin
+    to: bin
 win:
   target: nsis
   icon: build/icon.ico
@@ -34,11 +44,20 @@ nsis:
 mac:
   icon: build/icon.icns
   category: public.app-category.productivity
-  target: dmg
+  # The zip is only there for latest-mac.yml (update checks); unsigned apps cannot install updates themselves.
+  target:
+    - dmg
+    - zip
   # No Apple Developer certificate: sign ad hoc, so the app runs on Apple Silicon. Gatekeeper still asks once.
   identity: "-"
   # Ad-hoc signing with the hardened runtime would reject Electron's own pre-signed frameworks at launch.
   hardenedRuntime: false
+deb:
+  # Same package name as 1.0.0, so installing a newer .deb upgrades it in place. The scripts are electron-builder's
+  # own plus a /usr/bin/lore link.
+  packageName: lore-forge
+  afterInstall: build/linux/after-install.tpl
+  afterRemove: build/linux/after-remove.tpl
 linux:
   # .deb for Debian and Ubuntu: its installer adds an AppArmor profile on Ubuntu 24+ (or a setuid chrome-sandbox on
   # systems without user namespaces), so the app keeps Chromium's sandbox. AppImage for every other distribution.

@@ -42,6 +42,7 @@ my-world/
   characters/<id>.md  one file per entry; folder = type
   places/  factions/  items/  events/  notes/
   images/<entryId>/<view>.<ext>   reference images (any entry type)
+  models/<entryId>/<name>.<ext>   3D models: .glb, embedded .gltf, .obj, .fbx (optional, 1.1; not listed in the entry)
   story/NN-slug.md    the manuscript, one file per chapter (optional, 0.4)
   story-ignored.json  story proposals the author ignored (optional, 0.4)
 ```
@@ -123,8 +124,11 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   keys are kept and printed in the World Codex.
 - `chapter` (string) and `bookOrder` (number, lower first, default 0) on events and notes control the Story
   Book. `world.json` may hold `"book": {"title", "author", "chapterYears", "trim", "dedication",
-  "epigraph", "epigraphSource", "copyright", "publisher"}` (all optional; `trim` is `6x9`, `5.5x8.5` or
-  `a5`) and `"cover": {"color", "color2", "icon", "iconColor", "image", "titleStyle", "titleColor"}` (all optional;
+  "epigraph", "epigraphSource", "copyright", "publisher", "dropCap", "dateStamps", "bodyFont", "bodySize",
+  "bodyColor", "chapterFont", "chapterSize", "chapterColor", "lineSpacing", "margins", "coverTitleColor",
+  "coverTitleSize", "authorSize"}` (all optional; `trim` is `6x9`, `5.5x8.5`, `a5`, `a4` or `letter`;
+  `dropCap` is `none`, `raised` (default) or `dropped`; sizes are points, the cover sizes percent; the
+  copyright page is printed only when `copyright` or `publisher` is set) and `"cover": {"color", "color2", "icon", "iconColor", "image", "titleStyle", "titleColor"}` (all optional;
   colours are `#rrggbb` or `#rrggbbaa`, `image` is a world-relative path or `"none"`, `icon` a game-icons name or
   `"none"`, `titleStyle` is `display`, `serif` or `sans`) for the book cover on the shelf, Home and the PDFs.
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so

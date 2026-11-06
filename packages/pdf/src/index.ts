@@ -5,8 +5,8 @@ import { createRequire } from 'node:module';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import PDFDocument from 'pdfkit';
 import en from 'hyphen/en-us/index.js';
-import { coverFont } from './fonts.ts';
-import { ICON_SIZE, ICONS, inlineRuns, splitAlpha, toMarkdown, TRIMS, type Block, type CoverArt, type Doc, type IconName, type Trim } from '@lore-forge/core';
+import { bundledFontPath, coverFont } from './fonts.ts';
+import { bundledFont, COVER_EMBLEM, DEFAULT_LOOK, ICON_SIZE, ICONS, inlineRuns, placeOnCover, splitAlpha, toMarkdown, trimFor, type Block, type BookLook, type CoverArt, type Doc, type IconName, type Trim } from '@lore-forge/core';
 
 type Pdf = PDFKit.PDFDocument;
 type Heading = Extract<Block, { kind: 'heading' }>;
@@ -27,8 +27,14 @@ export interface PdfResult {
   notes: string[];
 }
 
+/** Story Book fonts other than DejaVu: font files for the body (upright and bold) and the chapter titles. */
+interface BookFonts {
+  body?: { r: string; b: string; italic: 'serif' | 'sans' };
+  bodyFamily: 'serif' | 'sans';
+  head?: string;
+}
 /** Layout options once the fonts are resolved. */
-type LayoutOptions = PdfOptions & { fontDir: string; titleFont?: string };
+type LayoutOptions = PdfOptions & { fontDir: string; titleFont?: string; bookFonts?: BookFonts };
 
 const FONT_FILES = {
   sans: 'DejaVuSans.ttf',
@@ -92,7 +98,10 @@ class Layout {
   readonly pageOf = new Map<string, number>();
   private pages = 0;
   private outlineTop: PDFKit.PDFOutline | undefined;
-  private readonly t: Theme;
+  private t: Theme;
+  /** Body text colour (the book's look, else near-black). */
+  private readonly ink: string;
+  private readonly look: BookLook | undefined;
   private readonly width: number;
   private readonly tocEntries: { key: string; h: Heading }[];
 
@@ -116,9 +125,11 @@ class Layout {
     this.doc = doc;
     this.opts = opts;
     this.numbers = numbers;
-    this.trim = doc.print ? TRIMS[doc.print.trim] : undefined;
+    this.look = doc.print ? doc.print.look ?? DEFAULT_LOOK : undefined;
+    this.trim = doc.print ? trimFor(doc.print.trim, this.look?.margins) : undefined;
     this.rightHand = !!doc.print?.rightHand;
     this.t = THEMES[this.trim ? 'print' : doc.kind];
+    this.ink = this.look?.bodyColor ?? INK;
     const tr = this.trim;
     this.pdf = new PDFDocument({
       size: tr ? [tr.width, tr.height] : 'A4',
@@ -130,6 +141,16 @@ class Layout {
       displayTitle: true,
     } as PDFKit.PDFDocumentOptions);
     for (const [name, file] of Object.entries(FONT_FILES)) this.pdf.registerFont(name, join(opts.fontDir, file));
+    const bf = opts.bookFonts;
+    if (bf?.body) { this.pdf.registerFont('book-r', bf.body.r); this.pdf.registerFont('book-b', bf.body.b); }
+    if (bf?.head) this.pdf.registerFont('book-head', bf.head);
+    if (this.look) {
+      // The book's look: sizes, colours, family and a line gap that gives `lineSpacing` times the body size.
+      const L = this.look;
+      this.t = { ...this.t, family: bf?.bodyFamily ?? 'serif', size: L.bodySize, accent: L.chapterColor, heading: { 1: L.chapterSize, 2: Math.max(L.bodySize + 1.5, L.chapterSize * 13 / 19), 3: L.bodySize + 0.5 } };
+      this.font('r').fontSize(L.bodySize);
+      this.t.gap = Math.max(0, L.lineSpacing * L.bodySize - this.pdf.currentLineHeight(true));
+    }
     this.pdf.on('pageAdded', () => {
       this.pages++;
       this.roles[this.pages] = this.flowRole;
@@ -142,7 +163,14 @@ class Layout {
   }
 
   private font(style: 'r' | 'b' | 'i' | 'mono', family: 'sans' | 'serif' = this.t.family): Pdf {
+    const body = this.opts.bookFonts?.body;
+    // A bundled body font has no italic: italics use DejaVu of the same kind.
+    if (body && family === this.t.family && style !== 'mono') return this.pdf.font(style === 'r' ? 'book-r' : style === 'b' ? 'book-b' : `${body.italic}-i`);
     return this.pdf.font(style === 'mono' ? 'mono' : style === 'r' ? family : `${family}-${style}`);
+  }
+  /** Chapter titles, the contents title and print headings: the book's title font when it has one, else bold body. */
+  private headFont(): Pdf {
+    return this.opts.bookFonts?.head ? this.pdf.font('book-head') : this.font('b');
   }
   private get left(): number { return this.trim ? this.trim.inside : this.t.margin; }
   private get top(): number { return this.trim ? this.trim.top : this.t.margin; }
@@ -188,7 +216,7 @@ class Layout {
     const x = o.x ?? this.left;
     const width = o.width ?? this.width;
     const size = o.size ?? this.t.size;
-    this.pdf.fontSize(size).fillColor(o.color ?? INK);
+    this.pdf.fontSize(size).fillColor(o.color ?? this.ink);
     let first = true;
     for (const line of text.split('\n')) {
       const runs = inlineRuns(line);
@@ -229,15 +257,16 @@ class Layout {
         if (b.level === 1) this.outlineTop = item;
       }
     }
-    const color = b.level === 3 ? INK : this.t.accent;
+    const color = b.level === 3 ? this.ink : this.t.accent;
+    const face = () => (this.trim ? this.headFont() : this.font('b'));
     const iconW = b.icon ? size * 1.3 : 0;
     const markW = b.mark ? size * 1.2 : 0;
     const width = this.width - iconW - markW;
     const y0 = this.pdf.y;
-    this.font('b').fontSize(size).fillColor(color);
+    face().fontSize(size).fillColor(color);
     if (b.icon) this.icon(b.icon, this.left, y0 + size * 0.05, size * 0.95, color);
     if (b.mark) this.icon(b.mark, this.left + iconW + Math.min(this.pdf.widthOfString(b.text), width) + size * 0.3, y0 + size * 0.05, size * 0.9, MUTED);
-    this.font('b').fontSize(size).fillColor(color);
+    face().fontSize(size).fillColor(color);
     this.pdf.text(b.text, this.left + iconW, y0, { width, lineGap: 2, ...(b.toc ? { destination: key } : {}) });
     if (b.level === 1) {
       const y = this.pdf.y + 3;
@@ -262,12 +291,16 @@ class Layout {
       if (this.numbers) this.outlineTop = this.pdf.outline.addItem(b.text);
     }
     // A small sink only: the chapter starts where the reader looks first, not a fifth of the way down.
+    if (b.stamp) {
+      // The chapter's date, small at the top right of the opening page.
+      this.font('i').fontSize(8.5).fillColor(MUTED).text(b.stamp, this.left, this.top - 6, { width: this.width, align: 'right', lineBreak: false });
+    }
     this.pdf.y = this.top + OPENER_SINK;
     if (label) {
       this.font('r').fontSize(9.5).fillColor(MUTED).text(label.toUpperCase(), this.left, this.pdf.y, { width: this.width, align: 'center', characterSpacing: 2.2 });
       this.pdf.y += 8;
     }
-    this.font('b').fontSize(this.t.heading[1]).fillColor(this.t.accent);
+    this.headFont().fontSize(this.t.heading[1]).fillColor(this.t.accent);
     const box = this.balanced(title, this.left, this.width, { lineGap: 2 });
     this.pdf.text(title, box.x, this.pdf.y, { width: box.width, align: 'center', lineGap: 2, ...(b.toc ? { destination: key } : {}) });
     const y = this.pdf.y + 12;
@@ -290,8 +323,8 @@ class Layout {
     }
     this.startPage('front', b.role === 'copyright' ? 'left' : 'right');
     const h = this.pdf.page.height;
-    const center = (text: string, size: number, style: 'r' | 'b' | 'i', color = INK, gap = 6) => {
-      this.font(style).fontSize(size).fillColor(color);
+    const center = (text: string, size: number, style: 'r' | 'b' | 'i' | 'h', color = this.ink, gap = 6) => {
+      (style === 'h' ? this.headFont() : this.font(style)).fontSize(size).fillColor(color);
       const box = this.balanced(text, this.left, this.width, { lineGap: 2 });
       this.pdf.text(text, box.x, this.pdf.y, { width: box.width, align: 'center', lineGap: 2 });
       this.pdf.y += gap;
@@ -300,10 +333,10 @@ class Layout {
     switch (b.role) {
       case 'title': {
         this.pdf.y = h * 0.24;
-        center(first ?? '', 26, 'b', this.t.accent, 10);
+        center(first ?? '', Math.max(26, this.t.heading[1] * 1.35), 'h', this.t.accent, 10);
         const [subtitle, author, publisher] = rest;
-        if (subtitle) center(subtitle, 13, 'i', INK, 10);
-        if (author) { this.pdf.y = h * 0.5; center(author, 13, 'r'); }
+        if (subtitle) center(subtitle, 13, 'i', this.ink, 10);
+        if (author) { this.pdf.y = h * 0.5; center(author, 13 * (this.look?.authorScale ?? 1), 'r'); }
         if (publisher) { this.pdf.y = h - this.trim.bottom - 30; center(publisher, 10, 'r', MUTED); }
         break;
       }
@@ -312,7 +345,7 @@ class Layout {
         const text = b.lines.join('\n');
         const height = this.pdf.heightOfString(text, { width: this.width, lineGap: 2.5 });
         this.pdf.y = h - this.trim.bottom - height - 6 * b.lines.length;
-        for (const l of b.lines) { this.runs(l, { size: 8.5, color: INK }); this.pdf.y += 6; }
+        for (const l of b.lines) { this.runs(l, { size: 8.5 }); this.pdf.y += 6; }
         break;
       }
       case 'dedication':
@@ -360,11 +393,20 @@ class Layout {
     this.runs(text, { align: 'justify', indent });
   }
 
+  /** The current font's ascender and cap height, in points at `size`. */
+  private metrics(size: number): { asc: number; cap: number } {
+    const f = (this.pdf as unknown as { _font: { ascender: number; capHeight?: number } })._font;
+    return { asc: (f.ascender / 1000) * size, cap: ((f.capHeight || 700) / 1000) * size };
+  }
+
   /**
-   * Chapter's first paragraph with a three-line drop cap. The lines beside the letter are fitted by hand
-   * (pdfkit cannot flow text around a shape); the rest of the paragraph continues as normal text.
+   * Chapter's first paragraph with a big initial: "raised" sets it on the first line's baseline and only the first
+   * line runs beside it; "dropped" sinks it two lines, its top level with the first line's capitals. The lines beside
+   * the letter are fitted by hand (pdfkit cannot flow text around a shape); the rest continues as normal text.
    */
   private dropCap(text: string): void {
+    const mode = this.look?.dropCap ?? 'raised';
+    if (mode === 'none') return this.bookPara(hyphenate(text), 0);
     const clean = text.replace(/\u00ad/g, '');
     const runs = inlineRuns(clean.replace(/\n/g, ' '));
     const lead = /^([“"‘']*)(\p{L})/u.exec(runs[0]?.text ?? '');
@@ -372,22 +414,33 @@ class Layout {
     const cap = lead[2]!;
     runs[0] = { ...runs[0]!, text: runs[0]!.text.slice(lead[0].length) };
     if (lead[1]) runs[0].text = lead[1] + runs[0].text;
-    this.font('r').fontSize(this.t.size);
+    const S = this.t.size;
+    this.font('r').fontSize(S);
     const line = this.pdf.heightOfString('X', { width: this.width, lineGap: this.t.gap });
-    const capSize = line * 3 * 0.92;
-    this.room(line * 4);
+    const body = this.metrics(S);
+    this.font('b').fontSize(100);
+    const capRatio = this.metrics(1).cap;
+    const dropped = mode === 'dropped';
+    // Dropped: from the first line's cap height down to the second baseline. Raised: about two and a half lines tall.
+    const capSize = dropped ? (line + body.cap) / capRatio : S * 2.6;
+    this.room(line * 3 + (dropped ? 0 : capSize));
     const y0 = this.pdf.y;
     this.font('b').fontSize(capSize);
-    const capW = this.pdf.widthOfString(cap) + 5;
-    this.pdf.fillColor(this.t.accent).text(cap, this.left, y0 - capSize * 0.16, { lineBreak: false });
+    const capM = this.metrics(capSize);
+    const base = dropped ? y0 + body.asc + line : y0 + capM.cap + (body.asc - body.cap);
+    // Flush: a raised initial is part of its word; a dropped one keeps a small even gap to the lines beside it.
+    const capW = this.pdf.widthOfString(cap) + (dropped ? S * 0.3 : S * 0.04);
+    this.pdf.fillColor(this.t.accent).text(cap, this.left, base - capM.asc, { lineBreak: false });
     // Words with their style, measured in their own font.
     type Word = { text: string; bold: boolean; italic: boolean; w: number };
     const words: Word[] = runs.flatMap((r) => r.text.split(/(?<=\s)/).filter((t) => t !== '').map((t) => ({ text: t, bold: r.bold, italic: r.italic, w: 0 })));
-    const measure = (wd: Word, t = wd.text) => { this.font(wd.bold ? 'b' : wd.italic ? 'i' : 'r').fontSize(this.t.size); return this.pdf.widthOfString(t); };
+    const measure = (wd: Word, t = wd.text) => { this.font(wd.bold ? 'b' : wd.italic ? 'i' : 'r').fontSize(S); return this.pdf.widthOfString(t); };
     for (const wd of words) wd.w = measure(wd);
     const avail = this.width - capW;
+    const rows = dropped ? 2 : 1;
+    const firstTop = dropped ? y0 : base - body.asc;
     let i = 0;
-    for (let row = 0; row < 3 && i < words.length; row++) {
+    for (let row = 0; row < rows && i < words.length; row++) {
       const start = i;
       let w = 0;
       while (i < words.length && (i === start || w + measure(words[i]!, words[i]!.text.trimEnd()) <= avail)) { w += words[i]!.w; i++; }
@@ -396,15 +449,15 @@ class Layout {
       const gaps = lineWords.filter((wd, k) => k < lineWords.length - 1 && /\s$/.test(wd.text)).length;
       const extra = i < words.length && gaps ? (avail - natural) / gaps : 0;
       let x = this.left + capW;
-      const y = y0 + row * line;
+      const y = firstTop + row * line;
       lineWords.forEach((wd, k) => {
         const t = k === lineWords.length - 1 ? wd.text.trimEnd() : wd.text;
-        this.font(wd.bold ? 'b' : wd.italic ? 'i' : 'r').fontSize(this.t.size).fillColor(INK).text(t, x, y, { lineBreak: false });
+        this.font(wd.bold ? 'b' : wd.italic ? 'i' : 'r').fontSize(S).fillColor(this.ink).text(t, x, y, { lineBreak: false });
         x += measure(wd, t) + (/\s$/.test(wd.text) ? extra : 0);
       });
     }
     this.pdf.x = this.left;
-    this.pdf.y = y0 + Math.max(3, Math.ceil(i ? 3 : 0)) * line;
+    this.pdf.y = firstTop + rows * line;
     const rest = words.slice(i).map((wd) => (wd.bold ? `**${wd.text.trim()}** ` : wd.italic ? `*${wd.text.trim()}* ` : wd.text)).join('').trim();
     if (rest) this.bookPara(hyphenate(rest), 0);
   }
@@ -421,7 +474,7 @@ class Layout {
     if (this.trim) {
       this.startPage('toc', 'right');
       this.pdf.y = this.top + 40;
-      this.font('b').fontSize(this.t.heading[1]).fillColor(this.t.accent).text('Contents', this.left, this.pdf.y, { width: this.width, align: 'center' });
+      this.headFont().fontSize(this.t.heading[1]).fillColor(this.t.accent).text('Contents', this.left, this.pdf.y, { width: this.width, align: 'center' });
       this.pdf.y += 18;
     } else this.pdf.addPage();
     if (this.trim) return this.tocLines();
@@ -438,7 +491,7 @@ class Layout {
       if (h.level === 1) this.pdf.y += 4;
       const y = this.pdf.y;
       const n = this.numbers?.get(key);
-      this.font(h.level === 1 ? 'b' : 'r').fontSize(size).fillColor(INK);
+      this.font(h.level === 1 ? 'b' : 'r').fontSize(size).fillColor(this.ink);
       // Print books even out an entry that wraps, so a chapter title does not leave one word on its own line.
       const room = this.width - indent - 44;
       const width = this.trim ? this.balanced(h.text, 0, room, { lineGap: 1.5 }).width : room;
@@ -608,7 +661,9 @@ class Layout {
       const size = 72 * k;
       const [ink, inkA] = fill(art.iconColor);
       pdf.save();
-      pdf.translate(W / 2 - size / 2, H * (70 / 320)).scale(size / ICON_SIZE);
+      // A chosen place is measured in the room inside the frame, like the app's covers; else centred near the top.
+      const at = art.emblemPos ? placeOnCover(art.emblemPos, size, size, W, H) : { x: W / 2 - size / 2, y: H * (COVER_EMBLEM.y / 320) };
+      pdf.translate(at.x, at.y).scale(size / ICON_SIZE);
       for (const d of ICONS[art.icon]) pdf.path(d).fillOpacity(0.9 * inkA).fill(ink);
       pdf.restore();
     }
@@ -619,16 +674,22 @@ class Layout {
     const title = art.titleStyle === 'display' ? c.title.toUpperCase() : c.title;
     if (art.showTitle) {
       const o = { align: 'center' as const, characterSpacing: art.titleStyle === 'display' ? 1.5 : 0 };
-      pdf.font(this.opts.titleFont ?? font).fontSize(Math.min(30, 13 * k)).fillOpacity(inkA).fillColor(ink);
+      pdf.font(this.opts.titleFont ?? font).fontSize(Math.min(30, 13 * k) * (this.look?.coverTitleScale ?? 1)).fillOpacity(inkA).fillColor(ink);
       const box = this.balanced(title, pad, W - 2 * pad, o);
-      pdf.text(title, box.x, H * 0.56, { ...o, width: box.width });
+      if (art.titlePos) {
+        // A chosen place: the title's own box goes there, never outside the frame; the subtitle and the cover lines
+        // stay where they always are.
+        const at = placeOnCover(art.titlePos, box.width, pdf.heightOfString(title, { ...o, width: box.width }), W, H);
+        pdf.text(title, at.x, at.y, { ...o, width: box.width });
+        pdf.y = H * 0.56;
+      } else pdf.text(title, box.x, H * 0.56, { ...o, width: box.width });
     } else pdf.y = H * 0.56;
     pdf.fillOpacity(1);
     pdf.y += 6;
     pdf.font('serif').fontSize(Math.min(16, 7 * k)).fillColor('#efe3c4').text(c.subtitle, pad, pdf.y, { width: W - 2 * pad, align: 'center' });
     pdf.y += 14;
     // A print book's cover has only the author under the subtitle, set large enough to read on a shelf.
-    const lineSize = this.trim ? Math.min(13, 5.6 * k) : Math.min(10, 4.4 * k);
+    const lineSize = (this.trim ? Math.min(13, 5.6 * k) : Math.min(10, 4.4 * k)) * (this.look?.authorScale ?? 1);
     for (const l of c.lines) {
       if (pdf.y > H - 40 * k) break;
       pdf.font('serif').fontSize(lineSize).fillColor(this.trim ? '#efe3c4' : '#d9ccad').text(l.replace(/\*\*/g, ''), pad + 10 * k, pdf.y, { width: W - 2 * pad - 20 * k, align: 'center' });
@@ -641,12 +702,12 @@ class Layout {
     this.pdf.addPage();
     if (c.art) return this.artCover(c.art);
     this.pdf.y = this.pdf.page.height * 0.3;
-    this.font('b').fontSize(30).fillColor(this.t.accent).text(c.title, this.left, this.pdf.y, { width: this.width, align: 'center' });
+    this.font('b').fontSize(30 * (this.look?.coverTitleScale ?? 1)).fillColor(this.look?.coverTitleColor ?? this.t.accent).text(c.title, this.left, this.pdf.y, { width: this.width, align: 'center' });
     this.pdf.y += 8;
-    this.font('r').fontSize(16).fillColor(INK).text(c.subtitle, { width: this.width, align: 'center' });
+    this.font('r').fontSize(16).fillColor(this.ink).text(c.subtitle, { width: this.width, align: 'center' });
     this.pdf.y += 40;
     for (const l of c.lines) {
-      this.runs(l, { size: this.t.size + 0.5, color: MUTED, align: 'center' });
+      this.runs(l, { size: (this.t.size + 0.5) * (this.look?.authorScale ?? 1), color: MUTED, align: 'center' });
       this.pdf.y += 6;
     }
   }
@@ -757,6 +818,53 @@ function printableDoc(doc: Doc, has: HasGlyph): Doc {
   return { ...doc, title: t(doc.title), cover: { ...doc.cover, title: t(doc.cover.title), subtitle: t(doc.cover.subtitle), lines: doc.cover.lines.map(t) }, blocks: doc.blocks.map(block) };
 }
 
+/** Every character of a Doc's text, once. */
+function docChars(doc: Doc): Set<string> {
+  const out = new Set<string>();
+  const add = (t: string) => { for (const ch of t) if (ch.trim()) out.add(ch); };
+  const block = (b: Block): void => {
+    switch (b.kind) {
+      case 'heading': add(b.text); if (b.stamp) add(b.stamp); break;
+      case 'para': add(b.text); break;
+      case 'facts': b.rows.forEach(([k, v]) => { add(k); add(v); }); break;
+      case 'list': b.items.forEach(add); break;
+      case 'image': add(b.caption); b.details.forEach(add); break;
+      case 'prompt': add(b.label); add(b.text); break;
+      case 'box': add(b.title); b.blocks.forEach(block); break;
+      case 'front': b.lines.forEach(add); break;
+      case 'toc': break;
+    }
+  };
+  doc.blocks.forEach(block);
+  return out;
+}
+
+/**
+ * The Story Book's body and chapter title fonts as files. DejaVu needs none. A bundled font that lacks a letter the
+ * book uses (the bundled web fonts carry Latin only, not ş or ğ) falls back to DejaVu, with a note.
+ */
+function resolveBookFonts(doc: Doc, look: BookLook, fontDir: string, dir: string | undefined, notes: string[]): BookFonts {
+  const chars = [...docChars(doc)];
+  const usable = (family: string, bold: boolean): string | undefined => {
+    const b = bundledFont(family);
+    const file = b && bundledFontPath(b, bold, dir);
+    if (!file) return undefined;
+    const has = glyphCheck(file);
+    const missing = chars.find((ch) => ch.codePointAt(0)! > 0x7f && !has(ch.codePointAt(0)!));
+    if (missing) { notes.push(`The font “${family}” has no “${missing}”, so the PDF uses DejaVu for that text instead.`); return undefined; }
+    return file;
+  };
+  const kind = (family: string): 'serif' | 'sans' => (/sans|carlito/i.test(family) ? 'sans' : 'serif');
+  const out: BookFonts = { bodyFamily: kind(look.bodyFont) };
+  if (!/^DejaVu /.test(look.bodyFont)) {
+    const r = usable(look.bodyFont, false);
+    if (r) out.body = { r, b: usable(look.bodyFont, true) ?? r, italic: kind(look.bodyFont) };
+  }
+  const dejavuBold = join(fontDir, FONT_FILES[kind(look.chapterFont) === 'sans' ? 'sans-b' : 'serif-b']);
+  out.head = /^DejaVu /.test(look.chapterFont) ? dejavuBold : usable(look.chapterFont, true) ?? dejavuBold;
+  return out;
+}
+
 /** Renders a World Codex or Story Book Doc to PDF bytes. */
 export async function renderPdf(source: Doc, options: PdfOptions): Promise<PdfResult> {
   const fontDir = options.fontDir ?? defaultFontDir();
@@ -772,7 +880,8 @@ export async function renderPdf(source: Doc, options: PdfOptions): Promise<PdfRe
     if (has && [...title].some((ch) => ch.trim() && !has(ch.codePointAt(0)!))) notes.push(`The cover font “${art.font}” has no letters for some of the title, so the PDF cover title uses DejaVu.`);
     else if (found.file) titleFont = found.file;
   }
-  const opts: LayoutOptions = { ...options, fontDir, ...(titleFont ? { titleFont } : {}) };
+  const bookFonts = doc.print?.look ? resolveBookFonts(doc, doc.print.look, fontDir, options.coverFontDir, notes) : undefined;
+  const opts: LayoutOptions = { ...options, fontDir, ...(titleFont ? { titleFont } : {}), ...(bookFonts ? { bookFonts } : {}) };
   const first = new Layout(doc, opts, undefined);
   first.run();
   await finish(first.pdf);
@@ -800,6 +909,6 @@ export async function writePublication(doc: Doc, worldDir: string, pdfPath: stri
   return { pdf: out, md, pages, notes };
 }
 
-export { renderDocx, writeDocx } from './docx.ts';
+export { renderDocx, writeDocx, type DocxOptions } from './docx.ts';
 export { BUNDLED_FONTS } from '@lore-forge/core';
 export { bundledFontFile, bundledFontPath, coverFont, systemFontFamilies, systemFonts, type SystemFont } from './fonts.ts';

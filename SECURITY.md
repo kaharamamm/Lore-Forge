@@ -6,7 +6,7 @@ Only the [latest release](https://github.com/kaharamamm/Lore-Forge/releases/late
 
 ## Reporting a vulnerability
 
-Please don't open a public issue. Use **[Report a vulnerability](https://github.com/kaharamamm/Lore-Forge/security/advisories/new)** on the repository's Security tab, or send a private message to [@kaharamamm](https://github.com/kaharamamm) on GitHub. Include the version, your system and steps to reproduce.
+Please don't open a public issue. Use **[Report a vulnerability](https://github.com/kaharamamm/Lore-Forge/security/advisories/new)** on the repository's Security tab, or send a private message to me ([@kaharamamm](https://github.com/kaharamamm)) on GitHub. Include the version, your system and steps to reproduce.
 
 You should get an answer within a week. Lore-Forge is a hobby project maintained by one person, so fixes may take longer; you'll be kept informed.
 
