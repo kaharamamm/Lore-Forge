@@ -16,7 +16,7 @@ Every world is a plain folder of Markdown and YAML, checked live for contradicti
 
 [**Download**](#download) · [Features](#features) · [Quick start](#quick-start) · [User guide](docs/USER-GUIDE.md) · [World format](docs/FORMAT.md)
 
-<img src="docs/media/demo.gif" alt="Opening the Camelamamm book from the shelf, browsing its entries and seeing an after-death error in the warnings panel" width="100%">
+<img src="docs/media/demo.gif" alt="Lore-Forge demo: opening Camelamamm from the library shelf, the world home, editing Queen Samira so an after-death error appears and marking it intended, the timeline, the relationship web, a story chapter with proposals and the Story Book preview" width="100%">
 
 </div>
 
