@@ -55,7 +55,7 @@
         "dedication": { "type": "string", "description": "Optional dedication page text." },
         "epigraph": { "type": "string", "description": "Optional epigraph (opening quotation)." },
         "epigraphSource": { "type": "string", "description": "Who the epigraph is by." },
-        "copyright": { "type": "string", "description": "Copyright page text. The copyright page is printed only when this or publisher is set (with a plain notice when only publisher is)." },
+        "copyright": { "type": "string", "description": "Copyright page text. The page is always printed; a plain notice with the author and year is used when this is empty." },
         "publisher": { "type": "string" },
         "dropCap": { "enum": ["none", "raised", "dropped"], "description": "First letter of each chapter: none, raised (big, on the first line; default) or dropped (two lines deep)." },
         "dateStamps": { "type": "boolean", "description": "Show chapter dates at the top right of each chapter opening (and dates on chronicle pages). Default true." },

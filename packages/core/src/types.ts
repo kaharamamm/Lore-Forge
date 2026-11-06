@@ -161,7 +161,7 @@ export interface BookSettings {
   dedication?: string;
   epigraph?: string;
   epigraphSource?: string;
-  /** Copyright page text. The copyright page is printed only when this or `publisher` is set. */
+  /** Copyright page text. The page is always printed; a plain notice with the author and year is used when this is empty. */
   copyright?: string;
   publisher?: string;
   /** First letter of each chapter: none, raised (big, on the first line's baseline; the default) or dropped (two lines deep). */

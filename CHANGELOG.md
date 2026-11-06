@@ -37,6 +37,10 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 - Releases are made with **Actions → Release** (version bump, tests, builds, release in one run).
 - README rewritten for new users; reference material moved to `docs/`. Community files and issue templates added.
 
+### Fixed
+
+- The Story Book always includes the copyright page. An empty copyright field still prints a plain notice with the author and year. The sample book is A4 and keeps its dedication and epigraph.
+
 ### Note for 1.0.0 users
 
 1.0.0 has no updater: download the new version once from the links in the README. From then on Lore-Forge updates itself.

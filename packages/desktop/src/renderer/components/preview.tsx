@@ -54,7 +54,7 @@ const DETAILS: [DetailKey, string, string, boolean][] = [
   ['dedication', 'Dedication', 'None (no dedication page)', true],
   ['epigraph', 'Epigraph', 'None (no epigraph page)', true],
   ['epigraphSource', 'Epigraph by', 'Unknown', false],
-  ['copyright', 'Copyright page', 'Empty: no copyright page (unless a publisher is set)', true],
+  ['copyright', 'Copyright page', 'Empty: a plain notice with the author and year', true],
 ];
 
 const anchorId = (b: Extract<Block, { kind: 'heading' }>, i: number) => `pv-${b.anchor ?? `h-${i}`}`;

@@ -187,20 +187,22 @@ function bookCoverArt(world: World, titleColor: string | undefined) {
 }
 
 /**
- * Title page, then the copyright page, dedication and epigraph only when world.json has text for them: a front page
- * is never printed empty. No half-title: the cover comes right before, so a page with the title alone only repeated it.
+ * Title page, then the copyright page (always, with a plain notice when world.json leaves it empty), then the
+ * dedication and epigraph when world.json has them. No half-title: the cover comes right before, so a page with the
+ * title alone only repeated it.
  */
 function frontMatter(world: World, title: string, subtitle: string, credit: string, opts: BookOptions): Block[] {
   const b = world.manifest.book ?? {};
   const author = b.author?.trim();
   const year = opts.year ?? new Date().getFullYear();
   const publisher = b.publisher?.trim();
-  const out: Block[] = [{ kind: 'front', role: 'title', lines: [title, subtitle, author ? `by ${author}` : '', publisher ?? ''] }];
-  if (b.copyright?.trim() || publisher) {
-    // A publisher alone still gets the plain notice, so the page reads like a copyright page.
-    const copyright = b.copyright?.trim() ? b.copyright.trim().split(/\n+/) : [`Copyright © ${year}${author ? ` ${author}` : ''}. All rights reserved.`];
-    out.push({ kind: 'front', role: 'copyright', lines: [...copyright, ...(publisher ? [`Published by ${publisher}`] : []), credit] });
-  }
+  const copyright = b.copyright?.trim()
+    ? b.copyright.trim().split(/\n+/)
+    : [`Copyright © ${year}${author ? ` ${author}` : ''}. All rights reserved.`];
+  const out: Block[] = [
+    { kind: 'front', role: 'title', lines: [title, subtitle, author ? `by ${author}` : '', publisher ?? ''] },
+    { kind: 'front', role: 'copyright', lines: [...copyright, ...(publisher ? [`Published by ${publisher}`] : []), credit] },
+  ];
   if (b.dedication?.trim()) out.push({ kind: 'front', role: 'dedication', lines: b.dedication.trim().split(/\n+/) });
   if (b.epigraph?.trim()) out.push({ kind: 'front', role: 'epigraph', lines: [b.epigraph.trim(), ...(b.epigraphSource?.trim() ? [`— ${b.epigraphSource.trim()}`] : [])] });
   return out;

@@ -128,7 +128,7 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   "bodyColor", "chapterFont", "chapterSize", "chapterColor", "lineSpacing", "margins", "coverTitleColor",
   "coverTitleSize", "authorSize"}` (all optional; `trim` is `6x9`, `5.5x8.5`, `a5`, `a4` or `letter`;
   `dropCap` is `none`, `raised` (default) or `dropped`; sizes are points, the cover sizes percent; the
-  copyright page is printed only when `copyright` or `publisher` is set) and `"cover": {"color", "color2", "icon", "iconColor", "image", "titleStyle", "titleColor"}` (all optional;
+  copyright page is always printed, with a plain notice when `copyright` is empty) and `"cover": {"color", "color2", "icon", "iconColor", "image", "titleStyle", "titleColor"}` (all optional;
   colours are `#rrggbb` or `#rrggbbaa`, `image` is a world-relative path or `"none"`, `icon` a game-icons name or
   `"none"`, `titleStyle` is `display`, `serif` or `sans`) for the book cover on the shelf, Home and the PDFs.
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so

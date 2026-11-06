@@ -855,7 +855,7 @@ export function App() {
             const bookOnDisk = async (ok: (ws: World) => boolean) => { for (let i = 0; i < 60; i++) { if (ok(parseWorld(await window.lore.readWorld(dirRef.current!)))) return true; await tick(50); } return false; };
             expect(count('.preview .sheet.is-print.trim-6x9') > 1 && !!$('.preview .sheet-cover.is-print.trim-6x9'), 'the book preview uses 6x9 print pages, cover included');
             expect(count('.preview .doc-front-title') === 1 && count('.preview .doc-front-half-title') === 0, 'a title page, no half-title');
-            expect(count('.preview .doc-front-copyright') === 0, 'no copyright page when there is no copyright text or publisher');
+            expect(count('.preview .doc-front-copyright') === 1, 'the copyright page is included even when the field is empty');
             // The cover keeps its page shape (it used to shrink to a strip) and carries the book title.
             const cv = $('.preview .sheet-cover.has-art')!.getBoundingClientRect();
             expect(cv.height > cv.width * 1.3 && !!$('.preview .sheet-cover-text .sheet-title'), `the cover sheet keeps its page shape and shows the title (${Math.round(cv.width)}x${Math.round(cv.height)})`);

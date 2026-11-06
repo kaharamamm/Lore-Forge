@@ -52,7 +52,10 @@
     "title": "Mr Camel and the Singing Well",
     "author": "Ahmet Kadir Zengin",
     "trim": "a4",
-    "bodySize": 11
+    "bodySize": 11,
+    "dedication": "For everyone who has ever waited for the kettle to sing.",
+    "epigraph": "Water remembers the way home. So should you.",
+    "epigraphSource": "Saying of the Well Wardens"
   },
   "cover": {
     "color": "#d9893a",

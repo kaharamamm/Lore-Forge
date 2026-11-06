@@ -1,6 +1,6 @@
 /**
  * Word (.docx) export of a print Story Book. Same structure as the print PDF: the cover as a full first page, the
- * title page, the copyright, dedication and epigraph pages when the book has them, contents, then each chapter on a
+ * title page, the copyright page (always), the dedication and epigraph pages when the book has them, contents, then each chapter on a
  * new page with its date at the top right and a raised or dropped initial (doc.print.look), in the book's fonts,
  * sizes and colours,
  * running heads (book title left, chapter right), page numbers from the first chapter (none on openers), mirrored

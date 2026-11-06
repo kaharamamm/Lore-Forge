@@ -106,13 +106,13 @@ When a world has story chapters, the Story Book is the story: each chapter in or
 The book is laid out like a printed book:
 
 1. The cover: the world's cover art with the book title, subtitle and author.
-2. The title page, the copyright page, the dedication and the epigraph (each when set).
+2. The title page, the copyright page (always; a plain notice when the field is empty), then the dedication and the epigraph when set.
 3. The contents, with page numbers.
 4. Each chapter starting at the top of a new page, with its label, title and a drop cap.
 
 Text is set in a serif face, justified and hyphenated, with no single line left at the top or bottom of a page. Margins are mirrored with a wider inside edge for the binding; running heads show the book title on left pages and the chapter on right pages; pages are numbered from the first chapter, with no number on chapter openings. There are no blank pages; for a printed copy, **Start chapters on right-hand pages** opens the title page and every chapter on a right-hand page.
 
-Trim sizes: 6 × 9 in (default), 5.5 × 8.5 in and A5. The book details (title, author, publisher, dedication, epigraph, copyright text) are edited in the preview and saved in `world.json`. **Save Word (.docx)…** writes the same book for Word.
+Trim sizes: 6 × 9 in (used when a book does not set one), 5.5 × 8.5 in, A5, A4 and US Letter. The sample Story Book is A4. The book details (title, author, publisher, dedication, epigraph, copyright text) are edited in the preview and saved in `world.json`. **Save Word (.docx)…** writes the same book for Word.
 
 The Story Book assembles what you wrote. It never writes, rewrites or summarises prose.
 

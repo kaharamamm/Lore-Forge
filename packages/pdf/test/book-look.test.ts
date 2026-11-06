@@ -74,7 +74,7 @@ const baseline = (w: { y0: number; y1: number }) => w.y0 + (w.y1 - w.y0) * (0.92
 
 test('PDF drop cap: raised sits on the first baseline flush with its word, dropped spans two lines, none is plain', { skip: !hasPdftotext }, async () => {
   const world = await loadWorld(example);
-  const page = 5; // cover, title, dedication, epigraph, contents: chapter 1 opens on page 6 (index 5 + 1)
+  const page = 6; // cover, title, copyright, dedication, epigraph, contents: chapter 1 opens on page 7
   const at = async (dropCap: BookSettings['dropCap']) => {
     const ws = await words(storyBook(withBook(world, { dropCap })), page + 1);
     const i = ws.findIndex((w) => w.text === 'E' || w.text === 'Every');
@@ -112,11 +112,13 @@ test('PDF follows the look: A4 and Letter pages, the chosen fonts embedded, the 
   assert.match(raw, /\/BaseFont \/[A-Z]{6}\+LiberationSerif/);
   assert.match(raw, /\/BaseFont \/[A-Z]{6}\+CinzelDecorative/);
   if (!hasPdftotext) return;
-  const ws = await words(storyBook(world), 6);
+  const ws = await words(storyBook(world), 7);
   const stamp = ws.find((w) => w.text === 'CR')!;
   const label = ws.find((w) => w.text === 'CHAPTER')!;
   assert.ok(stamp.y1 <= label.y0, 'the date is above the chapter label');
-  assert.ok(Math.abs(stamp.x1 - 369) < 1, 'the date ends at the right margin');
+  // Chapter 1 is a right-hand page: the date ends at the page width minus the outside margin.
+  const edge = trimFor('a4').width - trimFor('a4').outside;
+  assert.ok(Math.abs(stamp.x1 - edge) < 1, `the date ends at the A4 right margin (${stamp.x1} vs ${edge})`);
 });
 
 test('Word follows the look: cover as a full first page, fonts, sizes, colours, drop cap modes, no empty front pages', async () => {
@@ -143,11 +145,13 @@ test('Word follows the look: cover as a full first page, fonts, sizes, colours, 
   assert.match(body, /w:dropCap="drop" w:lines="2"/, 'dropped: a two-line Word drop cap');
   assert.match(body, /10\.03\.512 CR/);
   assert.match(body, /<w:jc w:val="right"\/>[\s\S]{0,400}10\.03\.512 CR/, 'the date is right-aligned');
-  assert.doesNotMatch(body, /Copyright ©/);
+  assert.match(body, /Copyright ©/, 'the copyright page is included even when the field is empty');
 
-  const raised = (await docxXml(storyBook(world))).body;
+  const raisedDoc = storyBook(world);
+  const capHalfPoints = Math.round(raisedDoc.print!.look!.bodySize * 2.6 * 2);
+  const raised = (await docxXml(raisedDoc)).body;
   assert.doesNotMatch(raised, /w:dropCap=/);
-  assert.match(raised, /<w:sz w:val="55"\/>[\s\S]{0,200}<w:t xml:space="preserve">E<\/w:t>|<w:sz w:val="55"\/>[\s\S]{0,200}<w:t>E<\/w:t>/, 'raised: a big E in the first line');
+  assert.match(raised, new RegExp(`<w:sz w:val="${capHalfPoints}"/>[\\s\\S]{0,200}<w:t xml:space="preserve">E</w:t>|<w:sz w:val="${capHalfPoints}"/>[\\s\\S]{0,200}<w:t>E</w:t>`), 'raised: a big E in the first line');
   assert.match(raised, /<wp:anchor[\s\S]*?behindDoc="1"/, 'without an app cover picture, the world picture fills the cover page');
   const noStamp = (await docxXml(storyBook(withBook(world, { dateStamps: false })))).body;
   assert.doesNotMatch(noStamp, /512 CR/);
