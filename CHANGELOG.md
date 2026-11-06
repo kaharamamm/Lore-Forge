@@ -7,6 +7,7 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 ### Changed
 
 - GitHub Release ships only the four stable installers plus updater `latest*.yml` files (no blockmaps, zips, debs, or versioned duplicates).
+- README download table matches those installers (AppImage only on Linux; no `.deb`).
 
 ### Added
 

@@ -29,17 +29,15 @@ Every world is a plain folder of Markdown and YAML, checked live for contradicti
 | **Windows 10/11** (x64) | [`Lore-Forge-Setup-x64.exe`](https://github.com/kaharamamm/Lore-Forge/releases/latest/download/Lore-Forge-Setup-x64.exe) | Run the installer. |
 | **macOS** (Apple Silicon) | [`Lore-Forge-mac-arm64.dmg`](https://github.com/kaharamamm/Lore-Forge/releases/latest/download/Lore-Forge-mac-arm64.dmg) | Open the disk image and drag Lore-Forge to Applications. |
 | **macOS** (Intel) | [`Lore-Forge-mac-x64.dmg`](https://github.com/kaharamamm/Lore-Forge/releases/latest/download/Lore-Forge-mac-x64.dmg) | The same. |
-| **Ubuntu, Debian** (x64) | [`Lore-Forge-amd64.deb`](https://github.com/kaharamamm/Lore-Forge/releases/latest/download/Lore-Forge-amd64.deb) | `sudo apt install ./Lore-Forge-amd64.deb` |
-| **Other Linux** (x64) | [`Lore-Forge-x86_64.AppImage`](https://github.com/kaharamamm/Lore-Forge/releases/latest/download/Lore-Forge-x86_64.AppImage) | `chmod +x Lore-Forge-x86_64.AppImage`, then run it. |
+| **Linux** (x64) | [`Lore-Forge-x86_64.AppImage`](https://github.com/kaharamamm/Lore-Forge/releases/latest/download/Lore-Forge-x86_64.AppImage) | `chmod +x Lore-Forge-x86_64.AppImage`, then run it. |
 
-These links always download the newest version, so they are safe to bookmark or share. Every release also keeps the same files with the version in the name (for example `Lore-Forge-1.1.0-linux-amd64.deb`) on the **[releases](https://github.com/kaharamamm/Lore-Forge/releases)** page. No Node.js or build tools are needed.
+These links always download the newest version, so they are safe to bookmark or share. No Node.js or build tools are needed.
 
 ### Updates
 
 Lore-Forge checks for a new version when it starts and every few hours. A small notice in the corner offers **Download**, **Later** and **What's new**; when the download is done, **Restart to update** installs it and starts the new version. **About → Updates** shows your version, has **Check now**, and can turn the automatic check off.
 
 - **Windows** and the **AppImage** update themselves.
-- **.deb:** the system asks for your password once (the update is installed with `dpkg`), then Lore-Forge restarts.
 - **macOS:** the builds are not signed, so macOS does not let the app replace itself. **Download** opens the new disk image; drag it to Applications as before.
 
 Updating never touches your worlds: they live in your own folders (see [Your data](#your-data)), not in the program's folder.
@@ -50,7 +48,7 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 
 - **Windows:** SmartScreen says *"Windows protected your PC"*. Choose **More info**, then **Run anyway**.
 - **macOS:** *"Lore-Forge cannot be opened because Apple cannot check it"*. Open **System Settings → Privacy & Security**, scroll down and choose **Open Anyway** (or right-click the app in Applications and choose **Open**). If macOS says the app *"is damaged"*, run `xattr -dr com.apple.quarantine /Applications/Lore-Forge.app` once in Terminal.
-- **Linux AppImage:** if it says *"AppImages require FUSE"*, install `libfuse2t64` (Ubuntu 24.04) or `libfuse2` (22.04). If it exits with *"GPU process isn't usable"*, start it with `--no-sandbox` or use the `.deb`, which installs the AppArmor profile it needs.
+- **Linux AppImage:** if it says *"AppImages require FUSE"*, install `libfuse2t64` (Ubuntu 24.04) or `libfuse2` (22.04). If it exits with *"GPU process isn't usable"*, start it with `--no-sandbox`.
 
 ---
 
@@ -141,10 +139,9 @@ lore duplicate ~/my-world "My copy"    # a copy with a new id, next to the origi
 
 | System | Where `lore` is |
 | --- | --- |
-| **.deb** | `/usr/bin/lore`, ready to use. |
 | **Windows** | `lore.cmd` in `resources\bin` of the install folder (by default `%LOCALAPPDATA%\Programs\Lore-Forge\resources\bin`). Add that folder to your `PATH` to type `lore` anywhere. |
 | **macOS** | `/Applications/Lore-Forge.app/Contents/Resources/bin/lore`. To type `lore` anywhere: `sudo ln -s /Applications/Lore-Forge.app/Contents/Resources/bin/lore /usr/local/bin/lore` |
-| **AppImage** | Inside the image; use the `.deb`, or run it from a source checkout. |
+| **AppImage** | Inside the image, or run it from a source checkout. |
 | **Source checkout** | `npm run lore -- check worlds/camelamamm` |
 
 See [docs/CLI.md](docs/CLI.md).
