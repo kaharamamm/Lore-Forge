@@ -1,0 +1,47 @@
+{
+  "name": "@lore-forge/mcp",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Lore-Forge MCP server: lets AI assistants (Claude, Codex, Cursor, ...) write whole worlds and stories in Lore-Forge.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaharamamm/Lore-Forge.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/kaharamamm/Lore-Forge#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./clients": {
+      "source": "./src/clients.ts",
+      "types": "./dist/clients.d.ts",
+      "default": "./dist/clients.js"
+    },
+    "./images": {
+      "source": "./src/images.ts",
+      "types": "./dist/images.d.ts",
+      "default": "./dist/images.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@lore-forge/core": "1.0.0",
+    "@lore-forge/pdf": "1.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  }
+}

@@ -11,6 +11,8 @@ import { defaultFontDir, systemFontFamilies, writeDocx, writePublication } from 
 import type { CoverImage, CreateWorldOptions, PdfKind, PublishOptions, Settings, SmokeMouse } from '../shared/api.ts';
 import { checkForUpdates, downloadUpdate, installUpdate, setupUpdater, updateState } from './updater.ts';
 import { cleanOrder, orderShelf, placeAfter, planShelf } from '../shared/library.ts';
+import { FolderWatch, libraryFiles, ownTouch, ownWrite, worldFiles } from './watch.ts';
+import { registerAi } from './ai.ts';
 
 const SMOKE = process.env['LORE_FORGE_SMOKE'] === '1';
 const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
@@ -81,6 +83,24 @@ async function readSettings(): Promise<Settings> {
   }
 }
 const worldsDir = async (): Promise<string> => (await readSettings()).worldsDir || defaultWorldsDir();
+
+// Live view: the open world and the worlds folder are watched, so changes made outside the app (an AI assistant
+// through `lore mcp`, an editor, git) show at once. Off in the smoke run, which must only see its own steps.
+let worldWatch: FolderWatch | null = null;
+let libraryWatch: FolderWatch | null = null;
+function watchWorld(dir: string): void {
+  if (SMOKE || resolve(worldWatch?.dir ?? '') === resolve(dir)) return;
+  worldWatch?.close();
+  worldWatch = new FolderWatch(resolve(dir), worldFiles, (files) => win?.webContents.send('world-changed', { dir, files }));
+}
+async function watchLibrary(): Promise<void> {
+  if (SMOKE) return;
+  const root = resolve(await worldsDir());
+  if (libraryWatch?.dir === root) return;
+  libraryWatch?.close();
+  await mkdir(root, { recursive: true }).catch(() => {});
+  libraryWatch = new FolderWatch(root, libraryFiles, () => win?.webContents.send('library-changed'), 500);
+}
 
 /** Merge into settings.json, keeping only values that differ from the defaults. */
 async function saveSettings(next: Settings): Promise<void> {
@@ -332,6 +352,12 @@ async function dataUrl(full: string): Promise<string | null> {
   }
 }
 
+/** Writes a text file the app itself changed (world.json), so the live view does not echo it back. */
+async function writeOwn(path: string, text: string): Promise<void> {
+  ownWrite(path, text);
+  await writeFile(path, text, 'utf8');
+}
+
 /** world.json "cover" keeps text values and the on/off switches only when they are off (on is the default). */
 function cleanCover(cover: WorldCoverSettings): WorldCoverSettings {
   return cleanCoverSettings(cover);
@@ -355,7 +381,10 @@ function registerIpc(): void {
   });
   ipcMain.handle('listWorlds', () => listWorlds());
   ipcMain.handle('settings', async () => ({ ...(await readSettings()), defaultWorldsDir: defaultWorldsDir(), worldsDir: await worldsDir() }));
-  ipcMain.handle('saveSettings', (_e, next: Settings) => saveSettings(next));
+  ipcMain.handle('saveSettings', async (_e, next: Settings) => {
+    await saveSettings(next);
+    await watchLibrary();
+  });
   ipcMain.handle('chooseFolder', async (_e, title: string, start?: string) => {
     if (SMOKE) return null;
     const r = await dialog.showOpenDialog(win!, { title, defaultPath: start, properties: ['openDirectory', 'createDirectory'] });
@@ -433,15 +462,18 @@ function registerIpc(): void {
   ipcMain.handle('readWorld', async (_e, dir: string) => {
     const files = await readWorldFiles(dir);
     await remember(dir); // in the smoke run this is the throwaway smoke home
+    watchWorld(dir);
     return files;
   });
   ipcMain.handle('peekWorld', async (_e, dir: string) => (existsSync(join(dir, 'world.json')) ? readWorldFiles(dir).catch(() => null) : null));
   ipcMain.handle('writeFile', async (_e, dir: string, path: string, content: string) => {
     const full = inside(dir, path);
     await mkdir(join(full, '..'), { recursive: true });
+    ownWrite(full, content);
     await writeFile(full, content, 'utf8');
   });
   ipcMain.handle('deleteFile', async (_e, dir: string, path: string) => {
+    ownTouch(inside(dir, path));
     await rm(inside(dir, path), { force: true });
   });
   ipcMain.handle('importImage', async (_e, dir: string, entryId: string, view: ImageView) => {
@@ -452,6 +484,7 @@ function registerIpc(): void {
     const rel = `images/${safeId}/${view.replace(/[^\w-]+/g, '-')}-${basename(src).replace(/[^\w.-]+/g, '-')}`;
     const full = inside(dir, rel);
     await mkdir(join(full, '..'), { recursive: true });
+    ownTouch(full);
     await copyFile(src, full);
     return rel;
   });
@@ -491,7 +524,7 @@ function registerIpc(): void {
     const next = Object.fromEntries(Object.entries({ ...(raw['book'] as BookSettings | undefined), ...book }).filter(([, v]) => v !== '' && v !== undefined && v !== null)) as BookSettings;
     if (Object.keys(next).length) raw['book'] = next;
     else delete raw['book'];
-    await writeFile(path, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+    await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
     return next;
   });
   ipcMain.handle('saveCalendar', async (_e, dir: string, calendar: Calendar) => {
@@ -508,7 +541,7 @@ function registerIpc(): void {
     if (calendar.months?.length) next.months = calendar.months.map(({ name, days }) => ({ name, days }));
     else delete next.months;
     raw['calendar'] = next;
-    await writeFile(path, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+    await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
     return next;
   });
   ipcMain.handle('saveCover', async (_e, dir: string, cover: WorldCoverSettings, pickedImage?: string) => {
@@ -519,6 +552,7 @@ function registerIpc(): void {
       // A new file name each time, so cached previews of an older cover picture never show.
       next.image = `images/cover-${Date.now().toString(36)}${extname(pickedImage).toLowerCase()}`;
       await mkdir(join(dir, 'images'), { recursive: true });
+      ownTouch(inside(dir, next.image));
       await copyFile(pickedImage, inside(dir, next.image));
     }
     // Patch only "cover" in the raw file, like saveBook.
@@ -527,7 +561,7 @@ function registerIpc(): void {
     const clean = cleanCover(next);
     if (Object.keys(clean).length) raw['cover'] = clean;
     else delete raw['cover'];
-    await writeFile(path, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+    await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
     return clean;
   });
   ipcMain.handle('smokeResize', (_e, width: number, height: number) => {
@@ -679,7 +713,9 @@ app.whenReady().then(async () => {
     }
   }
   registerIpc();
+  registerAi(defaultWorldsDir);
   createWindow();
+  void watchLibrary();
   setupUpdater({ smoke: SMOKE, window: () => win, autoCheck: async () => (await readSettings()).autoUpdate !== false });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

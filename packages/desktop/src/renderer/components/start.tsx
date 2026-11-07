@@ -8,7 +8,9 @@ import { IconPicker } from './icon-picker.tsx';
 import { EMBLEM_CHOICES } from './cover-editor.tsx';
 import { CoverSwitches, RecentPictures } from './cover-options.tsx';
 import { Aura } from './aura.tsx';
-import { ConfirmDialog, trapTab } from './confirm.tsx';
+import { ConfirmDialog } from './confirm.tsx';
+import { Dialog } from './dialog.tsx';
+import { ConnectAi } from './connect-ai.tsx';
 import { AboutDialog } from './about.tsx';
 import { fitText } from '../fit.ts';
 import { moveBook, removeKind, type RemoveKind } from '../../shared/library.ts';
@@ -663,26 +665,6 @@ function useSlide(ul: { current: HTMLUListElement | null }) {
 
 const SWATCHES = ['#7a2e2e', '#8a5a1c', '#2f5d3a', '#1f4f6b', '#3b3478', '#5c2a5e', '#2b2f3a', '#6b4a2b', '#14161b', '#3a2a1e'];
 
-/** Modal shell shared by the library dialogs: Escape and a click outside close it; Tab stays inside. */
-function Dialog({ title, onClose, children, footer, class: extra }: { title: string; onClose: () => void; children: preact.ComponentChildren; footer?: preact.ComponentChildren; class?: string }) {
-  const box = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div class="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <section ref={box} class={`about library-dialog${extra ? ` ${extra}` : ''}`} role="dialog" aria-modal="true" aria-labelledby="library-dialog-title" onKeyDown={(e) => trapTab(box.current, e)}>
-        <header class="dialog-head"><h2 id="library-dialog-title">{title}</h2></header>
-        <div class="dialog-body">{children}</div>
-        {/* A footer stays below the body, which scrolls on its own. */}
-        {footer && <div class="dialog-actions">{footer}</div>}
-      </section>
-    </div>
-  );
-}
-
 /** A new book's first look: a random colour and emblem, until the user picks or shuffles. */
 const randomCover = (): WorldCoverSettings => ({ color: SWATCHES[Math.floor(Math.random() * SWATCHES.length)]!, icon: COVER_EMBLEMS[Math.floor(Math.random() * COVER_EMBLEMS.length)]! });
 
@@ -924,7 +906,7 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
   const [shelf, setShelf] = useState<string[]>([]);
   const [sample, setSample] = useState<string | null>(null);
   const [worldsDir, setWorldsDir] = useState('');
-  const [dialog, setDialog] = useState<{ kind: 'create' } | { kind: 'settings' } | { kind: 'about' } | { kind: 'delete'; dir: string; name: string; world: World | null | undefined } | { kind: 'duplicate'; dir: string; name: string } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: 'create' } | { kind: 'settings' } | { kind: 'about' } | { kind: 'ai' } | { kind: 'delete'; dir: string; name: string; world: World | null | undefined } | { kind: 'duplicate'; dir: string; name: string } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   // Books moved to the trash this session never come back from a refresh that raced the move.
   const trashed = useRef(new Set<string>());
@@ -946,7 +928,12 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
     // Coming back to the app shows worlds added or removed meanwhile.
     const onFocus = () => void refresh();
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    // Books made or changed outside the app (an AI assistant through `lore mcp`) show up at once.
+    const stop = window.lore.onLibraryChanged(() => void refresh());
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      stop();
+    };
   }, []);
   const trash = async (dir: string) => {
     // The app's own sample only leaves the shelf (Library settings shows it again); other folders go to the trash.
@@ -1106,6 +1093,7 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
         <div class="start-actions">
           <button type="button" class="ghost" onClick={() => void openFolder()}><Icon name="open-folder" /> Open a world folder…</button>
           <button type="button" class="ghost start-tour" onClick={onTour} title="A short guided tour of Lore-Forge, using the sample world"><Icon name="direction-signs" /> Take the tour</button>
+          <button type="button" class="ghost start-ai has-label" onClick={() => setDialog({ kind: 'ai' })} aria-label="Connect AI" title="Let Claude, Codex or another AI app write worlds and stories in Lore-Forge, with pictures"><Icon name="magic-lamp" /><span class="btn-label">Connect AI</span></button>
           <button type="button" class="ghost start-about has-label" onClick={() => setDialog({ kind: 'about' })} aria-label="About and credits" title="About Lore-Forge, credits and licences"><Icon name="laurels" /><span class="btn-label">About</span></button>
           <button type="button" class="ghost start-settings has-label" onClick={() => setDialog({ kind: 'settings' })} aria-label="Library settings" title="Library settings"><Icon name="cog" /><span class="btn-label">Settings</span></button>
         </div>
@@ -1150,6 +1138,7 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
       {dialog?.kind === 'create' && <CreateBook worldsDir={worldsDir} onClose={() => setDialog(null)} onCreated={(dir) => { setDialog(null); onOpen(dir); }} />}
       {dialog?.kind === 'about' && <AboutDialog onClose={() => setDialog(null)} onTour={() => { setDialog(null); onTour(); }} />}
       {dialog?.kind === 'duplicate' && <DuplicateBook dir={dialog.dir} name={dialog.name} onClose={() => setDialog(null)} onDone={(copy) => { setDialog(null); void refresh().then(() => setFresh(copy)); }} />}
+      {dialog?.kind === 'ai' && <ConnectAi onClose={() => setDialog(null)} />}
       {dialog?.kind === 'settings' && <LibrarySettings onClose={() => setDialog(null)} onSaved={() => void refresh()} />}
       {dialog?.kind === 'delete' && (
         <DeleteBook dir={dialog.dir} name={dialog.name} world={dialog.world} kind={removeKind(dialog.dir, sample)} onClose={() => setDialog(null)} onConfirm={() => trash(dialog.dir)} />

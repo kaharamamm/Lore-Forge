@@ -33,6 +33,40 @@ export interface CreateWorldOptions {
   cover?: WorldCoverSettings;
 }
 
+/** A picture service for AI-made pictures (Connect AI). */
+export type PictureProvider = 'openai' | 'gemini' | 'xai';
+/** An AI app Lore-Forge can add its MCP server to. */
+export interface AiClient {
+  id: string;
+  name: string;
+  /** The app seems to be installed on this computer. */
+  installed: boolean;
+  /** "elsewhere": a lore-forge entry exists but starts another copy of Lore-Forge (moved, or a source checkout). */
+  connected: 'yes' | 'no' | 'elsewhere';
+  /** One click can connect it (Claude Code needs its `claude` command). */
+  canConnect: boolean;
+  /** What to do after connecting, e.g. restart the app. */
+  after: string;
+  /** Claude Code: the command to run in a terminal instead. */
+  command?: string;
+}
+export interface AiPictures {
+  provider: PictureProvider | 'none';
+  /** Saved keys, shown as their last four characters only. */
+  keys: Partial<Record<PictureProvider, string>>;
+  models: Partial<Record<PictureProvider, string>>;
+  providers: { id: PictureProvider; label: string; keyPage: string }[];
+}
+export interface AiState {
+  clients: AiClient[];
+  pictures: AiPictures;
+  /** The { "mcpServers": ... } snippet for any other MCP app; null when this install cannot be connected. */
+  setup: string | null;
+  /** Why connecting is not possible here (the AppImage). */
+  unavailable?: string;
+}
+export type PictureCheck = { ok: true; model: string; models: string[] } | { ok: false; error: string };
+
 /** What the preload script exposes to the renderer as window.lore. */
 export interface LoreApi {
   /** World folder to open at startup (from the command line or LORE_FORGE_OPEN), if any. */
@@ -107,6 +141,24 @@ export interface LoreApi {
   showInFolder(path: string): Promise<void>;
   /** Back/forward from the OS (Windows app-command: mouse buttons 4/5, media keys). */
   onNavigate(cb: (direction: 'back' | 'forward') => void): void;
+  /**
+   * Files of the open world changed outside the app (an AI assistant through `lore mcp`, an editor, git): paths
+   * relative to the world folder. Returns a function that stops listening.
+   */
+  onWorldChanged(cb: (change: { dir: string; files: string[] }) => void): () => void;
+  /** A book appeared in, left or changed its name or cover in the worlds folder. Returns a function that stops listening. */
+  onLibraryChanged(cb: () => void): () => void;
+  /** Connect AI: the AI apps and their connection, the picture settings, the setup snippet. */
+  aiState(): Promise<AiState>;
+  /** Add Lore-Forge to an AI app (or remove it). Rejects with a message the user can act on. */
+  aiConnect(id: string, connect: boolean): Promise<AiClient>;
+  /** Try a picture service key (the saved one when none is given): which image model it would use. */
+  aiCheckPictures(provider: PictureProvider, key?: string): Promise<PictureCheck>;
+  /** Save the picture service, and its key and model when given. */
+  aiSavePictures(next: { provider: PictureProvider | 'none'; key?: string; model?: string }): Promise<AiPictures>;
+  /** Delete a saved picture service key. */
+  aiForgetKey(provider: PictureProvider): Promise<AiPictures>;
+  copyText(text: string): Promise<void>;
   /** Used by the headless smoke test only. */
   smokeReport(summary: Record<string, unknown>): void;
   /** Smoke test only: set the window's content size. */

@@ -14,7 +14,7 @@ Every world is a plain folder of Markdown and YAML, checked live for contradicti
 [![License: MIT](https://img.shields.io/badge/license-MIT-c9963f)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555)](#download)
 
-[**Download**](#download) · [Features](#features) · [Quick start](#quick-start) · [User guide](docs/USER-GUIDE.md) · [World format](docs/FORMAT.md)
+[**Download**](#download) · [Features](#features) · [Write with AI](#write-with-an-ai-assistant) · [Quick start](#quick-start) · [User guide](docs/USER-GUIDE.md) · [World format](docs/FORMAT.md)
 
 <img src="docs/media/demo.gif" alt="Lore-Forge demo: opening Camelamamm from the library shelf, the world home, editing Queen Samira so an after-death error appears and marking it intended, the timeline, the relationship web, a story chapter with proposals and the Story Book preview" width="100%">
 
@@ -57,7 +57,8 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 ## Why Lore-Forge
 
 - **Canon you can trust.** Consistency rules run while you type: a character acting after their death, a parent born after their child, a city visited before it was founded. Each warning points at the exact field and the fact it breaks; **Go to** jumps there, **Mark intended** keeps a contradiction on purpose.
-- **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. Nothing leaves your machine.
+- **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. Nothing leaves your machine unless you connect an AI app or picture service yourself.
+- **Works with your AI.** Ask Claude, Codex, Cursor or another MCP app for a story and it writes the whole book in Lore-Forge: entries, relationships, chapters and pictures, checked for contradictions.
 - **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, art briefs and reference images for artists and 3D tools.
 - **From notes to a book.** Write the story chapter by chapter; Lore-Forge proposes entries from your prose and exports a typeset Story Book (PDF, Word or Markdown), with A4 among the trim sizes and Word matching the PDF including the cover.
 
@@ -86,6 +87,14 @@ The warning in these screenshots was added on purpose to a copy of the sample wo
 
 More in the [user guide](docs/USER-GUIDE.md).
 
+## Write with an AI assistant
+
+Lore-Forge works with AI apps that support MCP: Claude Desktop, Claude Code, Codex, Cursor and others. Choose **Connect AI** in the library, connect your app once, then ask it something like *"Write me a story about camels in Lore-Forge"*.
+
+The assistant creates a new book on your shelf. It adds characters, places, factions, items and events with their dates and details, the relationships between them and the chapters. Then it runs the consistency checks and fixes what they find. If Lore-Forge is open, you watch the book fill in; afterwards it is an ordinary book that you keep editing. It can also continue or change a book you already have.
+
+Pictures for the entries and the cover use your own key for OpenAI, Google Gemini or xAI Grok, set in **Connect AI → Pictures**. The key stays on your computer. Setup, tools and privacy: [docs/MCP.md](docs/MCP.md).
+
 ## Quick start
 
 1. [Download](#download) and install Lore-Forge, then start it.
@@ -93,6 +102,7 @@ More in the [user guide](docs/USER-GUIDE.md).
 3. Click **New book** (always first on the top shelf), give your world a name, colour and emblem.
 4. In the sidebar, choose **+ New** next to *Characters*, type a name and a birth date. The entry is saved as `characters/<id>.md` a moment after you stop typing.
 5. Set their status to *Dead* with a death date before the birth date, and watch the warnings panel flag it (`date-order`).
+6. To have an AI assistant write a book, choose **Connect AI** in the library (see [Write with an AI assistant](#write-with-an-ai-assistant)).
 
 ## Your data
 
@@ -137,6 +147,7 @@ lore check ~/my-world                  # exit 1 when there are errors
 lore codex ~/my-world -o codex.pdf     # World Codex PDF
 lore book ~/my-world -o book.pdf       # Story Book PDF (or .docx)
 lore duplicate ~/my-world "My copy"    # a copy with a new id, next to the original
+lore mcp                               # the MCP server AI apps start (see docs/MCP.md)
 ```
 
 | System | Where `lore` is |
@@ -165,7 +176,6 @@ Architecture, tests, packaging and releases: [docs/DEVELOPMENT.md](docs/DEVELOPM
 
 ## Roadmap
 
-- **Planned:** an MCP server so agents (Claude and other MCP clients) can work in your world — reading canon, filling relationships and images, writing chapters, and getting consistency warnings back. Not shipped yet; worlds are already plain files other tools can read ([Integration guide](docs/INTEGRATION.md)).
 - Ideas and requests are welcome in [issues](https://github.com/kaharamamm/Lore-Forge/issues).
 
 ## Contributing
@@ -180,6 +190,6 @@ Lore-Forge is released under the [MIT License](LICENSE). Copyright (c) 2026 Ahme
 - Heading font: Cinzel by Natanael Gama and the Cinzel Project Authors, SIL Open Font License 1.1.
 - Cover fonts: the Fontsource packages listed in `packages/pdf/package.json` and Liberation Sans and Serif, SIL Open Font License 1.1.
 - PDF fonts: DejaVu Sans, Serif and Mono, Bitstream Vera / DejaVu licence.
-- React Flow (MIT), d3 (ISC), Preact (MIT), PDFKit (MIT), auto-animate (MIT), three.js (MIT, the 3D model viewer), electron-updater (MIT).
+- React Flow (MIT), d3 (ISC), Preact (MIT), PDFKit (MIT), auto-animate (MIT), three.js (MIT, the 3D model viewer), electron-updater (MIT), the MCP TypeScript SDK and zod (MIT, the server for AI apps).
 
 The app lists the same credits under **About** in the library.

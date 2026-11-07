@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "license": "MIT",
-  "description": "Headless Lore-Forge commands: lore check, export, codex, book, duplicate.",
+  "description": "Headless Lore-Forge commands: lore check, export, codex, book, duplicate, and the MCP server (lore mcp).",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kaharamamm/Lore-Forge.git",
@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@lore-forge/core": "1.0.0",
+    "@lore-forge/mcp": "1.0.0",
     "@lore-forge/pdf": "1.0.0"
   },
   "files": [

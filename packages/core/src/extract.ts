@@ -127,6 +127,42 @@ const STOP = new Set([
   'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December',
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'God', 'Gods', 'Part', 'Prologue', 'Epilogue',
 ]);
+/**
+ * Words that start sentences, mostly in dialogue, without being names there: questions ("Are you sure?"), commands
+ * ("Remember the smell."), numbers and amounts. Only a sentence's first word is checked, so "said Will" can still be a name.
+ */
+const COMMON_START = new Set([
+  'Am', 'Are', 'Is', 'Was', 'Were', 'Be', 'Been', 'Do', 'Does', 'Did', 'Can', 'Could', 'Will', 'Would', 'Shall', 'Should', 'Might', 'Must',
+  'Have', 'Has', 'Had', 'Let', 'Come', 'Go', 'Look', 'Listen', 'Hear', 'Wait', 'Stop', 'Remember', 'Forget', 'Make', 'Take', 'Sit', 'Stand',
+  'Follow', 'Keep', 'Stay', 'Run', 'Get', 'Give', 'Tell', 'See', 'Watch', 'Hold', 'Help', 'Try', 'Find', 'Bring', 'Leave', 'Put', 'Turn',
+  'Move', 'Walk', 'Hurry', 'Hush', 'Climb', 'Drink', 'Eat', 'Sleep', 'Rest', 'Open', 'Close', 'Mind', 'Show', 'Ask', 'Say', 'Sing',
+  'Breathe', 'Trust', 'Believe', 'Think', 'Imagine', 'Promise', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+  'Eleven', 'Twelve', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Hundred', 'Hundreds', 'Thousand', 'Thousands', 'Half', 'Dozens', 'Much', 'More',
+  'Less', 'Enough', 'Good', 'Bad', 'Low', 'High', 'Very', 'Too', 'Just', 'Almost', 'Better', 'Best', 'Little', 'Same', 'Sure', 'Right',
+  'Back', 'Up', 'Down', 'Off', 'Out', 'Away', 'Together', 'Ready', 'Fine', 'Okay', 'Quiet', 'Quick', 'Careful', 'Easy', 'Steady',
+  'Whatever', 'Whoever', 'Somehow', 'Anyway', 'Besides', 'Otherwise', 'Already', 'Rather', 'Quite', 'Sorry', 'Near', 'Far', 'Past',
+  'Beside', 'Between', 'Beneath', 'Underneath', 'Despite', 'Except', 'Like', 'Unlike', 'Onto',
+]);
+/** "I'm", "We'll", "Don't": contractions, never names. */
+const CONTRACTION = /^(?:I|You|We|They|He|She|It|That|There|Here|Who|What|Where|How|Let)['’](?:m|ll|ve|re|d|s)$|n['’]t$/u;
+/**
+ * The plain forms a capitalised word may come from: "Bells" from bell, "Foxes" from fox, "Stories" from story,
+ * "Flying" from fly, "Running" from run, "Making" from make. A sentence-initial word whose plain form the chapter
+ * uses in lowercase is that common word, not a name.
+ */
+function plainForms(word: string): string[] {
+  const w = word.toLowerCase();
+  const out: string[] = [];
+  if (w.length > 4 && /[^s]s$/.test(w)) out.push(w.slice(0, -1));
+  if (/(?:s|x|z|ch|sh)es$/.test(w)) out.push(w.slice(0, -2));
+  if (w.length > 4 && w.endsWith('ies')) out.push(`${w.slice(0, -3)}y`);
+  if (w.length > 5 && w.endsWith('ing')) {
+    const stem = w.slice(0, -3);
+    out.push(stem, `${stem}e`);
+    if (/([b-df-hj-np-tv-z])\1$/.test(stem)) out.push(stem.slice(0, -1));
+  }
+  return out;
+}
 const ITEM_WORDS = [
   'Sword', 'Blade', 'Crown', 'Compass', 'Ring', 'Amulet', 'Staff', 'Spear', 'Shield', 'Helm', 'Bow', 'Axe', 'Dagger',
   'Cup', 'Chalice', 'Lamp', 'Orb', 'Scepter', 'Sceptre', 'Book', 'Tome', 'Scroll', 'Key', 'Stone', 'Gem', 'Necklace',
@@ -591,7 +627,8 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
     for (const m of s.text.matchAll(rx`${START}${NAME}`)) {
       const at = m.index!;
       const before = s.text.slice(0, at);
-      const initial = /^[\s"'“‘(]*$/.test(before);
+      // The first word of a sentence, of a quote inside one (said, "Are we there?") or of *emphasis*.
+      const initial = /^[\s"'“‘(*_]*$/.test(before) || /(?:^|[\s,:;(—–-])["'“‘*_]+$/u.test(before);
       const possessive = /['’]s$/.test(m[0]);
       const split = splitRole(m[0].replace(/['’]s$/, ''));
       const n = cleanName(split.raw);
@@ -599,12 +636,13 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       const words = n.name.split(' ');
       const one = words.length === 1 ? n.name : undefined;
       if (one && (TITLE_SET.has(one) || ITEM_WORDS.includes(one) || PLACE_WORDS.includes(one) || EVENT_WORDS.includes(one))) continue;
-      if (p.months.has(n.name) || p.eras.has(n.name) || words.some((w) => STOP.has(w)) || /^\p{Lu}{1,4}$/u.test(n.name)) continue;
+      if (p.months.has(n.name) || p.eras.has(n.name) || words.some((w) => STOP.has(w) || CONTRACTION.test(w)) || /^\p{Lu}{1,4}$/u.test(n.name)) continue;
       if (/(?:^|[^\p{L}])of[ \t]+(?:the[ \t]+)?$/u.test(before)) continue; // "son of X", "Battle of X": other patterns
       if (initial && !n.title && !split.role && words.length === 1) {
         // A sentence-initial word is a name only when it is not a common word and goes on into the sentence.
         const after = s.text.slice(at + m[0].length);
-        if (/ly$/.test(n.name) || lowerWords.has(n.name.toLowerCase()) || !/^[ \t]+\p{Ll}/u.test(after)) continue;
+        const common = lowerWords.has(n.name.toLowerCase()) || COMMON_START.has(n.name) || plainForms(n.name).some((w) => lowerWords.has(w));
+        if (/ly$/.test(n.name) || common || !/^[ \t]+\p{Ll}/u.test(after)) continue;
       }
       const afterThe = /(?:^|[^\p{L}])the[ \t]+$/iu.test(before) || /^the$/i.test(m[0].split(/[ \t]+/)[0]!);
       const hasWord = (list: readonly string[]) => words.some((w) => list.includes(w));

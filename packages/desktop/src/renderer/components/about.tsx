@@ -14,6 +14,7 @@ const CREDITS: [string, string, string, string][] = [
   ['PDF', 'PDFKit', 'MIT', 'https://pdfkit.org'],
   ['3D model viewer', 'three.js (GLTF, OBJ and FBX loaders, OrbitControls), loaded only when a model is shown', 'MIT', 'https://threejs.org'],
   ['Self-update', 'electron-updater (electron-builder)', 'MIT', 'https://www.electron.build/auto-update'],
+  ['AI apps (MCP server)', 'MCP TypeScript SDK and zod', 'MIT', 'https://modelcontextprotocol.io'],
 ];
 
 /** About and credits: who made the icons and fonts, and their licences (CC BY needs the attribution). */

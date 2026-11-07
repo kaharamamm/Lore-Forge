@@ -9,6 +9,7 @@
     "id": { "type": "string", "minLength": 1 },
     "name": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
+    "artStyle": { "type": "string", "description": "One line describing the look of every picture made for this world (used by image tools), e.g. \"painterly fantasy concept art, warm desert light\"." },
     "calendar": {
       "type": "object",
       "required": ["eras", "defaultEra"],

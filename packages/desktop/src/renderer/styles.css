@@ -170,6 +170,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--er
 .nav-back:disabled { opacity: 0.35; cursor: default; }
 /* game-icons' plain-arrow points down: turned a quarter it points left (the Back button). */
 .icon.point-left { transform: rotate(90deg); }
+.icon.point-right { transform: rotate(-90deg); }
 /* The world's mini book and its title are one button to world home. Hover: the cover swings open on its left
    hinge onto a glowing page (reduced motion: the glow only). */
 .world-home-btn { display: flex; align-items: center; gap: 0.7rem; min-width: 0; padding: 0.2rem 0.6rem 0.2rem 0.3rem; border: 1px solid transparent; background: none; border-radius: 8px; font: inherit; color: inherit; }
@@ -1630,6 +1631,34 @@ body:has(.modal-backdrop) .toasts { right: auto; left: 1rem; }
 .link-button { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
 .link-button:hover { background: none; border: 0; color: var(--text); }
 .link-button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+/* Connect AI (library): the AI apps Lore-Forge's MCP server is added to, and the picture service. */
+.connect-ai { width: min(46rem, 100%); }
+.connect-ai .dialog-body { display: flex; flex-direction: column; gap: 1rem; }
+.ai-intro { display: flex; gap: 0.9rem; align-items: flex-start; margin: 0; line-height: 1.55; }
+.ai-intro-mark { flex: none; width: 2.4rem; height: 2.4rem; color: var(--gold); }
+.ai-intro q { color: var(--gold); }
+.ai-apps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.ai-app { display: grid; grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr) auto; align-items: center; gap: 0.4rem 0.9rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+.ai-app.is-connected { border-color: var(--gold-soft); }
+.ai-app-name { font-weight: 650; }
+.ai-app-status { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.9rem; }
+.ai-app.is-connected .ai-app-status { color: var(--ok); }
+.ai-app .ai-notice { grid-column: 1 / -1; }
+.ai-notice { margin: 0; font-size: 0.88rem; color: var(--ok); }
+.ai-notice.is-error { color: var(--error); }
+.ai-other { margin-top: 0.2rem; }
+.ai-copied { color: var(--ok); }
+.ai-key-row { display: flex; gap: 0.5rem; align-items: center; }
+.ai-key { flex: 1; min-width: 0; }
+.ai-get-key { flex: none; }
+.ai-pictures-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.8rem; }
+.ai-pictures-actions .ai-notice { margin-right: auto; }
+@media (max-width: 40rem) {
+  .ai-app { grid-template-columns: minmax(0, 1fr) auto; }
+  .ai-app-status { grid-column: 1 / -1; grid-row: 2; }
+  .ai-key-row { flex-wrap: wrap; }
+}
 @media (max-width: 640px) { .settings-row { grid-template-columns: minmax(0, 1fr); gap: 0.3rem; } .settings-row > .settings-label:empty { display: none; } .folder-picker { flex-wrap: wrap; } }
 
 /* Buttons that were only an icon now say what they do; on narrow windows the words fold away and the button keeps

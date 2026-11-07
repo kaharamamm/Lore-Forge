@@ -53,6 +53,13 @@ export function useImage(dir: string | null, file: string | undefined): string |
 }
 /** Forget cached images (after Reload, files may have changed on disk). */
 export const forgetImages = () => { images.clear(); imagesRead.clear(); };
+/** Forget only these files (paths inside the world), which changed on disk: the other pictures stay as they are. */
+export const forgetImageFiles = (dir: string, files: readonly string[]) => {
+  for (const f of files) {
+    images.delete(imageKey(dir, f));
+    imagesRead.delete(imageKey(dir, f));
+  }
+};
 
 /** The entry's card icon: the one picked for it on the Home page, else the default from core (gender, race, keywords). */
 export function entryEmblem(entry: Entry, raceName?: string): IconName {

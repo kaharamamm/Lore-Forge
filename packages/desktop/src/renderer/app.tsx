@@ -22,7 +22,7 @@ import { ErasLink, WorldSettings } from './components/world-settings.tsx';
 import { transition } from './motion.ts';
 import { sameWarnings, useEvent, useSame, useSettledWorld } from './hooks.ts';
 import { WorldHome } from './components/home.tsx';
-import { forgetImages, Portrait, portraitFile, WorldBookCover, WorldDir } from './components/cover.tsx';
+import { forgetImageFiles, forgetImages, Portrait, portraitFile, WorldBookCover, WorldDir } from './components/cover.tsx';
 import { ConfirmDialog } from './components/confirm.tsx';
 import { PaneResizer, SaveIndicator, sidebarMax, useSidebarWidth, type SaveState } from './components/chrome.tsx';
 import { ChapterList, StoryView, type StoryActions } from './components/story.tsx';
@@ -187,17 +187,32 @@ export function App() {
   const toasts = useToasts();
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const pending = useRef(new Map<string, () => Promise<void>>());
+  /** Files changed outside the app while the user's own edits were waiting to be saved: read once those are written. */
+  const liveWanted = useRef<Set<string> | null>(null);
 
-  const open = useCallback(async (d: string) => {
+  /**
+   * Opens (or reads again) a world. `changed` makes it a live update after files changed outside the app (an AI
+   * assistant writing through `lore mcp`): the view and selection stay, only the changed pictures are read again,
+   * and typing that is not saved yet is never overwritten (the update waits for that save).
+   */
+  const open = useCallback(async (d: string, changed?: readonly string[]) => {
     try {
       const w = parseWorld(await window.lore.readWorld(d));
+      if (changed) {
+        if (dirRef.current !== d) return null;
+        if (pending.current.size) {
+          liveWanted.current = new Set([...(liveWanted.current ?? []), ...changed]);
+          return null;
+        }
+      }
       if (dirRef.current !== d) {
         // Another world starts on its home page (history keeps the way back to the library).
         setView('home');
         setPreview(null);
         dirRef.current = d;
       }
-      forgetImages();
+      if (changed) forgetImageFiles(d, changed);
+      else forgetImages();
       setDir(d);
       setWorld(w);
       setLoadError(null);
@@ -2533,10 +2548,24 @@ export function App() {
         if (w) await w();
       }
       if (pending.current.size === 0) setSave({ kind: 'saved' });
+      // Changes from outside that waited for this save can be shown now.
+      if (pending.current.size === 0 && liveWanted.current && dirRef.current) {
+        const files = [...liveWanted.current];
+        liveWanted.current = null;
+        void open(dirRef.current, files);
+      }
     } catch (e) {
       setSave({ kind: 'failed', message: (e as Error).message });
     }
   };
+
+  // Live view: files of the open world changed outside the app (an AI assistant writing through `lore mcp`, an
+  // editor, git) are read again at once, unless the user's own edits are still waiting to be saved.
+  useEffect(() => window.lore.onWorldChanged(({ dir: d, files }) => {
+    if (d !== dirRef.current) return;
+    if (pending.current.size) liveWanted.current = new Set([...(liveWanted.current ?? []), ...files]);
+    else void open(d, files);
+  }), [open]);
 
   const updateEntry = (entry: Entry): void => {
     if (!world || !dir) return;

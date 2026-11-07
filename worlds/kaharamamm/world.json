@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "kaharamamm",
+  "name": "Kaharamamm",
+  "calendar": {
+    "eras": [
+      {
+        "id": "BW",
+        "name": "Before the Wells",
+        "start": -600,
+        "color": "#8a6a4a"
+      },
+      {
+        "id": "CR",
+        "name": "Camelamamm Reckoning",
+        "start": 1,
+        "color": "#4a6a8c"
+      }
+    ],
+    "defaultEra": "CR",
+    "months": [
+      {
+        "name": "Dawnwind",
+        "days": 60
+      },
+      {
+        "name": "Saltsun",
+        "days": 60
+      },
+      {
+        "name": "Highheat",
+        "days": 60
+      },
+      {
+        "name": "Palmfall",
+        "days": 60
+      },
+      {
+        "name": "Duskwind",
+        "days": 60
+      },
+      {
+        "name": "Starfrost",
+        "days": 60
+      }
+    ]
+  },
+  "description": "A red-stone mountain city of snow-cream stalls and hero statues, and the small boy who remembers what its silent bell is for.",
+  "artStyle": "Painterly fantasy concept art, cool mountain light and warm copper lantern glow, soft brush strokes, storybook warmth",
+  "book": {
+    "title": "Kerem and the Hero's Bell",
+    "author": "Ahmet Kadir Zengin",
+    "dedication": "For everyone who ran to warn someone, and was not believed the first time.",
+    "epigraph": "Heroes are only people who happened to be there, and did not run.",
+    "epigraphSource": "Saying of the Paddle Guild",
+    "trim": "a4"
+  },
+  "cover": {
+    "color": "#4a6a8c",
+    "color2": "#7a2418",
+    "icon": "ringing-bell",
+    "iconColor": "#f2c46d",
+    "titleColor": "#fff1d2",
+    "font": "Cinzel Decorative"
+  }
+}

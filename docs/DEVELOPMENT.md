@@ -8,10 +8,14 @@ packages/core  (@lore-forge/core)      types, dates, parser and serializer, rule
     │
     ├── packages/pdf  (@lore-forge/pdf)   PDF (pdfkit) and Word (docx) rendering of the documents
     │
-    ├── packages/cli  (@lore-forge/cli)   lore check / export / codex / book
+    ├── packages/mcp  (@lore-forge/mcp)   MCP server for AI apps: book tools, picture services,
+    │                                     AI app settings
+    │
+    ├── packages/cli  (@lore-forge/cli)   lore check / export / codex / book / duplicate / mcp
     │
     └── packages/desktop  (@lore-forge/desktop)
-            ├── main process (Electron)   files, dialogs, exports, settings, recent worlds
+            ├── main process (Electron)   files, dialogs, exports, settings, recent worlds,
+            │                             folder watching, Connect AI
             ├── preload                   window.lore: the only bridge between the two
             └── renderer (Preact)         library, editor, views, story, previews
 ```
@@ -48,10 +52,19 @@ packages/
     src/docx.ts                the same book for Word
     src/fonts.ts               bundled and system cover fonts
     fonts/                     Liberation fonts for covers
+  mcp/
+    src/server.ts              the MCP tools and the write_story prompt; runStdio for `lore mcp`
+    src/books.ts               what the tools do to a world: entries, links, chapters, checks, pictures
+    src/guide.ts               the playbook and field reference the assistant reads, built from core's tables
+    src/images.ts              OpenAI, Gemini and xAI image generation, model choice, ai-images.json
+    src/library.ts             the shelf as the app sees it: user-data folder, worlds folder, sample
+    src/clients.ts             Claude Desktop, Claude Code, Codex and Cursor settings (Connect AI)
   cli/
-    src/main.ts                lore check / export / codex / book
+    src/main.ts                lore check / export / codex / book / duplicate / mcp
   desktop/
     src/main/main.ts           Electron main process and IPC handlers
+    src/main/watch.ts          watches the open world and the library for changes from outside
+    src/main/ai.ts             Connect AI: AI app settings and the picture service
     src/shared/api.ts          the window.lore API shared by main, preload and renderer
     src/renderer/
       app.tsx                  world app shell, navigation, autosave, headless smoke test
@@ -103,7 +116,8 @@ Tests use Node's built-in test runner with native TypeScript type stripping: no 
 
 - `packages/core/test/` covers dates, parsing, every rule, the story extractor and checks, layouts, schemas and the document model.
 - `packages/pdf/test/` renders real PDFs and Word files and checks their page order, running heads, page numbers and fonts (page text checks use `pdftotext` when it is installed).
-- `packages/cli/test/` runs the real `lore` commands.
+- `packages/mcp/test/` drives the MCP server through an in-memory client: a whole book written with the tools, the read-only sample, picture services with a fake `fetch`, model choice, and the AI app settings files.
+- `packages/cli/test/` runs the real `lore` commands, including `lore mcp` over stdio.
 
 `packages/core/test/fixtures/shifting-sands` is the rule test world. It breaks canon on purpose so every rule fires once, and its README maps each rule to the entry that triggers it. It is a test fixture and does not show on the shelf.
 
@@ -161,6 +175,12 @@ It only uses the workflow's own `GITHUB_TOKEN` (`contents: write`). `GENERATOR` 
 ### Self-update
 
 `packages/desktop/src/main/updater.ts` uses electron-updater with the GitHub provider (the `publish` block in `electron-builder.yml`). The states and the version logic are in `src/shared/update-state.ts` with unit tests. It is off when running from source, in the smoke test and with `LORE_FORGE_NO_UPDATE=1`. To try it locally, serve a folder with a newer build and its `latest-linux.yml` and start an installed build with `LORE_FORGE_UPDATE_URL=http://localhost:8000/`; `LORE_FORGE_UPDATE_SUDO=sudo` replaces the `pkexec` prompt of the `.deb` install (for a terminal without a desktop).
+
+### The MCP server
+
+`lore mcp` (in `packages/mcp`) is bundled into `dist/cli.cjs` with the rest of the CLI. **Connect AI** writes AI app settings that start the app's own executable with `ELECTRON_RUN_AS_NODE=1` on that file, plus `LORE_FORGE_DATA` (the app's user-data folder), so the server sees the same library and settings as the app. The settings point at the running app, so connecting from a source checkout uses `packages/desktop/dist/cli.cjs` and the checkout's `worlds/` folder (`LORE_FORGE_WORLDS`). The AppImage cannot be connected, since its path changes on every start.
+
+To try the server with a client without touching any app's settings, Claude Code can load it for one session: `claude --mcp-config <file> --strict-mcp-config`, with the server in the file's `mcpServers` and `LORE_FORGE_DATA`/`LORE_FORGE_WORLDS` pointing at a scratch folder.
 
 ### The `lore` command in the packages
 
@@ -223,4 +243,5 @@ The shelf lists the worlds folder (Library settings), the worlds you opened from
 | Word | `docx` 9, `fflate` |
 | Fonts | Cinzel (headings), 16 bundled cover fonts from Fontsource and Liberation |
 | Icons | game-icons.net via `@iconify-json/game-icons` |
+| AI apps | `@modelcontextprotocol/sdk` 1 (MCP server, stdio), zod 4 |
 | Tests | `node:test` with native TypeScript type stripping, ajv for the schemas |

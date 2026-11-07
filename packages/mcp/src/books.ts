@@ -1,0 +1,646 @@
+/**
+ * What the assistant can do to a book (a world folder): create it, read it, change its entries, relationships,
+ * chapters and pictures, check it and export it. Every change goes through the same parser, serializer and rules as
+ * the desktop app, so files written here look exactly like files the app writes.
+ */
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
+import YAML from 'yaml';
+import {
+  analyzeStory, applyFields, artBrief, calendarProblems, chapterDate, chapterPath, check, cleanCoverSettings, DEFAULT_STATUS, DETAIL_FIELDS,
+  ENTRY_TYPES, entryPath, isStoryFact, LIFECYCLE, newEntryId, normalizeName, parseEntry, proposalEntry, relationFits, relationKind,
+  serializeEntry, sortChapters, splitFrontMatter, storyBook, TRIMS, TYPE_LABELS, TYPE_SINGULAR, wordCount, WorldIndex, worldCodex,
+  type Calendar, type Entry, type EntryType, type FactRef, type Proposal, type Relation, type StoryChapter, type TrimSize, type Warning,
+  type World, type WorldCoverSettings,
+} from '@lore-forge/core';
+import { createWorld, duplicateWorld, loadWorld, saveChapter, saveEntry, saveIntended, saveStoryIgnored, uniqueWorldDir } from '@lore-forge/core/node';
+import { writeDocx, writePublication } from '@lore-forge/pdf';
+import type { Library } from './library.ts';
+
+export type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
+const today = (): string => new Date().toISOString().slice(0, 10);
+
+// ------------------------------------------------------------------------------------------------- books
+
+export interface BookPatch {
+  name?: string;
+  description?: string | null;
+  /** One style line used for every picture of this book, e.g. "painterly fantasy concept art, warm desert light". */
+  artStyle?: string | null;
+  calendar?: Calendar;
+  /** Story Book details (title, author, dedication, epigraph, ...). null removes a field. */
+  book?: Obj;
+  /** Cover look on the shelf (colours, emblem, title colour and font). null removes a field. */
+  cover?: Obj;
+}
+
+async function readManifestRaw(dir: string): Promise<Obj> {
+  return JSON.parse(await readFile(join(dir, 'world.json'), 'utf8')) as Obj;
+}
+async function writeManifestRaw(dir: string, raw: Obj): Promise<void> {
+  await writeFile(join(dir, 'world.json'), JSON.stringify(raw, null, 2) + '\n', 'utf8');
+}
+
+/** Shallow merge where null (or an empty string) removes a key. */
+function mergeObj(base: unknown, patch: Obj): Obj {
+  const out: Obj = { ...(isObj(base) ? base : {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null || v === '') delete out[k];
+    else if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+function cleanCalendar(c: Calendar): Calendar {
+  const out: Calendar = {
+    eras: c.eras.map(({ id, name, start, end, color }) => ({ id: id.trim(), name: name.trim(), start, ...(end !== undefined ? { end } : {}), ...(color ? { color } : {}) })),
+    defaultEra: c.defaultEra.trim(),
+  };
+  if (c.months?.length) out.months = c.months.map(({ name, days }) => ({ name, days }));
+  if (c.approxYears !== undefined) out.approxYears = c.approxYears;
+  return out;
+}
+
+/** Changes world.json in place, keeping every key Lore-Forge does not know about. */
+export async function patchBook(dir: string, patch: BookPatch): Promise<void> {
+  const raw = await readManifestRaw(dir);
+  if (patch.name?.trim()) raw['name'] = patch.name.trim();
+  for (const k of ['description', 'artStyle'] as const) {
+    const v = patch[k];
+    if (v === undefined) continue;
+    if (v === null || !v.trim()) delete raw[k];
+    else raw[k] = v.trim();
+  }
+  if (patch.calendar) {
+    const cal = cleanCalendar(patch.calendar);
+    const problems = calendarProblems(cal);
+    if (problems.length) throw new Error(`The calendar does not work: ${problems.join(' ')}`);
+    raw['calendar'] = cal;
+  }
+  if (patch.book) {
+    if (typeof patch.book['trim'] === 'string' && !(patch.book['trim'] in TRIMS)) throw new Error(`book.trim must be one of ${Object.keys(TRIMS).join(', ')}.`);
+    const b = mergeObj(raw['book'], patch.book);
+    if (Object.keys(b).length) raw['book'] = b;
+    else delete raw['book'];
+  }
+  if (patch.cover) {
+    const c = cleanCoverSettings(mergeObj(raw['cover'], patch.cover) as WorldCoverSettings);
+    if (Object.keys(c).length) raw['cover'] = c;
+    else delete raw['cover'];
+  }
+  await writeManifestRaw(dir, raw);
+}
+
+/** A new, empty book in the library's worlds folder. Its id is its folder name, so two books never share one. */
+export async function createBook(lib: Library, input: BookPatch & { name: string }): Promise<{ dir: string; id: string; name: string }> {
+  const name = input.name.trim();
+  if (!name) throw new Error('A book needs a name.');
+  const root = lib.worldsDir();
+  await mkdir(root, { recursive: true });
+  const dir = uniqueWorldDir(root, name);
+  await createWorld(dir, name);
+  const raw = await readManifestRaw(dir);
+  raw['id'] = basename(dir);
+  await writeManifestRaw(dir, raw);
+  await patchBook(dir, input);
+  return { dir, id: basename(dir), name };
+}
+
+export async function duplicateBook(lib: Library, src: string, name: string): Promise<{ dir: string; id: string; name: string }> {
+  const dir = await duplicateWorld(src, lib.worldsDir(), name);
+  const world = await loadWorld(dir);
+  return { dir, id: world.manifest.id, name: world.manifest.name };
+}
+
+/** The book in one page: settings, every entry in short, the chapters, the warning counts. */
+export async function bookOverview(lib: Library, dir: string): Promise<Obj> {
+  const world = await loadWorld(dir);
+  const raw = await readManifestRaw(dir);
+  const warnings = check(world);
+  const open = warnings.filter((w) => !w.intended);
+  const m = world.manifest;
+  return {
+    name: m.name,
+    id: m.id,
+    folder: dir,
+    readOnly: lib.isReadOnly(dir) || undefined,
+    description: m.description,
+    artStyle: typeof raw['artStyle'] === 'string' ? raw['artStyle'] : undefined,
+    calendar: { defaultEra: m.calendar.defaultEra, eras: m.calendar.eras.map((e) => `${e.id} = ${e.name} (starts at absolute year ${e.start}${e.end !== undefined ? `, ends ${e.end}` : ''})`), months: m.calendar.months?.map((x) => `${x.name} (${x.days} days)`) },
+    book: m.book,
+    cover: m.cover,
+    counts: Object.fromEntries(ENTRY_TYPES.map((t) => [TYPE_LABELS[t].toLowerCase(), world.entries.filter((e) => e.type === t).length])),
+    entries: world.entries.map(entrySummary),
+    chapters: sortChapters(world.story ?? []).map((c, i) => ({ number: i + 1, title: c.title, date: chapterDate(c), words: wordCount(c.body), file: c.file })),
+    warnings: { errors: open.filter((w) => w.severity === 'error').length, warnings: open.filter((w) => w.severity === 'warning').length, info: open.filter((w) => w.severity === 'info').length, intended: warnings.length - open.length },
+  };
+}
+
+const DATE_KEYS = ['born', 'died', 'founded', 'created', 'dissolved', 'destroyed', 'date', 'end'] as const;
+
+function entrySummary(e: Entry): Obj {
+  const r = e as unknown as Obj;
+  const dates = DATE_KEYS.filter((k) => typeof r[k] === 'string').map((k) => `${k} ${r[k] as string}`).join(', ');
+  return {
+    id: e.id, type: e.type, name: e.name,
+    ...((r['status'] as string | undefined) ? { status: r['status'] } : {}),
+    ...(dates ? { dates } : {}),
+    ...(e.summary ? { summary: e.summary } : {}),
+    ...(e.images?.length ? { images: e.images.length } : {}),
+  };
+}
+
+// ----------------------------------------------------------------------------------------------- entries
+
+/** An entry by id, name or alias (optionally of one type). The error lists close names, so the assistant can retry. */
+export function findEntry(world: World, ref: string, type?: EntryType): Entry {
+  const text = ref.trim();
+  const byId = world.entries.find((e) => e.id === text);
+  if (byId && (!type || byId.type === type)) return byId;
+  const hit = new WorldIndex(world).resolve(text);
+  if (hit && (!type || hit.type === type)) return hit;
+  const want = normalizeName(text).replace(/^the /, '');
+  const loose = world.entries.filter((e) => (!type || e.type === type) && [e.name, ...(e.aliases ?? [])].some((n) => normalizeName(n).replace(/^the /, '') === want));
+  if (loose.length === 1) return loose[0]!;
+  const near = world.entries.filter((e) => normalizeName(e.name).includes(want) || want.includes(normalizeName(e.name))).slice(0, 8).map((e) => `"${e.name}" (${e.id})`);
+  throw new Error(`No ${type ? TYPE_SINGULAR[type].toLowerCase() : 'entry'} "${ref}" in ${world.manifest.name}.${near.length ? ` Did you mean ${near.join(', ')}?` : ''}`);
+}
+
+/** The entry as the assistant should see it: the file's front matter as JSON, plus the body text. */
+export function entryJson(world: World, e: Entry): Obj {
+  const split = splitFrontMatter(serializeEntry(e));
+  const data = 'error' in split ? {} : (split.data as Obj);
+  return { ...data, body: e.body, file: world.files[e.id] };
+}
+
+const COMMON_KEYS = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'relations', 'images', 'picture', 'visual', 'chapter', 'bookOrder', 'body'];
+const TYPE_KEYS: Record<EntryType, readonly string[]> = {
+  character: ['race', 'born', 'died', 'status', 'locations'],
+  place: ['status', 'founded', 'destroyed', 'partOf'],
+  faction: ['status', 'founded', 'dissolved'],
+  item: ['status', 'created', 'destroyed'],
+  event: ['date', 'end', 'place', 'participants', 'actions'],
+  note: ['date'],
+};
+export const knownKeys = (t: EntryType): string[] => [...COMMON_KEYS, ...TYPE_KEYS[t], ...DETAIL_FIELDS[t].map((f) => f.key)];
+
+const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : typeof v === 'string' ? v.split(',').map((s) => s.trim()).filter(Boolean) : v === undefined || v === null ? [] : [v]);
+const asText = (v: unknown): unknown => (typeof v === 'number' ? String(v) : v);
+const kebab = (s: string): string => s.trim().toLowerCase().replace(/[\s_]+/g, '-');
+
+/**
+ * The assistant's fields, tidied into the file format: numbers in dates become text, comma lists become lists,
+ * names of other entries become their ids when those exist (or are being created in the same call).
+ */
+function normalizeFields(input: Obj, type: EntryType, ref: (s: unknown) => unknown): Obj {
+  const out: Obj = {};
+  for (const [k, v] of Object.entries(input)) {
+    if (['id', 'type', 'body'].includes(k)) continue;
+    if (v === null) { out[k] = null; continue; }
+    if ((DATE_KEYS as readonly string[]).includes(k)) out[k] = asText(v);
+    else if (k === 'aliases' || k === 'tags') out[k] = asList(v).map(asText);
+    else if (k === 'place' || k === 'partOf') out[k] = ref(v);
+    else if (k === 'relations') {
+      out[k] = asList(v).filter(isObj).map((r) => ({ ...r, type: typeof r['type'] === 'string' ? kebab(r['type']) : r['type'], target: ref(r['target']), from: asText(r['from']), to: asText(r['to']) }));
+    } else if (k === 'locations') {
+      out[k] = asList(v).map((l) => (isObj(l) ? { ...l, place: ref(l['place']), from: asText(l['from']), to: asText(l['to']) } : { place: ref(l) }));
+    } else if (k === 'participants') {
+      out[k] = asList(v).map((p) => (isObj(p) ? { ...p, id: ref(p['id'] ?? p['name']) } : { id: ref(p) }));
+    } else if (k === 'actions') {
+      out[k] = asList(v).filter(isObj).map((a) => ({ ...a, actor: ref(a['actor']), ...(a['target'] !== undefined ? { target: ref(a['target']) } : {}) }));
+    } else if (k === 'visual' && isObj(v)) {
+      out[k] = Object.fromEntries(Object.entries(v).filter(([, x]) => x !== null && x !== undefined && x !== '').map(([kk, x]) => [kk, String(x)]));
+    } else {
+      const f = DETAIL_FIELDS[type].find((d) => d.key === k);
+      if (f?.kind === 'ref') out[k] = ref(v);
+      else if (f?.kind === 'refs') out[k] = asList(v).map(ref);
+      else if (f?.kind === 'list') out[k] = asList(v).map(asText);
+      else out[k] = asText(v);
+    }
+  }
+  // Undefined dates inside relations etc. are dropped by YAML; keep objects tidy.
+  return JSON.parse(JSON.stringify(out)) as Obj;
+}
+
+export interface EntryInput extends Obj {
+  id?: string;
+  type?: string;
+  name?: string;
+  body?: string;
+}
+
+export interface SavedEntry { id: string; type: EntryType; name: string; file: string; created: boolean }
+
+export interface SaveOutcome {
+  saved: SavedEntry[];
+  /** Entries that could not be saved, with the reason. */
+  problems: string[];
+  /** Field names that are not part of the format (kept in the file, but Lore-Forge does not use them). */
+  notes: string[];
+  /** Open errors and warnings that involve the saved entries. */
+  warnings: FormattedWarning[];
+}
+
+/**
+ * Creates or updates entries. An item with the id or the exact name of an existing entry (of that type) updates it:
+ * only the fields given change, null removes a field, lists replace the whole list. Others are created; ids come
+ * from the type and name ("char-mr-camel"). Names of entries in the same call can be used as references.
+ */
+export async function saveEntries(dir: string, items: EntryInput[]): Promise<SaveOutcome> {
+  let world = await loadWorld(dir);
+  const taken = new Set(world.entries.map((e) => e.id));
+  const problems: string[] = [];
+  const notes: string[] = [];
+  type Plan = { item: EntryInput; type: EntryType; name: string; id: string; existing?: Entry };
+  const plans: Plan[] = [];
+  for (const [i, item] of items.entries()) {
+    const label = `#${i + 1}${item.name ? ` "${item.name}"` : item.id ? ` (${item.id})` : ''}`;
+    try {
+      const typeText = typeof item.type === 'string' ? item.type.trim().toLowerCase() : undefined;
+      if (typeText && !(ENTRY_TYPES as readonly string[]).includes(typeText)) throw new Error(`type must be one of ${ENTRY_TYPES.join(', ')}`);
+      let existing = item.id ? world.entries.find((e) => e.id === item.id) : undefined;
+      if (!existing && item.name && typeText) {
+        const want = normalizeName(item.name);
+        existing = world.entries.find((e) => e.type === typeText && normalizeName(e.name) === want);
+      }
+      if (existing && typeText && existing.type !== typeText) throw new Error(`"${existing.name}" is a ${existing.type}; an entry cannot change type (delete it and create a new one)`);
+      const type = (existing?.type ?? typeText) as EntryType | undefined;
+      const name = (typeof item.name === 'string' && item.name.trim()) || existing?.name;
+      if (!type || !name) throw new Error('a new entry needs a "type" and a "name"');
+      const id = existing?.id ?? (item.id && /^[A-Za-z0-9][\w-]*$/.test(item.id) && !taken.has(item.id) ? item.id : newEntryId(type, name, taken));
+      taken.add(id);
+      plans.push({ item, type, name: name.trim(), id, ...(existing ? { existing } : {}) });
+    } catch (e) {
+      problems.push(`${label}: ${(e as Error).message}.`);
+    }
+  }
+  // Names (and aliases) of everything in this call, so they can refer to each other before they exist on disk.
+  const pending = new Map<string, string>();
+  for (const p of plans) {
+    for (const n of [p.name, ...asList(p.item['aliases']).map(String)]) pending.set(normalizeName(n).replace(/^the /, ''), p.id);
+  }
+  const ix = new WorldIndex(world);
+  const ref = (v: unknown): unknown => {
+    if (typeof v !== 'string' || !v.trim()) return v;
+    const t = v.trim();
+    return ix.resolve(t)?.id ?? pending.get(normalizeName(t).replace(/^the /, '')) ?? ix.resolve(t.replace(/^the\s+/i, ''))?.id ?? t;
+  };
+  const saved: SavedEntry[] = [];
+  for (const p of plans) {
+    try {
+      const base: Obj = p.existing
+        ? (() => { const s = splitFrontMatter(serializeEntry(p.existing)); return 'error' in s ? {} : (s.data as Obj); })()
+        : { id: p.id, type: p.type, name: p.name, ...(LIFECYCLE[p.type] ? { status: DEFAULT_STATUS } : {}) };
+      const fm = mergeObj(base, normalizeFields(p.item, p.type, ref));
+      fm['id'] = p.id;
+      fm['type'] = p.type;
+      fm['name'] = p.name;
+      const unknown = Object.keys(p.item).filter((k) => !knownKeys(p.type).includes(k));
+      if (unknown.length) notes.push(`${p.name}: ${unknown.map((k) => `"${k}"`).join(', ')} ${unknown.length === 1 ? 'is' : 'are'} not a ${p.type} field; kept in the file but not shown in Lore-Forge. Use lore_forge_guide for the field names.`);
+      const body = typeof p.item.body === 'string' ? p.item.body : (p.existing?.body ?? '');
+      const parsed = parseEntry(`---\n${YAML.stringify(fm, { lineWidth: 0 })}---\n\n${body.replace(/^\n+/, '')}`);
+      if (!parsed.entry || parsed.problems.length) throw new Error(parsed.problems.join(' '));
+      const file = (p.existing && world.files[p.existing.id]) || entryPath(parsed.entry);
+      await saveEntry(dir, parsed.entry, file);
+      saved.push({ id: p.id, type: p.type, name: p.name, file, created: !p.existing });
+    } catch (e) {
+      problems.push(`"${p.name}": ${(e as Error).message}`);
+    }
+  }
+  world = await loadWorld(dir);
+  const ids = new Set(saved.map((s) => s.id));
+  const warnings = check(world).filter((w) => !w.intended && w.severity !== 'info' && (ids.has(w.offending.entryId) || (w.conflicting && ids.has(w.conflicting.entryId))));
+  return { saved, problems, notes, warnings: warnings.map((w) => formatWarning(world, w)) };
+}
+
+export async function deleteEntry(dir: string, ref: string): Promise<{ id: string; name: string; file: string }> {
+  const world = await loadWorld(dir);
+  const e = findEntry(world, ref);
+  const file = world.files[e.id] ?? entryPath(e);
+  await rm(join(dir, file), { force: true });
+  return { id: e.id, name: e.name, file };
+}
+
+// ----------------------------------------------------------------------------------------- relationships
+
+export interface LinkInput {
+  /** The entry the relationship is written in: "<entry> <type> <target>", e.g. Mr Camel ally-of Queen Samira. */
+  entry: string;
+  type: string;
+  target: string;
+  from?: string;
+  to?: string;
+  note?: string;
+  remove?: boolean;
+}
+
+export async function linkEntries(dir: string, links: LinkInput[]): Promise<{ done: string[]; problems: string[] }> {
+  const world = await loadWorld(dir);
+  const touched = new Map<string, Entry>();
+  const done: string[] = [];
+  const problems: string[] = [];
+  for (const l of links) {
+    try {
+      const a = touched.get(findEntry(world, l.entry).id) ?? structuredClone(findEntry(world, l.entry));
+      const b = findEntry(world, l.target);
+      const kind = relationKind(kebab(l.type));
+      const type = kind?.type ?? kebab(l.type);
+      if (!type) throw new Error('a relationship needs a type');
+      const ix = new WorldIndex(world);
+      const has = (x: Relation) => x.type === type && (x.target === b.id || ix.resolve(x.target)?.id === b.id);
+      if (l.remove) {
+        const before = a.relations?.length ?? 0;
+        a.relations = (a.relations ?? []).filter((x) => !has(x));
+        // A symmetric link may sit on the other entry instead.
+        const other = touched.get(b.id) ?? structuredClone(b);
+        const otherBefore = other.relations?.length ?? 0;
+        if (kind?.symmetric) other.relations = (other.relations ?? []).filter((x) => !(x.type === type && x.target === a.id));
+        if ((a.relations.length) === before && (other.relations?.length ?? 0) === otherBefore) throw new Error(`there is no "${type}" link from ${a.name} to ${b.name}`);
+        touched.set(a.id, a);
+        if (kind?.symmetric) touched.set(b.id, other);
+        done.push(`Removed: ${a.name} ${type} ${b.name}`);
+        continue;
+      }
+      // Earlier links of this same call count: the other entry may have just been given the link.
+      if (kind?.symmetric && ((touched.get(b.id) ?? b).relations ?? []).some((x) => x.type === type && x.target === a.id)) {
+        done.push(`Already linked: ${b.name} ${type} ${a.name} (shown on both entries)`);
+        continue;
+      }
+      const rel: Relation = { type, target: b.id, ...(l.from ? { from: l.from } : {}), ...(l.to ? { to: l.to } : {}), ...(l.note ? { note: l.note } : {}) };
+      const list = a.relations ?? [];
+      const i = list.findIndex(has);
+      a.relations = i >= 0 ? list.map((x, j) => (j === i ? rel : x)) : [...list, rel];
+      touched.set(a.id, a);
+      const fit = kind && !relationFits(kind, a.type, b.type) ? ` (note: "${type}" usually links ${kind.from.join('/')} to ${kind.to.join('/')}; check_book will warn)` : '';
+      done.push(`${i >= 0 ? 'Updated' : 'Linked'}: ${a.name} ${kind?.label ?? type} ${b.name}${fit}`);
+    } catch (e) {
+      problems.push(`${l.entry} ${l.type} ${l.target}: ${(e as Error).message}.`);
+    }
+  }
+  for (const e of touched.values()) await saveEntry(dir, e, world.files[e.id] ?? entryPath(e));
+  return { done, problems };
+}
+
+// ------------------------------------------------------------------------------------------------ story
+
+export interface ChapterInput {
+  title: string;
+  text: string;
+  date?: string;
+  /** Reading position: 1 = first chapter. A chapter with this number and another title is replaced only with replace. */
+  number?: number;
+  /** Replace this existing chapter (its number or title) instead of matching by title. */
+  replace?: string | number;
+}
+
+function findChapter(chapters: StoryChapter[], ref: string | number): StoryChapter | undefined {
+  const sorted = sortChapters(chapters);
+  if (typeof ref === 'number' || /^\d+$/.test(String(ref).trim())) return sorted[Number(ref) - 1];
+  const want = normalizeName(String(ref));
+  return sorted.find((c) => normalizeName(c.title) === want || c.file === ref);
+}
+
+/** Writes one chapter (new, or replacing the one with that title or number) and reports what the story now proposes. */
+export async function writeChapter(dir: string, input: ChapterInput): Promise<Obj> {
+  const title = input.title.trim();
+  if (!title) throw new Error('A chapter needs a title.');
+  let world = await loadWorld(dir);
+  const chapters = world.story ?? [];
+  const sorted = sortChapters(chapters);
+  const old = input.replace !== undefined ? findChapter(chapters, input.replace) : sorted.find((c) => normalizeName(c.title) === normalizeName(title));
+  if (input.replace !== undefined && !old) throw new Error(`There is no chapter "${input.replace}" to replace. Chapters: ${sorted.map((c, i) => `${i + 1}. ${c.title}`).join('; ') || 'none yet'}.`);
+  let chapter: StoryChapter;
+  if (old) {
+    chapter = { ...old, title, body: input.text, ...(input.date !== undefined ? { date: input.date } : {}) };
+    if (input.date === '') delete chapter.date;
+  } else {
+    const order = input.number ?? (sorted.length ? Math.max(...sorted.map((c) => c.order)) + 1 : 1);
+    chapter = { file: chapterPath(order, title, chapters.map((c) => c.file)), title, order, body: input.text, ...(input.date ? { date: input.date } : {}) };
+  }
+  await saveChapter(dir, chapter);
+  world = await loadWorld(dir);
+  const analysis = analyzeStory(world);
+  const here = (p: Proposal) => p.sourceSpan.chapter === chapter.file || p.alsoAt?.some((s) => s.chapter === chapter.file);
+  const number = sortChapters(world.story ?? []).findIndex((c) => c.file === chapter.file) + 1;
+  return {
+    chapter: { number, title, file: chapter.file, words: wordCount(chapter.body), replaced: !!old },
+    proposals: analysis.proposals.filter(here).map(proposalJson),
+    storyWarnings: analysis.warnings.filter((w) => !w.intended && w.offending.chapter === chapter.file).map((w) => formatWarning(world, w)),
+  };
+}
+
+export async function readStory(dir: string, ref?: string | number): Promise<Obj> {
+  const world = await loadWorld(dir);
+  const sorted = sortChapters(world.story ?? []);
+  if (ref === undefined || ref === '') {
+    return { chapters: sorted.map((c, i) => ({ number: i + 1, title: c.title, date: chapterDate(c), words: wordCount(c.body), file: c.file })) };
+  }
+  const c = findChapter(sorted, ref);
+  if (!c) throw new Error(`No chapter "${ref}". Chapters: ${sorted.map((x, i) => `${i + 1}. ${x.title}`).join('; ') || 'none yet'}.`);
+  return { number: sorted.indexOf(c) + 1, title: c.title, date: chapterDate(c), file: c.file, text: c.body };
+}
+
+function proposalJson(p: Proposal): Obj {
+  return {
+    key: p.key,
+    action: p.kind === 'create' ? `create ${p.entryType}` : `update ${p.entryType}`,
+    name: p.name,
+    fields: p.fields,
+    ...(p.previous ? { replaces: p.previous } : {}),
+    quote: p.sourceSpan.quote,
+  };
+}
+
+/** What the story mentions that the world does not have yet. Accepts or ignores proposals by key ("all" accepts every one). */
+export async function storyProposals(dir: string, opts: { accept?: string[]; ignore?: string[] }): Promise<Obj> {
+  let world = await loadWorld(dir);
+  let analysis = analyzeStory(world);
+  const added: string[] = [];
+  const acceptAll = opts.accept?.includes('all');
+  const accept = analysis.proposals.filter((p) => acceptAll || opts.accept?.includes(p.key));
+  if (accept.length) {
+    const taken = new Set(world.entries.map((e) => e.id));
+    const pending = new Map<string, string>();
+    const made: Entry[] = [];
+    for (const p of accept.filter((x) => x.kind === 'create')) {
+      const e = proposalEntry(p, world, taken, pending);
+      taken.add(e.id);
+      pending.set(normalizeName(p.name).replace(/^the /, ''), e.id);
+      made.push(e);
+    }
+    for (const e of made) {
+      await saveEntry(dir, e);
+      added.push(`Created ${e.type} "${e.name}" (${e.id})`);
+    }
+    for (const p of accept.filter((x) => x.kind === 'update' && x.matchedExistingId)) {
+      const target = world.entries.find((e) => e.id === p.matchedExistingId);
+      if (!target) continue;
+      const next = applyFields(target, p.fields, world, pending);
+      await saveEntry(dir, next, world.files[target.id] ?? entryPath(next));
+      added.push(`Updated ${target.type} "${target.name}"`);
+    }
+  }
+  if (opts.ignore?.length) {
+    const have = new Set((world.storyIgnored ?? []).map((i) => i.key));
+    const add = analysis.proposals.filter((p) => opts.ignore!.includes(p.key) && !have.has(p.key)).map((p) => ({ key: p.key, name: p.name, ignoredAt: today() }));
+    if (add.length) await saveStoryIgnored(dir, [...(world.storyIgnored ?? []), ...add]);
+    added.push(...add.map((i) => `Ignored "${i.name}"`));
+  }
+  if (added.length) {
+    world = await loadWorld(dir);
+    analysis = analyzeStory(world);
+  }
+  return { done: added, open: analysis.proposals.map(proposalJson) };
+}
+
+// ------------------------------------------------------------------------------------------------ checks
+
+export interface FormattedWarning {
+  id: string;
+  severity: string;
+  rule: string;
+  message: string;
+  at: string;
+  conflictsWith?: string;
+  note?: string;
+}
+
+function where(world: World, f: FactRef): string {
+  if (isStoryFact(f) && f.chapter && f.span) {
+    const quote = world.story?.find((c) => c.file === f.chapter)?.body.slice(f.span[0], f.span[1]);
+    return `${f.source}${quote ? `: "${quote.length > 140 ? `${quote.slice(0, 137)}...` : quote}"` : ''}`;
+  }
+  return `${f.source} (${f.field})`;
+}
+
+export function formatWarning(world: World, w: Warning): FormattedWarning {
+  return {
+    id: w.id,
+    severity: w.intended ? 'intended' : w.severity,
+    rule: w.ruleId,
+    message: w.message,
+    at: where(world, w.offending),
+    ...(w.conflicting ? { conflictsWith: where(world, w.conflicting) } : {}),
+    ...(w.intended?.note ? { note: w.intended.note } : {}),
+  };
+}
+
+export async function checkBook(dir: string, opts: { entry?: string; includeInfo?: boolean; includeIntended?: boolean }): Promise<Obj> {
+  const world = await loadWorld(dir);
+  const all = check(world);
+  const only = opts.entry ? findEntry(world, opts.entry).id : undefined;
+  const list = all.filter((w) => (opts.includeIntended || !w.intended) && (opts.includeInfo || w.severity !== 'info' || w.intended) && (!only || w.offending.entryId === only || w.conflicting?.entryId === only));
+  const open = all.filter((w) => !w.intended);
+  return {
+    counts: { errors: open.filter((w) => w.severity === 'error').length, warnings: open.filter((w) => w.severity === 'warning').length, info: open.filter((w) => w.severity === 'info').length, intended: all.length - open.length },
+    warnings: list.map((w) => formatWarning(world, w)),
+  };
+}
+
+export async function markIntended(dir: string, warningId: string, note: string): Promise<string> {
+  const world = await loadWorld(dir);
+  const w = check(world).find((x) => x.id === warningId);
+  if (!w) throw new Error(`No open warning with id "${warningId}". Use check_book to see the ids.`);
+  await saveIntended(dir, [...world.intended.filter((m) => m.warningId !== warningId), { warningId, ...(note.trim() ? { note: note.trim() } : {}), markedAt: today() }]);
+  return w.message;
+}
+
+// ----------------------------------------------------------------------------------------------- pictures
+
+/** The entry a picture is for, its default view, and a ready prompt built from its visual description. */
+export async function pictureBrief(dir: string, ref: string, view?: string): Promise<{ world: World; entry?: Entry; view: string; prompt: string; artStyle?: string }> {
+  const world = await loadWorld(dir);
+  const raw = await readManifestRaw(dir);
+  const artStyle = typeof raw['artStyle'] === 'string' && raw['artStyle'].trim() ? raw['artStyle'].trim() : undefined;
+  if (normalizeName(ref) === 'cover') {
+    const m = world.manifest;
+    const title = m.book?.title ?? m.name;
+    const prompt = `Book cover illustration for "${title}"${m.description ? `: ${m.description}` : ''}. A single striking scene, rich detail, leave calm space at the top and bottom for the title. No text, no letters, no logos, no border.`;
+    return { world, view: 'cover', prompt, ...(artStyle ? { artStyle } : {}) };
+  }
+  const entry = findEntry(world, ref);
+  const v = view?.trim() ? kebab(view) : ({ character: 'three-quarter', place: 'establishing', faction: 'emblem', item: 'front', event: 'scene', note: 'illustration' } as const)[entry.type];
+  const brief = artBrief(entry, new WorldIndex(world));
+  const base = brief?.prompt ?? `${entry.type === 'faction' ? `Emblem and banner design for ${entry.name}` : `Illustration of ${entry.name}`}.${entry.summary ? ` ${entry.summary}` : ''}${Object.values(entry.visual ?? {}).length ? ` ${Object.values(entry.visual ?? {}).join(' ')}` : ''} Setting: the world of ${world.manifest.name}.`;
+  const viewHint = v === 'a-pose' ? ' Full body, neutral A-pose, plain background.' : v === 'front' && entry.type === 'character' ? ' Full body, front view.' : '';
+  return { world, entry, view: v, prompt: `${base}${viewHint} No text, no captions, no watermark.`, ...(artStyle ? { artStyle } : {}) };
+}
+
+function freePath(dir: string, rel: string): string {
+  const ext = extname(rel);
+  const stem = rel.slice(0, -ext.length);
+  let out = rel;
+  for (let n = 2; existsSync(join(dir, out)); n++) out = `${stem}-${n}${ext}`;
+  return out;
+}
+
+/** Saves picture bytes into the book and attaches them: to an entry's images (its card picture too, when it had none), or as the cover. */
+export async function attachPicture(dir: string, ref: string, view: string, data: Uint8Array, ext: string, provenance: { tool?: string; prompt?: string; sources?: string[] }): Promise<{ file: string; entry?: string }> {
+  const world = await loadWorld(dir);
+  const prov = { ...(provenance.tool ? { tool: provenance.tool } : {}), ...(provenance.prompt ? { prompt: provenance.prompt } : {}), date: today(), ...(provenance.sources?.length ? { sources: provenance.sources } : {}) };
+  if (normalizeName(ref) === 'cover') {
+    // A new file name each time, like the app's cover editor, so no cached copy of an older cover shows.
+    const file = freePath(dir, `images/cover-${Date.now().toString(36)}.${ext}`);
+    await mkdir(join(dir, 'images'), { recursive: true });
+    await writeFile(join(dir, file), data);
+    await patchBook(dir, { cover: { image: file } });
+    return { file };
+  }
+  const entry = structuredClone(findEntry(world, ref));
+  const safeId = entry.id.replace(/[^\w-]+/g, '-');
+  const file = freePath(dir, `images/${safeId}/${kebab(view).replace(/[^\w-]+/g, '-') || 'concept'}.${ext}`);
+  await mkdir(join(dir, dirname(file)), { recursive: true });
+  await writeFile(join(dir, file), data);
+  entry.images = [...(entry.images ?? []), { file, view: kebab(view), provenance: prov }];
+  if (!entry.picture?.image) entry.picture = { ...entry.picture, image: file };
+  await saveEntry(dir, entry, world.files[entry.id] ?? entryPath(entry));
+  return { file, entry: entry.name };
+}
+
+const IMAGE_EXT: Record<string, string> = { '.png': 'png', '.jpg': 'jpg', '.jpeg': 'jpg', '.webp': 'webp', '.gif': 'gif' };
+
+/** Picture bytes from a local file, a web address or a data: URL. */
+export async function loadPictureSource(source: string, fetchFn: typeof fetch = fetch): Promise<{ data: Uint8Array; ext: string }> {
+  const s = source.trim();
+  const m = /^data:image\/(png|jpe?g|webp|gif);base64,(.+)$/is.exec(s);
+  if (m) return { data: Uint8Array.from(Buffer.from(m[2]!, 'base64')), ext: m[1]!.toLowerCase().replace('jpeg', 'jpg') };
+  if (/^https?:\/\//i.test(s)) {
+    const res = await fetchFn(s, { signal: AbortSignal.timeout(120_000) });
+    if (!res.ok) throw new Error(`Could not download the picture (${res.status}).`);
+    const type = res.headers.get('content-type') ?? '';
+    const data = new Uint8Array(await res.arrayBuffer());
+    if (data.length > 30 * 1024 * 1024) throw new Error('The picture is larger than 30 MB.');
+    const ext = /png/.test(type) ? 'png' : /jpe?g/.test(type) ? 'jpg' : /webp/.test(type) ? 'webp' : /gif/.test(type) ? 'gif' : IMAGE_EXT[extname(new URL(s).pathname).toLowerCase()];
+    if (!ext) throw new Error('That address is not a PNG, JPEG, WebP or GIF picture.');
+    return { data, ext };
+  }
+  const path = isAbsolute(s) ? s : resolve(s);
+  const ext = IMAGE_EXT[extname(path).toLowerCase()];
+  if (!ext) throw new Error('Pictures can be PNG, JPEG, WebP or GIF files.');
+  if (!existsSync(path)) throw new Error(`There is no file at ${path}.`);
+  const tmp = await readFile(path);
+  return { data: new Uint8Array(tmp), ext };
+}
+
+// ------------------------------------------------------------------------------------------------ export
+
+export interface ExportOptions { kind: 'story-book' | 'codex'; format: 'pdf' | 'docx'; output?: string; trim?: TrimSize; fontDir?: string; coverFontDir?: string }
+
+/** The Story Book or World Codex as a file, into <book>/exports/ unless another path is given. */
+export async function exportBook(dir: string, o: ExportOptions): Promise<Obj> {
+  const world = await loadWorld(dir);
+  if (o.kind === 'codex' && o.format === 'docx') throw new Error('The World Codex is made as a PDF; only the Story Book can also be a Word file.');
+  const name = `${world.manifest.id}-${o.kind === 'codex' ? 'codex' : 'book'}.${o.format}`;
+  let file = o.output?.trim() ? resolve(o.output.trim()) : join(dir, 'exports', name);
+  if (o.output?.trim() && !extname(file)) file = join(file, name);
+  await mkdir(dirname(file), { recursive: true });
+  const doc = o.kind === 'codex' ? worldCodex(world) : storyBook(world, o.trim ? { trim: o.trim } : {});
+  if (o.format === 'docx') {
+    const r = await writeDocx(doc, dir, file);
+    return { file: r.docx };
+  }
+  const r = await writePublication(doc, dir, file, o.fontDir, o.coverFontDir);
+  return { file: r.pdf, markdownCopy: r.md, pages: r.pages, ...(r.notes.length ? { notes: r.notes } : {}) };
+}

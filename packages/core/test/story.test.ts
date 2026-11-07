@@ -237,6 +237,20 @@ test('names: no proposals for common words, pronouns, months or plain sentences'
   assert.deepEqual(proposals('Leyla was born in 1900 XX.').map((p) => p.name), ['Leyla'], 'short capitals are not names');
 });
 
+test('names: none for contractions, questions, commands, numbers or plurals at the start of a sentence', () => {
+  const story = [
+    'Hadiya rang the bell. Bells clanked and fell quiet. The old camel lay down. Camels never hurry.',
+    '"Remember the smell," said Hadiya. "Are you sure?" asked Zahra. Four days later they rested.',
+    '"I\'m here. We\'ll go. Don\'t stop. You’ve seen it." Sit down. Much later the wind came. Let\'s go. Will you sing? Zahra sang.',
+    'She said, "Are we there?" *Camels never get lost.* "*Follow the dunes,*" sang Zahra. He asked, \'Can you hear it?\'',
+    'A fox cannot fly. Foxes dig. Flying is mostly falling. Near the top she stopped. Stories travel. It was a good story.',
+  ].join(' ');
+  assert.deepEqual([...new Set(proposals(story).map((p) => p.name))], ['Hadiya', 'Zahra']);
+  // A name whose letters only look like a plain form stays a name.
+  assert.deepEqual(proposals('A jam jar fell. James laughed. Irving ran in. Rivers sang.').map((p) => p.name), ['James', 'Irving', 'Rivers']);
+  assert.deepEqual(proposals('Hadiya waited for Will. Will came at dusk.').map((p) => p.name), ['Hadiya', 'Will'], 'a name in the middle of a sentence still counts');
+});
+
 // ---------------------------------------------------------------------------------------- matching
 
 test('existing entries match by name or alias, case-insensitive: a match without news is a link, not a proposal', () => {

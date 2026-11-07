@@ -15,12 +15,13 @@
   "workspaces": [
     "packages/core",
     "packages/pdf",
+    "packages/mcp",
     "packages/cli",
     "packages/desktop"
   ],
   "scripts": {
-    "build": "npm run build -w @lore-forge/core -w @lore-forge/pdf -w @lore-forge/cli -w @lore-forge/desktop",
-    "typecheck": "tsc -b packages/core packages/pdf packages/cli && tsc -p tsconfig.test.json && npm run typecheck -w @lore-forge/desktop",
+    "build": "npm run build -w @lore-forge/core -w @lore-forge/pdf -w @lore-forge/mcp -w @lore-forge/cli -w @lore-forge/desktop",
+    "typecheck": "tsc -b packages/core packages/pdf packages/mcp packages/cli && tsc -p tsconfig.test.json && npm run typecheck -w @lore-forge/desktop",
     "test": "node --conditions=source --test \"packages/*/test/*.test.ts\"",
     "lore": "node --conditions=source packages/cli/src/main.ts",
     "dev": "npm run dev -w @lore-forge/desktop",

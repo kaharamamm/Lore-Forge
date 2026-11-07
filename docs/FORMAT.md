@@ -26,6 +26,7 @@ my-world/
 | Key | Holds |
 | --- | --- |
 | `schemaVersion`, `id`, `name`, `description` | identity |
+| `artStyle` | one line describing the look of the book's pictures, added to every picture an AI assistant makes (optional) |
 | `calendar` | `eras` (id, name, start, optional end and colour), `defaultEra`, `months` (name, days), `approxYears` |
 | `rules` | per-rule severity overrides, e.g. `{ "duplicate-name": "info", "two-places-at-once": "off" }` |
 | `book` | Story Book details: `title`, `author`, `publisher`, `dedication`, `epigraph`, `epigraphSource`, `copyright`, `trim`, `rightHandChapters`, `chapterYears` |

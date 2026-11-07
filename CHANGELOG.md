@@ -11,6 +11,10 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 
 ### Added
 
+- **AI assistants (MCP).** `lore mcp` is an MCP server for Claude Desktop, Claude Code, Codex, Cursor and other AI apps. Asked for "a story about camels in Lore-Forge", an assistant creates the book and writes everything into it: entries with their details, relationships, a calendar, chapters and pictures. It also checks the book for contradictions and fixes them. Its 18 tools also read, continue and change existing books, mark warnings intended and export the Story Book or World Codex. See [docs/MCP.md](docs/MCP.md).
+- **Connect AI** in the library connects those apps in one click (and removes them again), copies the settings for other apps, and sets up **Pictures**: OpenAI, Google Gemini or xAI Grok with your own key, which stays on your computer, and the newest image model the key can use.
+- **Live updates:** the shelf and the open book show changes made outside the app (by an AI assistant, a text editor or `git pull`) a moment later. Edits you are typing are kept, and the changes load once they are saved.
+- `artStyle` in `world.json`: one line describing the look of a book's pictures, added to every picture prompt.
 - **Duplicate world**, on the shelf next to Delete and on the world home: a copy with a new id and its cover, which opens straight away. Works on the read-only sample world. `lore duplicate` does the same from the command line.
 - **First-run tour** (eight steps through the library and the sample world), with Skip, Back and Next and Esc. Shown once; **Take the tour** in the library and in About brings it back.
 - **3D models** for entries: **Images | 3D model** tabs in the editor. `.glb`, embedded `.gltf`, `.obj` and `.fbx`, stored in `models/<entry-id>/`, several per entry. The viewer (three.js) orbits, zooms, pans, resets and auto-rotates.
@@ -44,6 +48,7 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 
 ### Fixed
 
+- Story proposals no longer offer everyday words at the start of a sentence or a quote as new characters: contractions ("I'm", "Don't"), questions and commands ("Are you…", "Remember…"), numbers, and plurals or -ing forms of words the chapter already uses ("Bells", "Flying").
 - The Story Book always includes the copyright page. An empty copyright field still prints a plain notice with the author and year. The sample book is A4 and keeps its dedication and epigraph.
 
 ### Note for 1.0.0 users

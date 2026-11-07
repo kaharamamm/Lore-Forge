@@ -14,6 +14,7 @@ The start screen is a bookcase. Every world is a book: a 3D spine with its title
 - **Take the tour** shows a short guided tour (eight steps) through the library and the sample world. It starts by itself the first time Lore-Forge opens; **Skip** or Esc ends it, Back and Next (or the arrow keys) move through it, and it does not change the sample. **About** has the same button.
 - **Open a world folder…** opens a world from anywhere on disk; it then stays on the shelf.
 - **Library settings** chooses the folder new books go to.
+- **Connect AI** connects Lore-Forge to an AI app (Claude Desktop, Claude Code, Codex, Cursor, or another app through **Copy the settings**). You can then ask the assistant to write a story in Lore-Forge, and it writes the whole book here. **Pictures** sets up the image service it uses (OpenAI, Google Gemini or xAI Grok) with your own API key. See [AI assistants](MCP.md).
 - **About** lists the credits and licences, and has **Updates** (see [Updates](#updates)).
 
 Behind the shelf is a quiet animated scene (light through a window, dust, runes, candles and embers). It pauses while the window is hidden and stays still with the system's reduced-motion setting.
@@ -67,6 +68,10 @@ The same rules check what the story says: a sentence that breaks canon is underl
 ### World Settings
 
 The gear in the top bar: the default era (dates without an era abbreviation count in it), the eras (name, abbreviation, start and end, colour, and how many dates use each), and the months with their lengths. Saved in `world.json`.
+
+### Changes from Outside the App
+
+Lore-Forge watches the open book's folder and the library. When an AI assistant, a text editor or `git pull` changes the files, the book shows the change a moment later: new and changed entries, chapters and pictures, without a reload. New books appear on the shelf. If you are typing in the same book at that moment, nothing you type is lost: the outside changes load right after your edit is saved.
 
 ### Navigation
 
@@ -138,6 +143,7 @@ Updates never touch your worlds or settings: they live in the folders below, not
 | `<user data>/settings.json` | the folder new worlds go to, whether the tour was seen (`tourDone`), automatic update checks (`autoUpdate`) |
 | `<user data>/recent-worlds.json` | worlds opened from outside the worlds folder |
 | `<user data>/recent-cover-uploads.json` | pictures uploaded for covers, offered again |
+| `<user data>/ai-images.json` | the picture service for AI assistants, its API keys and models (**Connect AI → Pictures**; readable only by you on macOS and Linux) |
 | `localStorage` | sidebar width, open or closed editor and warning sections, recent colours |
 
 `<user data>` is the app's user-data folder: `~/.config/Lore-Forge` on Linux, `%APPDATA%\Lore-Forge` on Windows and `~/Library/Application Support/Lore-Forge` on macOS.

@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 import { check, report, snapshot, storyBook, TRIMS, worldCodex, WorldFormatError, type TrimSize, type Warning, type World } from '@lore-forge/core';
 import { duplicateWorld, loadWorld } from '@lore-forge/core/node';
 import { writeDocx, writePublication } from '@lore-forge/pdf';
+import { runStdio } from '@lore-forge/mcp';
 
 const USAGE = `Usage:
   lore check <worldDir> [--json]     Print consistency warnings. Exit 1 if there are errors.
@@ -16,6 +17,8 @@ const USAGE = `Usage:
   lore duplicate <worldDir> [name] [--into <folder>]
                                          Copy a world to a new folder with a new name and id
                                          (default name "<name> (copy)", default folder next to the original).
+  lore mcp                               Run the Lore-Forge MCP server on stdin/stdout, so AI assistants
+                                         (Claude, Codex, Cursor, ...) can write worlds and stories in Lore-Forge.
 
 Exit codes: 0 = no errors, 1 = errors found, 2 = bad usage or unreadable world.`;
 
@@ -37,6 +40,11 @@ function formatWarning(w: Warning, world?: World): string {
 
 export async function run(argv: string[], out: (s: string) => void = (s) => process.stdout.write(s)): Promise<number> {
   const [given, dir, ...rest] = argv;
+  // The MCP server owns stdout (JSON-RPC messages only) and runs until the client closes stdin.
+  if (given === 'mcp') {
+    await runStdio();
+    return 0;
+  }
   const cmd = given === 'bible' ? 'codex' : given;
   if (!cmd || !['check', 'export', 'codex', 'book', 'duplicate'].includes(cmd) || !dir) {
     out(USAGE + '\n');

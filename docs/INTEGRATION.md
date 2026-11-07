@@ -15,6 +15,9 @@ There are four ways to consume a world. The most stable comes first:
    (`loadWorld`, `saveEntry`, `saveIntended`, `createWorld`).
 4. **Raw files:** read the folder yourself using the format below and the schemas.
 
+AI assistants can also write worlds through the MCP server, `lore mcp` (see [MCP.md](MCP.md)). Its tools use the
+same library and checks, so a world an assistant writes is an ordinary world in this format.
+
 ## JSON Schemas
 
 Every schema is in `packages/core/schemas/`, uses JSON Schema draft 2020-12, and has an `$id` under
@@ -37,7 +40,7 @@ these schemas with ajv.
 
 ```
 my-world/
-  world.json          manifest: id, name, description, calendar, rule overrides, book, cover
+  world.json          manifest: id, name, description, art style, calendar, rule overrides, book, cover
   intended.json       warnings marked "intended" (optional)
   characters/<id>.md  one file per entry; folder = type
   places/  factions/  items/  events/  notes/
@@ -131,6 +134,8 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   copyright page is always printed, with a plain notice when `copyright` is empty) and `"cover": {"color", "color2", "icon", "iconColor", "image", "titleStyle", "titleColor"}` (all optional;
   colours are `#rrggbb` or `#rrggbbaa`, `image` is a world-relative path or `"none"`, `icon` a game-icons name or
   `"none"`, `titleStyle` is `display`, `serif` or `sans`) for the book cover on the shelf, Home and the PDFs.
+  `"artStyle"` (optional string) describes the look of the world's pictures; the MCP server adds it to every
+  picture prompt. Image tools of your own can use it the same way.
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so
   diffs stay small.
 
@@ -324,7 +329,8 @@ Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral 
   `image-view` rule) was additive, and so was 0.3 (status on places, factions and items, the
   `relation-kind` rule, snapshot `references`), 0.3.1 (dotted and day-month dates, character `race`) and
   0.4 (`story/`, `story-ignored.json`, snapshot `story`, fact `chapter`/`span`, the `story-contradiction`
-  rule, detail fields, `picture`, several races, manifest `cover` and the new `book` keys), so worlds stay at version 1. Older files load unchanged and are never migrated.
+  rule, detail fields, `picture`, several races, manifest `cover` and the new `book` keys) and 1.1 (manifest
+  `artStyle`), so worlds stay at version 1. Older files load unchanged and are never migrated.
   Consumers should ignore fields they don't know.
 - **Breaking changes** bump the version: removing or renaming fields, or changing the meaning of a field or
   of the date syntax. Lore-Forge will migrate older worlds when it opens them. Consumers should check

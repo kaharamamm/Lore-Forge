@@ -41,6 +41,22 @@ const api: LoreApi = {
   saveCover: (dir, cover, picked) => ipcRenderer.invoke('saveCover', dir, cover, picked),
   showInFolder: (path) => ipcRenderer.invoke('showInFolder', path),
   onNavigate: (cb) => void ipcRenderer.on('navigate', (_e, direction: 'back' | 'forward') => cb(direction)),
+  onWorldChanged: (cb) => {
+    const listener = (_e: unknown, change: { dir: string; files: string[] }) => cb(change);
+    ipcRenderer.on('world-changed', listener);
+    return () => void ipcRenderer.removeListener('world-changed', listener);
+  },
+  onLibraryChanged: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('library-changed', listener);
+    return () => void ipcRenderer.removeListener('library-changed', listener);
+  },
+  aiState: () => ipcRenderer.invoke('aiState'),
+  aiConnect: (id, connect) => ipcRenderer.invoke('aiConnect', id, connect),
+  aiCheckPictures: (provider, key) => ipcRenderer.invoke('aiCheckPictures', provider, key),
+  aiSavePictures: (next) => ipcRenderer.invoke('aiSavePictures', next),
+  aiForgetKey: (provider) => ipcRenderer.invoke('aiForgetKey', provider),
+  copyText: (text) => ipcRenderer.invoke('copyText', text),
   smokeReport: (summary) => ipcRenderer.send('smokeReport', summary),
   smokeResize: (width, height) => ipcRenderer.invoke('smokeResize', width, height),
   smokeShow: (show) => ipcRenderer.invoke('smokeShow', show),

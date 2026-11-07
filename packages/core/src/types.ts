@@ -93,6 +93,8 @@ export interface WorldManifest {
   id: string;
   name: string;
   description?: string;
+  /** One line describing the look of every picture made for this world, used by image tools (the MCP server's create_image). */
+  artStyle?: string;
   calendar: Calendar;
   /** Per-rule severity overrides, e.g. { "duplicate-name": "off" }. */
   rules?: Record<string, RuleSetting>;

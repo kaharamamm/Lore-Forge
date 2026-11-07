@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createWorld } from '@lore-forge/core/node';
@@ -88,4 +88,30 @@ test('lore duplicate copies a world with a new name and id', () => {
   assert.equal(again.status, 0, again.stdout);
   assert.equal(JSON.parse(readFileSync(join(into, 'camel-copy-copy', 'world.json'), 'utf8')).name, 'Camel Copy (copy)');
   assert.equal(lore('duplicate', camelamamm, 'a', 'b').status, 2);
+});
+
+test('lore mcp serves the Lore-Forge tools over stdin/stdout and writes books into the library', async () => {
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+  const home = mkdtempSync(join(tmpdir(), 'lore-mcp-cli-'));
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ['--conditions=source', main, 'mcp'],
+    env: { ...(process.env as Record<string, string>), LORE_FORGE_DATA: join(home, 'data'), LORE_FORGE_WORLDS: join(home, 'worlds') },
+    stderr: 'pipe',
+  });
+  const client = new Client({ name: 'cli-test', version: '1.0.0' });
+  try {
+    await client.connect(transport);
+    assert.equal(client.getServerVersion()?.name, 'lore-forge');
+    assert.ok((await client.listTools()).tools.some((t) => t.name === 'write_chapter'));
+    const made = await client.callTool({ name: 'create_book', arguments: { name: 'Stdio Book' } });
+    assert.ok(!made.isError, JSON.stringify(made.content));
+    assert.ok(existsSync(join(home, 'worlds', 'stdio-book', 'world.json')));
+    const ch = await client.callTool({ name: 'write_chapter', arguments: { book: 'Stdio Book', title: 'One', text: 'Queen Mira was born in 12.' } });
+    assert.match((ch.content as { text: string }[])[0]!.text, /"name": "Mira"/);
+  } finally {
+    await client.close();
+    rmSync(home, { recursive: true, force: true });
+  }
 });

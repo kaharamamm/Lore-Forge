@@ -21,7 +21,10 @@ lore book <worldDir> -o book.docx    # the same book for Word
 lore book <worldDir> --trim a5       # trim: 6x9 (default, or book.trim), 5.5x8.5, a5, a4, letter
 lore duplicate <worldDir> [name] [--into <folder>]   # a copy with a new id; name defaults to "<name> (copy)",
                                                      # the folder to the original's parent folder
+lore mcp                          # the MCP server for AI apps, on stdin/stdout (see MCP.md)
 ```
+
+`lore mcp` is what AI apps such as Claude Desktop, Claude Code, Codex and Cursor start to write books in Lore-Forge. It is not meant to be typed by hand: it waits for an MCP client on stdin. **Connect AI** in the app sets the apps up; [MCP.md](MCP.md) covers the tools, pictures and settings.
 
 `lore duplicate` copies everything (entries, story, images, 3D models, cover) into a new folder named after the new name, gives the world a new id and makes the copy writable, so it also works on the read-only sample world.
 
