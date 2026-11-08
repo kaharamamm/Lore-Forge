@@ -1,4 +1,5 @@
 import { isEnded, LIFECYCLE, TYPE_ICON, TYPE_SINGULAR, type Entry, type EntryType } from '@lore-forge/core';
+import { lower, t, tm } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 
 /** Emoji + type word, in the type colour. Never colour alone. */
@@ -6,7 +7,7 @@ export function TypeBadge({ type, short }: { type: EntryType; short?: boolean })
   return (
     <span class={`type-badge t-${type}`}>
       <Icon name={TYPE_ICON[type]} />
-      <span class={short ? 'sr-only' : undefined}>{TYPE_SINGULAR[type]}</span>
+      <span class={short ? 'sr-only' : undefined}>{tm(TYPE_SINGULAR[type])}</span>
     </span>
   );
 }
@@ -16,9 +17,9 @@ export function EndedMark({ entry }: { entry: Entry }) {
   const lc = LIFECYCLE[entry.type];
   if (!lc || !isEnded(entry)) return null;
   return (
-    <span class="ended-mark" title={lc.endedWord}>
+    <span class="ended-mark" title={tm(lc.endedWord)}>
       <Icon name={lc.endedIcon} />
-      <span class="sr-only"> ({lc.endedWord})</span>
+      <span class="sr-only"> ({tm(lc.endedWord)})</span>
     </span>
   );
 }
@@ -37,9 +38,9 @@ export function EntryLabel({ entry }: { entry: Entry }) {
 /** A clickable entry name. */
 export function EntryLink({ entry, onOpen }: { entry: Entry; onOpen: (id: string) => void }) {
   return (
-    <button type="button" class="entry-chip" onClick={() => onOpen(entry.id)} title={`Open ${TYPE_SINGULAR[entry.type].toLowerCase()} ${entry.name}`}>
+    <button type="button" class="entry-chip" onClick={() => onOpen(entry.id)} title={t('Open {type} {name}', { type: lower(tm(TYPE_SINGULAR[entry.type])), name: entry.name })}>
       <EntryLabel entry={entry} />
-      <span class="sr-only">, {TYPE_SINGULAR[entry.type].toLowerCase()}</span>
+      <span class="sr-only">, {lower(tm(TYPE_SINGULAR[entry.type]))}</span>
     </button>
   );
 }

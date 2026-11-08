@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AppUpdater, ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater';
 import { debInstallCommand, initialUpdateState, nextUpdateState, notesText, updateErrorText, updaterOff, type UpdateEvent, type UpdateState } from '../shared/update-state.ts';
+import { t } from '../shared/i18n.ts';
 
 /** Automatic checks: a few seconds after launch, then every four hours while the app stays open. */
 const FIRST_CHECK_MS = 4_000;
@@ -105,7 +106,8 @@ export function installUpdate(): void {
         app.relaunch();
         app.exit(0);
       } else {
-        emit({ type: 'install-failed', message: code === 126 || code === 127 ? 'the password prompt was cancelled.' : `the installer stopped (exit ${code}).` });
+        // The fixed text stays English in the state, like updateErrorText's: updateText translates it when shown.
+        emit({ type: 'install-failed', message: code === 126 || code === 127 ? 'the password prompt was cancelled.' : t('the installer stopped (exit {code}).', { code }) });
       }
     });
     return;

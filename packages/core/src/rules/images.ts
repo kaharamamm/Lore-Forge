@@ -1,5 +1,8 @@
 import type { Finding, Rule } from '../engine.ts';
+import { joined, msg, verbatim } from '../i18n.ts';
 import { IMAGE_VIEWS, viewLabel } from '../types.ts';
+import { A_TYPE } from '../words.ts';
+import { numberDuplicates } from '../world-index.ts';
 
 export const imageView: Rule = {
   id: 'image-view',
@@ -9,12 +12,15 @@ export const imageView: Rule = {
   check: ({ ix }) => {
     const out: Finding[] = [];
     for (const e of ix.entries) {
+      if (!e.images?.length) continue;
       const usual = IMAGE_VIEWS[e.type];
-      e.images?.forEach((img, i) => {
+      const keys = numberDuplicates(e.images.map((img) => img.file));
+      e.images.forEach((img, i) => {
         if (usual.includes(img.view)) return;
         out.push({
-          key: `${e.id}:${i}`,
-          message: `${img.file} is labelled "${img.view}", which is not a usual view for ${/^[aeiou]/.test(e.type) ? 'an' : 'a'} ${e.type} (usual: ${usual.map(viewLabel).join(', ')}).`,
+          key: `${e.id}:${keys[i]}`,
+          legacyKey: `${e.id}:${i}`,
+          message: msg`${img.file} is labelled "${verbatim(img.view)}", which is not a usual view for ${A_TYPE[e.type]} (usual: ${joined(usual.map(viewLabel), ', ')}).`,
           offending: ix.fact(e, `images[${i}]`),
         });
       });

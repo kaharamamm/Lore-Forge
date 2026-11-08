@@ -1,0 +1,73 @@
+/** Turkish for the desktop app's own texts (main). Keys are the English texts exactly as the code passes them to t(). */
+export const MAIN: Readonly<Record<string, string>> = {
+  // main.ts: dialogs and errors the page shows
+  'Refusing to touch a file outside the world folder: {path}': 'Dünya klasörünün dışındaki bir dosyaya dokunulmuyor: {path}',
+  'Open a Lore-Forge world folder': 'Lore-Forge dünya klasörü aç',
+  'That folder is not a Lore-Forge world.': 'Bu klasör bir Lore-Forge dünyası değil.',
+  'A world folder has a world.json file. Use "Create world" to start a new one.': 'Dünya klasörlerinde bir world.json dosyası bulunur. Yeni bir dünya başlatmak için "Yeni kitap" seçeneğini kullanın.',
+  'Choose a cover picture': 'Kapak resmi seç',
+  'Images': 'Görseller',
+  'A world called "{name}" is already in that folder.': 'Bu klasörde "{name}" adlı bir dünya zaten var.',
+  'Add a 3D model': '3B model ekle',
+  '3D models (glTF, OBJ, FBX)': '3B modeller (glTF, OBJ, FBX)',
+  'The sample world that comes with the app is not deleted: remove it from the library instead.': 'Uygulamayla gelen örnek dünya silinmez: onun yerine kütüphaneden kaldırın.',
+  'Could not move the folder to the trash ({error}). Nothing was deleted.': 'Klasör çöp kutusuna taşınamadı ({error}). Hiçbir şey silinmedi.',
+  'Attach {view} image': 'Görsel ekle: {view}',
+  'Save World Codex PDF': 'Dünya Kodeksi: PDF olarak kaydet',
+  'Save Story Book PDF': 'Hikâye Kitabı: PDF olarak kaydet',
+  'Save Story Book for Word': 'Hikâye Kitabı: Word için kaydet',
+  'Word document': 'Word belgesi',
+  'That picture can no longer be used. Choose it again with Upload picture.': 'Bu resim artık kullanılamıyor. Resim yükle düğmesiyle yeniden seçin.',
+  // The close prompt.
+  'Close anyway': 'Yine de kapat',
+  'Keep open': 'Açık bırak',
+  'Some changes could not be saved.': 'Bazı değişiklikler kaydedilemedi.',
+  'A file may be open in another program, or the folder may be read-only. Lore-Forge keeps trying while it stays open.': 'Bir dosya başka bir programda açık olabilir ya da klasör salt okunur olabilir. Lore-Forge açık kaldığı sürece denemeyi sürdürür.',
+
+  // ai.ts: Connect AI
+  'The AppImage unpacks itself to a new place every time it starts, so an AI app could not find it again. Install the .deb, or run Lore-Forge from source, to connect an AI app.': "AppImage her başladığında kendini yeni bir yere açar, bu yüzden bir yapay zekâ uygulaması onu yeniden bulamaz. Bir yapay zekâ uygulaması bağlamak için .deb paketini kurun ya da Lore-Forge'u kaynak koddan çalıştırın.",
+  'Claude Code said: {output}': 'Claude Code şunu bildirdi: {output}',
+  'Unknown AI app {id}.': 'Bilinmeyen yapay zekâ uygulaması: {id}.',
+  'Claude Code\'s "claude" command was not found. Copy the command and run it in a terminal instead.': 'Claude Code\'un "claude" komutu bulunamadı. Bunun yerine komutu kopyalayıp bir terminalde çalıştırın.',
+  'Choose a picture service first.': 'Önce bir resim servisi seçin.',
+  'Paste an API key first.': 'Önce bir API anahtarı yapıştırın.',
+  "The key works, but {service} offers it no image model. Check the account's access to image generation.": 'Anahtar çalışıyor ama {service} bu anahtara hiçbir görsel modeli sunmuyor. Hesabın görsel üretimine erişimi olup olmadığını denetleyin.',
+
+  // updater.ts: a failed install (Linux .deb)
+  'the installer stopped (exit {code}).': 'kurulum programı durdu (çıkış kodu {code}).',
+  // Kept in English in the update state and translated by updateText (t(s.error)) when shown.
+  'the password prompt was cancelled.': 'parola istemi iptal edildi.',
+
+  // update-state.ts: updateText
+  'Updates are off.': 'Güncellemeler kapalı.',
+  'Checking for updates…': 'Güncellemeler denetleniyor…',
+  'Lore-Forge is up to date.': 'Lore-Forge güncel.',
+  'Lore-Forge {version} is available.': 'Lore-Forge {version} çıktı.',
+  'Downloading Lore-Forge {version}… {percent}%': 'Lore-Forge {version} indiriliyor… %{percent}',
+  'Lore-Forge {version} is ready, but did not install: {error}': 'Lore-Forge {version} hazır ama kurulamadı: {error}',
+  'Lore-Forge {version} is ready. Restart to update.': 'Lore-Forge {version} hazır. Güncellemek için yeniden başlatın.',
+  'Installing the update…': 'Güncelleme kuruluyor…',
+  'Could not check for updates: {error}': 'Güncellemeler denetlenemedi: {error}',
+  // updaterOff's reasons and updateErrorText's errors: kept in English in the state, translated by updateText (t(s.offReason), t(s.error)).
+  'Updates are off in the smoke test.': 'Smoke testinde güncellemeler kapalı.',
+  'Updates are off when running from source.': 'Kaynak koddan çalışırken güncellemeler kapalı.',
+  'Updates are turned off (LORE_FORGE_NO_UPDATE).': 'Güncellemeler kapatıldı (LORE_FORGE_NO_UPDATE).',
+  'This package cannot update itself. Download the new .deb or AppImage from the releases page.': 'Bu paket kendini güncelleyemez. Yeni .deb ya da AppImage dosyasını sürümler sayfasından indirin.',
+  'no public release found on GitHub.': "GitHub'da herkese açık bir sürüm bulunamadı.",
+  'you seem to be offline.': 'çevrimdışı görünüyorsunuz.',
+  'unknown error.': 'bilinmeyen hata.',
+
+  // packages/pdf (the PDF and Word writers), through main's t(): their own notes in the exported files and the toast.
+  '[Image not embedded: {file}. PDF export embeds PNG, JPEG and GIF only.]': '[Görsel eklenmedi: {file}. PDF dışa aktarımı yalnızca PNG, JPEG ve GIF ekler.]',
+  '[Image not embedded: {file}. Export embeds PNG, JPEG and GIF only.]': '[Görsel eklenmedi: {file}. Dışa aktarım yalnızca PNG, JPEG ve GIF ekler.]',
+  '[Image file missing: {file}]': '[Görsel dosyası yok: {file}]',
+  '[Image could not be read: {file}]': '[Görsel okunamadı: {file}]',
+  '[Image could not be read: {file} ({error})]': '[Görsel okunamadı: {file} ({error})]',
+  'Cover: {title}': 'Kapak: {title}',
+  'The font “{font}” has no “{letter}”, so the PDF uses DejaVu for that text instead.': '“{font}” yazı tipinde “{letter}” harfi yok; PDF bu metin için onun yerine DejaVu kullanıyor.',
+  'The cover font “{font}” has no letters for some of the title, so the PDF cover title uses DejaVu.': 'Kapak yazı tipi “{font}”, başlıktaki bazı harfleri içermiyor; bu yüzden PDF kapak başlığında DejaVu kullanılıyor.',
+  'The cover font “{font}” is not installed as a TrueType or OpenType file on this computer, so the PDF cover title uses DejaVu.': 'Kapak yazı tipi “{font}” bu bilgisayarda TrueType ya da OpenType dosyası olarak kurulu değil; bu yüzden PDF kapak başlığında DejaVu kullanılıyor.',
+
+  // The save dialog of Download… (a picture or a 3D model).
+  'Save a copy': 'Kopyasını kaydet',
+};

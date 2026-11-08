@@ -1,4 +1,5 @@
 import type { ParsedDate } from '../dates.ts';
+import { joined, msg } from '../i18n.ts';
 import { GENERATOR } from '../snapshot.ts';
 import type { Entry, LoreEvent, Note, RefImage, StoryChapter, TrimSize, World } from '../types.ts';
 import { WorldIndex } from '../world-index.ts';
@@ -7,7 +8,7 @@ import { imageBlock } from './codex.ts';
 import { worldCoverArt } from '../cover.ts';
 import { anchorOf, bodyBlocks, bookLook, dateWithEra, DEFAULT_TRIM, markDropCaps, TRIMS, type Block, type Doc } from './doc.ts';
 
-export const LORE_AND_LEGENDS = 'Lore & Legends';
+export const LORE_AND_LEGENDS = msg`Lore & Legends`;
 
 export interface BookPage {
   entry: LoreEvent | Note;
@@ -45,14 +46,14 @@ export interface BookOptions {
   year?: number;
 }
 
-export const CHRONICLE_APPENDIX = 'Appendix: Chronicle';
+export const CHRONICLE_APPENDIX = msg`Appendix: Chronicle`;
 
 /** Manuscript chapters that have text, in reading order. */
 export function writtenChapters(world: World): StoryChapter[] {
   return (world.story ?? []).filter((c) => c.body.trim() !== '');
 }
 
-export const SINGLE_CHAPTER = 'The Story';
+export const SINGLE_CHAPTER = msg`The Story`;
 
 /** Chapter title for a dated page. */
 function autoChapter(d: ParsedDate, world: World, opts: BookOptions): string {
@@ -108,11 +109,11 @@ function chronicleBlocks(chapters: BookChapter[], ix: WorldIndex, level: 1 | 2, 
   const blocks: Block[] = [];
   const sub = (level + 1) as 2 | 3;
   chapters.forEach((ch, n) => {
-    blocks.push({ kind: 'heading', level, text: numbered ? `Chapter ${n + 1}. ${ch.title}` : ch.title, toc: true, ...(level === 1 ? { newPage: true, opener: true } : {}) });
+    blocks.push({ kind: 'heading', level, text: numbered ? msg`Chapter ${n + 1}. ${ch.title}` : ch.title, toc: true, ...(level === 1 ? { newPage: true, opener: true } : {}) });
     for (const { entry: e, date } of ch.pages) {
       blocks.push({ kind: 'heading', level: sub, text: e.name, anchor: anchorOf(e.id), toc: level === 1 });
       const place = e.type === 'event' && e.place ? ix.nameOf(e.place) : undefined;
-      const line = [dates && date && dateWithEra(date, m.calendar), place].filter(Boolean).join(' · ');
+      const line = joined([dates && date && dateWithEra(date, m.calendar), place].filter((x): x is string => !!x), ' · ');
       if (line) blocks.push({ kind: 'para', text: line, style: 'muted' });
       for (const { img, of } of illustrations(e, ix)) {
         const b = imageBlock(img, of);
@@ -121,7 +122,7 @@ function chronicleBlocks(chapters: BookChapter[], ix: WorldIndex, level: 1 | 2, 
       const body = bodyBlocks(e.body, ix);
       if (body.length) blocks.push(...body);
       else if (e.summary) blocks.push({ kind: 'para', text: e.summary });
-      else blocks.push({ kind: 'para', text: '(No text written for this page yet.)', style: 'muted' });
+      else blocks.push({ kind: 'para', text: msg`(No text written for this page yet.)`, style: 'muted' });
     }
   });
   return blocks;
@@ -146,22 +147,24 @@ export function storyBook(world: World, opts: BookOptions = {}): Doc {
     written.forEach((ch, n) => {
       // The chapter's date sits at the top right of its opening page, not under the title.
       const d = look.dateStamps ? ix.date(chapterDate(ch)) : undefined;
-      blocks.push({ kind: 'heading', level: 1, text: `Chapter ${n + 1}. ${ch.title}`, toc: true, newPage: true, opener: true, ...(d ? { stamp: dateWithEra(d, m.calendar) } : {}) });
+      blocks.push({ kind: 'heading', level: 1, text: msg`Chapter ${n + 1}. ${ch.title}`, toc: true, newPage: true, opener: true, ...(d ? { stamp: dateWithEra(d, m.calendar) } : {}) });
       blocks.push(...bodyBlocks(ch.body, ix));
     });
     const appendix = opts.appendix !== false && chapters.length > 0;
     if (appendix) {
       blocks.push({ kind: 'heading', level: 1, text: CHRONICLE_APPENDIX, toc: true, newPage: true, opener: true });
-      blocks.push({ kind: 'para', text: 'The events and lore pages of the world, in story order.', style: 'muted' });
+      blocks.push({ kind: 'para', text: msg`The events and lore pages of the world, in story order.`, style: 'muted' });
       blocks.push(...chronicleBlocks(chapters, ix, 2, false, look.dateStamps));
     }
-    credit = `Assembled by ${GENERATOR} from the story manuscript${appendix ? ' and the world\'s events and notes' : ''}. The text is the author's own; Lore-Forge only orders and typesets it.`;
+    credit = appendix
+      ? msg`Assembled by ${GENERATOR} from the story manuscript and the world's events and notes. The text is the author's own; Lore-Forge only orders and typesets it.`
+      : msg`Assembled by ${GENERATOR} from the story manuscript. The text is the author's own; Lore-Forge only orders and typesets it.`;
   } else {
     blocks.push(...chronicleBlocks(chapters, ix, 1, true, look.dateStamps));
-    if (!chapters.length) blocks.push({ kind: 'para', text: 'This world has no events or notes yet.', style: 'muted' });
-    credit = `Assembled by ${GENERATOR} from the world's events and notes. The text is the author's own; Lore-Forge only orders and typesets it.`;
+    if (!chapters.length) blocks.push({ kind: 'para', text: msg`This world has no events or notes yet.`, style: 'muted' });
+    credit = msg`Assembled by ${GENERATOR} from the world's events and notes. The text is the author's own; Lore-Forge only orders and typesets it.`;
   }
-  const subtitle = m.book?.title ? `A story of ${m.name}` : 'A Story Book';
+  const subtitle = m.book?.title ? msg`A story of ${m.name}` : msg`A Story Book`;
   const trim = opts.trim ?? m.book?.trim ?? DEFAULT_TRIM;
   const rightHand = opts.rightHandChapters ?? m.book?.rightHandChapters ?? false;
   const author = m.book?.author?.trim();
@@ -172,7 +175,7 @@ export function storyBook(world: World, opts: BookOptions = {}): Doc {
     cover: {
       title,
       subtitle,
-      lines: author ? [`by ${author}`] : [],
+      lines: author ? [msg`by ${author}`] : [],
       art: bookCoverArt(world, look.coverTitleColor),
     },
     blocks: [...frontMatter(world, title, subtitle, credit, opts), { kind: 'toc' }, ...(look.dropCap === 'none' ? blocks : markDropCaps(blocks))],
@@ -198,12 +201,12 @@ function frontMatter(world: World, title: string, subtitle: string, credit: stri
   const publisher = b.publisher?.trim();
   const copyright = b.copyright?.trim()
     ? b.copyright.trim().split(/\n+/)
-    : [`Copyright © ${year}${author ? ` ${author}` : ''}. All rights reserved.`];
+    : [author ? msg`Copyright © ${year} ${author}. All rights reserved.` : msg`Copyright © ${year}. All rights reserved.`];
   const out: Block[] = [
-    { kind: 'front', role: 'title', lines: [title, subtitle, author ? `by ${author}` : '', publisher ?? ''] },
-    { kind: 'front', role: 'copyright', lines: [...copyright, ...(publisher ? [`Published by ${publisher}`] : []), credit] },
+    { kind: 'front', role: 'title', lines: [title, subtitle, author ? msg`by ${author}` : '', publisher ?? ''] },
+    { kind: 'front', role: 'copyright', lines: [...copyright, ...(publisher ? [msg`Published by ${publisher}`] : []), credit] },
   ];
   if (b.dedication?.trim()) out.push({ kind: 'front', role: 'dedication', lines: b.dedication.trim().split(/\n+/) });
-  if (b.epigraph?.trim()) out.push({ kind: 'front', role: 'epigraph', lines: [b.epigraph.trim(), ...(b.epigraphSource?.trim() ? [`— ${b.epigraphSource.trim()}`] : [])] });
+  if (b.epigraph?.trim()) out.push({ kind: 'front', role: 'epigraph', lines: [b.epigraph.trim(), ...(b.epigraphSource?.trim() ? [b.epigraphSource.trim()] : [])] });
   return out;
 }

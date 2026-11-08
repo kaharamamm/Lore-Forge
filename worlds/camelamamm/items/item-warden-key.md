@@ -28,9 +28,9 @@ images:
     view: front
     provenance:
       tool: Grok Bot image generation
+      prompt: Painterly fantasy concept art of The Warden Key, from its visual description
       date: "2026-11-05"
       rights: Made for the Lore-Forge sample world; MIT like the rest of the repo
-      prompt: Painterly fantasy concept art of The Warden Key, from its visual description
 ---
 
 The key does not turn when forced. It turns when it is ready, which is the only lesson the Well Wardens ever bothered to write down.

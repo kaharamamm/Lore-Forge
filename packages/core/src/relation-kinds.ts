@@ -1,3 +1,4 @@
+import { msg } from './i18n.ts';
 import type { IconName } from './icons.ts';
 import { ENTRY_TYPES, type EntryType } from './types.ts';
 
@@ -37,31 +38,31 @@ const ALL = ENTRY_TYPES;
 
 /** The relationship table. Shared by the editor, the checker and other tools (AI-HQ). Custom types outside it are allowed. */
 export const RELATION_KINDS: readonly RelationKind[] = [
-  { type: 'parent-of', label: 'parent of', inverse: 'child of', group: 'family', from: [C], to: [C] },
-  { type: 'child-of', label: 'child of', inverse: 'parent of', group: 'family', from: [C], to: [C] },
-  { type: 'spouse-of', label: 'spouse of', inverse: 'spouse of', group: 'family', from: [C], to: [C], symmetric: true },
-  { type: 'sibling-of', label: 'sibling of', inverse: 'sibling of', group: 'family', from: [C], to: [C], symmetric: true },
-  { type: 'friend-of', label: 'friend of', inverse: 'friend of', group: 'bonds', from: [C], to: [C], symmetric: true },
-  { type: 'mentor-of', label: 'mentor of', inverse: 'student of', group: 'bonds', from: [C], to: [C] },
-  { type: 'ally-of', label: 'ally of', inverse: 'ally of', group: 'bonds', from: [C, F], to: [C, F], symmetric: true, aliases: ['allied-with'] },
-  { type: 'enemy-of', label: 'enemy of', inverse: 'enemy of', group: 'bonds', from: [C, F], to: [C, F], symmetric: true },
-  { type: 'member-of', label: 'member of', inverse: 'has member', group: 'power', from: [C, F], to: [F] },
-  { type: 'leader-of', label: 'leader of', inverse: 'led by', group: 'power', from: [C], to: [F] },
-  { type: 'serves', label: 'serves', inverse: 'served by', group: 'power', from: [C, F], to: [C, F] },
-  { type: 'rules', label: 'rules', inverse: 'ruled by', group: 'power', from: [C, F], to: [P, F] },
-  { type: 'founded', label: 'founded', inverse: 'founded by', group: 'power', from: [C, F], to: [P, F] },
-  { type: 'owns', label: 'owns', inverse: 'owned by', group: 'possession', from: [C, F], to: [I, P] },
-  { type: 'wields', label: 'wields', inverse: 'wielded by', group: 'possession', from: [C], to: [I] },
-  { type: 'made', label: 'made', inverse: 'made by', group: 'possession', from: [C, F], to: [I] },
-  { type: 'lives-in', label: 'lives in', inverse: 'home of', group: 'place', from: [C], to: [P] },
-  { type: 'located-in', label: 'located in', inverse: 'contains', group: 'place', from: [P, I, F], to: [P] },
-  { type: 'part-of', label: 'part of', inverse: 'includes', group: 'place', from: [P, F, I, E], to: [P, F, I, E], sameType: true },
-  { type: 'took-place-at', label: 'took place at', inverse: 'scene of', group: 'place', from: [E], to: [P] },
-  { type: 'killed', label: 'killed', inverse: 'killed by', group: 'story', from: [C, F], to: [C] },
-  { type: 'involved-in', label: 'involved in', inverse: 'involves', group: 'story', from: [C, F, I, P], to: [E] },
-  { type: 'caused', label: 'caused', inverse: 'caused by', group: 'story', from: [E, C, F], to: [E] },
-  { type: 'about', label: 'about', inverse: 'described in', group: 'story', from: [N], to: ALL },
-  { type: 'related-to', label: 'related to', inverse: 'related to', group: 'other', from: ALL, to: ALL, symmetric: true },
+  { type: 'parent-of', label: msg`parent of`, inverse: msg`child of`, group: 'family', from: [C], to: [C] },
+  { type: 'child-of', label: msg`child of`, inverse: msg`parent of`, group: 'family', from: [C], to: [C] },
+  { type: 'spouse-of', label: msg`spouse of`, inverse: msg`spouse of`, group: 'family', from: [C], to: [C], symmetric: true },
+  { type: 'sibling-of', label: msg`sibling of`, inverse: msg`sibling of`, group: 'family', from: [C], to: [C], symmetric: true },
+  { type: 'friend-of', label: msg`friend of`, inverse: msg`friend of`, group: 'bonds', from: [C], to: [C], symmetric: true },
+  { type: 'mentor-of', label: msg`mentor of`, inverse: msg`student of`, group: 'bonds', from: [C], to: [C] },
+  { type: 'ally-of', label: msg`ally of`, inverse: msg`ally of`, group: 'bonds', from: [C, F], to: [C, F], symmetric: true, aliases: ['allied-with'] },
+  { type: 'enemy-of', label: msg`enemy of`, inverse: msg`enemy of`, group: 'bonds', from: [C, F], to: [C, F], symmetric: true },
+  { type: 'member-of', label: msg`member of`, inverse: msg`has member`, group: 'power', from: [C, F], to: [F] },
+  { type: 'leader-of', label: msg`leader of`, inverse: msg`led by`, group: 'power', from: [C], to: [F] },
+  { type: 'serves', label: msg`serves`, inverse: msg`served by`, group: 'power', from: [C, F], to: [C, F] },
+  { type: 'rules', label: msg`rules`, inverse: msg`ruled by`, group: 'power', from: [C, F], to: [P, F] },
+  { type: 'founded', label: msg`founded`, inverse: msg`founded by`, group: 'power', from: [C, F], to: [P, F] },
+  { type: 'owns', label: msg`owns`, inverse: msg`owned by`, group: 'possession', from: [C, F], to: [I, P] },
+  { type: 'wields', label: msg`wields`, inverse: msg`wielded by`, group: 'possession', from: [C], to: [I] },
+  { type: 'made', label: msg`made`, inverse: msg`made by`, group: 'possession', from: [C, F], to: [I] },
+  { type: 'lives-in', label: msg`lives in`, inverse: msg`home of`, group: 'place', from: [C], to: [P] },
+  { type: 'located-in', label: msg`located in`, inverse: msg`contains`, group: 'place', from: [P, I, F], to: [P] },
+  { type: 'part-of', label: msg`part of`, inverse: msg`includes`, group: 'place', from: [P, F, I, E], to: [P, F, I, E], sameType: true },
+  { type: 'took-place-at', label: msg`took place at`, inverse: msg`scene of`, group: 'place', from: [E], to: [P] },
+  { type: 'killed', label: msg`killed`, inverse: msg`killed by`, group: 'story', from: [C, F], to: [C] },
+  { type: 'involved-in', label: msg`involved in`, inverse: msg`involves`, group: 'story', from: [C, F, I, P], to: [E] },
+  { type: 'caused', label: msg`caused`, inverse: msg`caused by`, group: 'story', from: [E, C, F], to: [E] },
+  { type: 'about', label: msg`about`, inverse: msg`described in`, group: 'story', from: [N], to: ALL },
+  { type: 'related-to', label: msg`related to`, inverse: msg`related to`, group: 'other', from: ALL, to: ALL, symmetric: true },
 ];
 
 const BY_TYPE = new Map<string, RelationKind>();
@@ -92,7 +93,7 @@ export function relationTargets(type: string, from: EntryType): EntryType[] {
 
 /** How a relation reads from the target's side, e.g. "child of" for parent-of. */
 export function inverseLabel(type: string): string {
-  return relationKind(type)?.inverse ?? `${type.replace(/-/g, ' ')} (from)`;
+  return relationKind(type)?.inverse ?? msg`${type.replace(/-/g, ' ')} (from)`;
 }
 
 /** How a relation reads from the source's side. */

@@ -3,12 +3,13 @@ import { Icon, SvgIcon } from './icon.tsx';
 import { Portrait } from './cover.tsx';
 import { usePanZoom, zoomIdentity, type PanZoom } from '../zoom.ts';
 import { LIFECYCLE, TREE_LAYOUT, TYPE_ICON, TYPE_SINGULAR, type Entry, type FamilyTree, type TreeEdge } from '@lore-forge/core';
+import { t, tm } from '../i18n.tsx';
 
 const clip = (s: string, n: number) => ([...s].length > n ? `${[...s].slice(0, n - 1).join('')}…` : s);
 
 function nodeLabel(e: Entry, ended: boolean, dates?: string): string {
   const lc = LIFECYCLE[e.type];
-  return `${TYPE_SINGULAR[e.type]} ${e.name}${ended && lc ? `, ${lc.endedWord}` : ''}${dates ? `, ${dates}` : ''}. Open.`;
+  return t('{label}. Open.', { label: `${tm(TYPE_SINGULAR[e.type])} ${e.name}${ended && lc ? `, ${tm(lc.endedWord)}` : ''}${dates ? `, ${dates}` : ''}` });
 }
 
 /** One clickable SVG box. x/y is the top-left corner. */
@@ -20,20 +21,20 @@ function Node(props: { e: Entry; x: number; y: number; w: number; h: number; end
   return (
     <g class={`node t-${e.type}${ended ? ' is-ended' : ''}${focus ? ' is-focus' : ''}`} role="button" tabIndex={0} aria-label={nodeLabel(e, ended, props.sub)} data-node-id={e.id}
       onClick={open} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } }}>
-      <title>{`${TYPE_SINGULAR[e.type]}: ${e.name}${ended && lc ? ` (${lc.endedWord})` : ''}${props.sub ? `\n${props.sub}` : ''}`}</title>
+      <title>{`${tm(TYPE_SINGULAR[e.type])}: ${e.name}${ended && lc ? ` (${tm(lc.endedWord)})` : ''}${props.sub ? `\n${props.sub}` : ''}`}</title>
       <rect x={x} y={y} width={w} height={h} rx={10} />
       <foreignObject x={x + 12} y={y + h / 2 - 16} width={32} height={32} class="node-portrait"><Portrait entry={e} raceName={props.raceName} size="sm" /></foreignObject>
       <text x={x + 52} y={y + h / 2 - 3} class="node-name">{clip(e.name, 13)}</text>
       {ended && lc && <SvgIcon class="node-mark" name={lc.endedIcon} x={x + w - 24} y={y + 6} size={16} />}
-      <text x={x + 52} y={y + h / 2 + 15} class="node-sub">{clip(props.sub || TYPE_SINGULAR[e.type], 20)}</text>
+      <text x={x + 52} y={y + h / 2 + 15} class="node-sub">{clip(props.sub || tm(TYPE_SINGULAR[e.type]), 20)}</text>
       {props.onLinkStart && (
         <circle class="tree-connect" cx={x + w} cy={y + h / 2} r={7} onPointerDown={(ev) => { ev.stopPropagation(); props.onLinkStart!(e.id, ev); }} onClick={(ev) => ev.stopPropagation()}>
-          <title>Drag onto another card to link them</title>
+          <title>{t('Drag onto another card to link them')}</title>
         </circle>
       )}
       {props.onHide && !focus && (
-        <g class="node-hide" role="button" aria-label={`Remove ${e.name} from this view`} onClick={(ev) => { ev.stopPropagation(); props.onHide!(e.id); }}>
-          <title>Remove from this view (the entry stays)</title>
+        <g class="node-hide" role="button" aria-label={t('Remove {name} from this view', { name: e.name })} onClick={(ev) => { ev.stopPropagation(); props.onHide!(e.id); }}>
+          <title>{t('Remove from this view (the entry stays)')}</title>
           <circle cx={x + w - 10} cy={y + h - 10} r={8} />
           <path d={`M${x + w - 13} ${y + h - 13} l6 6 M${x + w - 7} ${y + h - 13} l-6 6`} />
         </g>
@@ -81,15 +82,15 @@ export function FamilyTreeSvg({ tree, onOpen, onConnect, onHide, onEdit }: {
   useLayoutEffect(fit, [tree]);
   return (
     <div class="zoom-frame">
-    <svg ref={svg} class="graph family-tree" style={{ height: `clamp(14rem, ${tree.height + 48}px, 62vh)` }} role="group" aria-label={`Family tree, ${tree.generations} generations, ${tree.nodes.length} people. Drag to pan, Ctrl+scroll to zoom.`}>
+    <svg ref={svg} class="graph family-tree" style={{ height: `clamp(14rem, ${tree.height + 48}px, 62vh)` }} role="group" aria-label={t('Family tree, {generations} generations, {people} people. Drag to pan, Ctrl+scroll to zoom.', { generations: tree.generations, people: tree.nodes.length })}>
       <g transform={pz.t.toString()}>
       <g class="edges">
         {tree.edges.map((ed, i) => {
           const a = at.get(ed.from)!;
           const b = at.get(ed.to)!;
           const hit = (d: string) => onEdit && (
-            <path class="edge-hit" d={d} role="button" aria-label={`Edit the link between ${a.entry.name} and ${b.entry.name}`} onClick={() => onEdit(ed)}>
-              <title>Click to edit or delete this link</title>
+            <path class="edge-hit" d={d} role="button" aria-label={t('Edit the link between {a} and {b}', { a: a.entry.name, b: b.entry.name })} onClick={() => onEdit(ed)}>
+              <title>{t('Click to edit or delete this link')}</title>
             </path>
           );
           if (ed.kind === 'parent') {
@@ -131,10 +132,10 @@ export function FamilyTreeSvg({ tree, onOpen, onConnect, onHide, onEdit }: {
 /** −, Fit and + for a pan-and-zoom canvas; the canvas itself also takes Ctrl+scroll and drag. */
 export function ZoomControls({ pz, onFit }: { pz: PanZoom; onFit: () => void }) {
   return (
-    <div class="zoom-controls" role="group" aria-label="Zoom">
-      <button type="button" class="zoom-out" onClick={() => pz.zoomBy(1 / 1.4)} aria-label="Zoom out"><Icon name="contract" /></button>
-      <button type="button" class="zoom-fit" onClick={onFit}>Fit</button>
-      <button type="button" class="zoom-in" onClick={() => pz.zoomBy(1.4)} aria-label="Zoom in"><Icon name="expand" /></button>
+    <div class="zoom-controls" role="group" aria-label={t('Zoom')}>
+      <button type="button" class="zoom-out" onClick={() => pz.zoomBy(1 / 1.4)} aria-label={t('Zoom out')}><Icon name="contract" /></button>
+      <button type="button" class="zoom-fit" onClick={onFit}>{t('Fit')}</button>
+      <button type="button" class="zoom-in" onClick={() => pz.zoomBy(1.4)} aria-label={t('Zoom in')}><Icon name="expand" /></button>
     </div>
   );
 }

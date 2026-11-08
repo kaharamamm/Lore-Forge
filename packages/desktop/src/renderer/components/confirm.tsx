@@ -1,5 +1,7 @@
+import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { IconName } from '@lore-forge/core';
+import { t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 
 const FOCUSABLE = 'button:not([disabled]), a[href], area[href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
@@ -37,7 +39,7 @@ interface Props {
  * to go, plain words on what happens, a danger button and Cancel. Cancel has the focus; Tab stays inside;
  * Escape and a click on the backdrop cancel. It rises in (reduced motion: fades in).
  */
-export function ConfirmDialog({ title, subject, children, confirmLabel, confirmIcon = 'trash-can', cancelLabel = 'Cancel', onConfirm, onClose }: Props) {
+export function ConfirmDialog({ title, subject, children, confirmLabel, confirmIcon = 'trash-can', cancelLabel = t('Cancel'), onConfirm, onClose }: Props) {
   const box = useRef<HTMLElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -63,7 +65,8 @@ export function ConfirmDialog({ title, subject, children, confirmLabel, confirmI
     if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); onClose(); }
     trapTab(box.current, e);
   };
-  return (
+  // On the page itself, so it dims the whole window wherever it is asked from (an editor panel too).
+  return createPortal(
     <div class="modal-backdrop confirm-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section ref={box} class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text" onKeyDown={onKey}>
         <div class="confirm-mark" aria-hidden="true"><Icon name="hazard-sign" /></div>
@@ -79,6 +82,7 @@ export function ConfirmDialog({ title, subject, children, confirmLabel, confirmI
           </div>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

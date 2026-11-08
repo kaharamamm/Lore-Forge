@@ -4,6 +4,7 @@ import { calendarProblems, eraUsage, type Calendar, type World } from '@lore-for
 import { Icon } from './icon.tsx';
 import { Select } from './select.tsx';
 import { ColorField } from './color.tsx';
+import { t, tj, tm } from '../i18n.tsx';
 
 /** Opens World settings at the calendar; null outside a world. Used by the "Known eras" hints. */
 export const ErasLink = createContext<(() => void) | null>(null);
@@ -12,7 +13,7 @@ export const ErasLink = createContext<(() => void) | null>(null);
 export function EditErasLink({ message }: { message: string }) {
   const open = useContext(ErasLink);
   if (!open || !message.includes('Known eras')) return null;
-  return <button type="button" class="link eras-link" onClick={open}><Icon name="calendar" /> Edit eras</button>;
+  return <button type="button" class="link eras-link" onClick={open}><Icon name="calendar" /> {t('Edit eras')}</button>;
 }
 
 const ERA_COLOURS = ['#c9a45c', '#6f8fc9', '#8fb87a', '#c97a6f', '#a68fc9', '#6fb8b0'];
@@ -54,7 +55,9 @@ export function WorldSettings({ world, onSave, onClose }: { world: World; onSave
   // A used era must keep its abbreviation, or its dates would stop parsing.
   const kept = new Set(eras.filter((r) => r.orig && r.orig === r.id.trim()).map((r) => r.orig));
   const lost = cal.eras.filter((e) => (usage.get(e.id) ?? 0) > 0 && !kept.has(e.id))
-    .map((e) => `${usage.get(e.id)} date${usage.get(e.id) === 1 ? ' is' : 's are'} written in ${e.name} (${e.id}). Keep its abbreviation ${e.id}, or change those dates first.`);
+    .map((e) => usage.get(e.id) === 1
+      ? t('{n} date is written in {era} ({code}). Keep its abbreviation {code}, or change those dates first.', { n: usage.get(e.id), era: e.name, code: e.id })
+      : t('{n} dates are written in {era} ({code}). Keep its abbreviation {code}, or change those dates first.', { n: usage.get(e.id), era: e.name, code: e.id }));
   const problems = [...lost, ...calendarProblems(draft)];
 
   const setEra = (key: number, patch: Partial<EraRow>) => setEras((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -77,81 +80,80 @@ export function WorldSettings({ world, onSave, onClose }: { world: World; onSave
         <header class="about-head dialog-head">
           <Icon name="calendar" class="about-mark" />
           <div>
-            <h2 id="ws-title">World settings</h2>
+            <h2 id="ws-title">{t('World settings')}</h2>
           </div>
         </header>
 
         <div class="dialog-body">
         <div class="ws-default-row">
           <label class="ws-default">
-            <span class="field-label">Default era</span>
-            <Select id="ws-default" value={defaultEra} onChange={setDefaultEra} placeholder="Pick an era…"
+            <span class="field-label">{t('Default era')}</span>
+            <Select id="ws-default" value={defaultEra} onChange={setDefaultEra} placeholder={t('Pick an era…')}
               options={draft.eras.filter((e) => e.id).map((e) => ({ value: e.id, label: `${e.name || e.id} (${e.id})`, ...(e.color ? { swatch: e.color } : {}) }))} />
           </label>
-          <p class="muted small">Dates written without an era abbreviation, like “312”, count in this era.</p>
+          <p class="muted small">{t('Dates written without an era abbreviation, like “312”, count in this era.')}</p>
         </div>
 
-        <h3 id="ws-eras">Eras</h3>
+        <h3 id="ws-eras">{t('Eras')}</h3>
         <p class="muted small ws-explain">
-          A date like “312 OK” is year 312 of the era with the abbreviation OK. <strong>Starts at</strong> is the world year that the era's year 1 falls on, so every era sits on one timeline.
-          An era without an end lasts until the next one starts. Dates with no abbreviation use the default era.
+          {tj("A date like “312 OK” is year 312 of the era with the abbreviation OK. {startsAt} is the world year that the era's year 1 falls on, so every era sits on one timeline. An era without an end lasts until the next one starts. Dates with no abbreviation use the default era.", { startsAt: <strong>{t('Starts at')}</strong> })}
         </p>
         <div class="ws-eras" role="group" aria-labelledby="ws-eras">
-          <div class="ws-era ws-head" aria-hidden="true"><span /><span>Name</span><span>Abbreviation</span><span>Starts at</span><span>Ends at</span><span>Colour</span><span>Dates</span><span /></div>
+          <div class="ws-era ws-head" aria-hidden="true"><span /><span>{t('Name')}</span><span>{t('Abbreviation')}</span><span>{t('Starts at')}</span><span>{t('Ends at')}</span><span>{t('Colour')}</span><span>{t('Dates')}</span><span /></div>
           {eras.map((r, i) => {
-            const label = r.name.trim() || `era ${i + 1}`;
+            const label = r.name.trim() || t('era {n}', { n: i + 1 });
             const used = r.orig ? usage.get(r.orig) ?? 0 : 0;
             return (
               <div key={r.key} class="ws-era" role="group" aria-label={label}>
                 <span class="ws-order">
-                  <button type="button" class="ghost small ws-up" aria-label={`Move ${label} up`} disabled={i === 0} onClick={() => setEras((rs) => move(rs, i, -1))}><span class="chev chev-up" /></button>
-                  <button type="button" class="ghost small ws-down" aria-label={`Move ${label} down`} disabled={i === eras.length - 1} onClick={() => setEras((rs) => move(rs, i, 1))}><span class="chev chev-down" /></button>
+                  <button type="button" class="ghost small ws-up" aria-label={t('Move {era} up', { era: label })} disabled={i === 0} onClick={() => setEras((rs) => move(rs, i, -1))}><span class="chev chev-up" /></button>
+                  <button type="button" class="ghost small ws-down" aria-label={t('Move {era} down', { era: label })} disabled={i === eras.length - 1} onClick={() => setEras((rs) => move(rs, i, 1))}><span class="chev chev-down" /></button>
                 </span>
-                <input ref={i === 0 ? first : undefined} class="ws-name" type="text" value={r.name} aria-label={`Name of ${label}`} placeholder="After the Sundering" onInput={(e) => setEra(r.key, { name: e.currentTarget.value })} />
-                <input class="ws-code" type="text" value={r.id} aria-label={`Abbreviation of ${label}`} placeholder="AS" onInput={(e) => setEra(r.key, { id: e.currentTarget.value })} />
-                <input class="ws-start" type="number" step={1} value={r.start} aria-label={`World year ${label} starts at`} onInput={(e) => setEra(r.key, { start: e.currentTarget.value })} />
-                <input class="ws-end" type="number" step={1} value={r.end} aria-label={`World year ${label} ends at (optional)`} placeholder="open" onInput={(e) => setEra(r.key, { end: e.currentTarget.value })} />
+                <input ref={i === 0 ? first : undefined} class="ws-name" type="text" value={r.name} aria-label={t('Name of {era}', { era: label })} placeholder={t('After the Sundering')} onInput={(e) => setEra(r.key, { name: e.currentTarget.value })} />
+                <input class="ws-code" type="text" value={r.id} aria-label={t('Abbreviation of {era}', { era: label })} placeholder={t('AS')} onInput={(e) => setEra(r.key, { id: e.currentTarget.value })} />
+                <input class="ws-start" type="number" step={1} value={r.start} aria-label={t('World year {era} starts at', { era: label })} onInput={(e) => setEra(r.key, { start: e.currentTarget.value })} />
+                <input class="ws-end" type="number" step={1} value={r.end} aria-label={t('World year {era} ends at (optional)', { era: label })} placeholder={t('open')} onInput={(e) => setEra(r.key, { end: e.currentTarget.value })} />
                 <span class="ws-color">
                   {r.color
-                    ? <><ColorField label={`Colour of ${label}`} value={r.color} alpha={false} swatches={ERA_COLOURS} class="inline" onChange={(c) => setEra(r.key, { color: c })} />
-                      <button type="button" class="ghost small" aria-label={`No colour for ${label}`} onClick={() => setEra(r.key, { color: '' })}><Icon name="cancel" /></button></>
-                    : <button type="button" class="ghost small" onClick={() => setEra(r.key, { color: ERA_COLOURS[i % ERA_COLOURS.length]! })}>Add colour</button>}
+                    ? <><ColorField label={t('Colour of {era}', { era: label })} value={r.color} alpha={false} swatches={ERA_COLOURS} class="inline" onChange={(c) => setEra(r.key, { color: c })} />
+                      <button type="button" class="ghost small" aria-label={t('No colour for {era}', { era: label })} onClick={() => setEra(r.key, { color: '' })}><Icon name="cancel" /></button></>
+                    : <button type="button" class="ghost small" onClick={() => setEra(r.key, { color: ERA_COLOURS[i % ERA_COLOURS.length]! })}>{t('Add colour')}</button>}
                 </span>
-                <span class="ws-used muted" title={`${used} dates use this era`}>{used}</span>
-                <button type="button" class="ghost small ws-delete" aria-label={`Delete ${label}`} onClick={() => setEras((rs) => rs.filter((x) => x.key !== r.key))}><Icon name="trash-can" /></button>
+                <span class="ws-used muted" title={t('{n} dates use this era', { n: used })}>{used}</span>
+                <button type="button" class="ghost small ws-delete" aria-label={t('Delete {era}', { era: label })} onClick={() => setEras((rs) => rs.filter((x) => x.key !== r.key))}><Icon name="trash-can" /></button>
               </div>
             );
           })}
         </div>
         <div class="ws-row">
-          <button type="button" class="ghost small ws-add-era" onClick={addEra}>+ Add era</button>
+          <button type="button" class="ghost small ws-add-era" onClick={addEra}>{t('+ Add era')}</button>
         </div>
 
-        <h3 id="ws-months">Months</h3>
-        <p class="muted small ws-explain">{months.length ? `${months.length} months, ${draft.months!.reduce((n, m) => n + (Number.isFinite(m.days) ? m.days : 0), 0)} days a year.` : 'No months set: the year has 12 months of 30 days.'}</p>
+        <h3 id="ws-months">{t('Months')}</h3>
+        <p class="muted small ws-explain">{months.length ? t('{months} months, {days} days a year.', { months: months.length, days: draft.months!.reduce((n, m) => n + (Number.isFinite(m.days) ? m.days : 0), 0) }) : t('No months set: the year has 12 months of 30 days.')}</p>
         <ol class="ws-months" aria-labelledby="ws-months">
           {months.map((m, i) => (
             <li key={m.key} class="ws-month">
               <span class="muted ws-month-no">{i + 1}</span>
-              <input class="ws-month-name" type="text" value={m.name} aria-label={`Name of month ${i + 1}`} onInput={(e) => { const v = e.currentTarget.value; setMonths((ms) => ms.map((x) => (x.key === m.key ? { ...x, name: v } : x))); }} />
-              <input class="ws-month-days" type="number" min={1} step={1} value={m.days} aria-label={`Days in month ${i + 1}`} onInput={(e) => { const v = e.currentTarget.value; setMonths((ms) => ms.map((x) => (x.key === m.key ? { ...x, days: v } : x))); }} />
-              <span class="muted small">days</span>
-              <button type="button" class="ghost small" aria-label={`Delete month ${i + 1}`} onClick={() => setMonths((ms) => ms.filter((x) => x.key !== m.key))}><Icon name="trash-can" /></button>
+              <input class="ws-month-name" type="text" value={m.name} aria-label={t('Name of month {n}', { n: i + 1 })} onInput={(e) => { const v = e.currentTarget.value; setMonths((ms) => ms.map((x) => (x.key === m.key ? { ...x, name: v } : x))); }} />
+              <input class="ws-month-days" type="number" min={1} step={1} value={m.days} aria-label={t('Days in month {n}', { n: i + 1 })} onInput={(e) => { const v = e.currentTarget.value; setMonths((ms) => ms.map((x) => (x.key === m.key ? { ...x, days: v } : x))); }} />
+              <span class="muted small">{t('days')}</span>
+              <button type="button" class="ghost small" aria-label={t('Delete month {n}', { n: i + 1 })} onClick={() => setMonths((ms) => ms.filter((x) => x.key !== m.key))}><Icon name="trash-can" /></button>
             </li>
           ))}
         </ol>
-        <button type="button" class="ghost small ws-add-month" onClick={() => setMonths((ms) => [...ms, { key: seq.current++, name: '', days: '30' }])}>+ Add month</button>
+        <button type="button" class="ghost small ws-add-month" onClick={() => setMonths((ms) => [...ms, { key: seq.current++, name: '', days: '30' }])}>{t('+ Add month')}</button>
 
         <div class="ws-problems" aria-live="polite">
           {problems.length > 0 && (
-            <ul>{problems.map((p) => <li key={p}><Icon name="hazard-sign" /> {p}</li>)}</ul>
+            <ul>{problems.map((p) => <li key={p}><Icon name="hazard-sign" /> {tm(p)}</li>)}</ul>
           )}
         </div>
         </div>
         <div class="dialog-actions">
-          <span class="muted small spacer">Changing a start year moves every date in that era on the timeline.</span>
-          <button type="button" class="ghost ws-cancel" onClick={onClose}>Cancel</button>
-          <button type="button" class="primary ws-save" disabled={problems.length > 0 || saving} onClick={() => void save()}><Icon name="check-mark" /> Save calendar</button>
+          <span class="muted small spacer">{t('Changing a start year moves every date in that era on the timeline.')}</span>
+          <button type="button" class="ghost ws-cancel" onClick={onClose}>{t('Cancel')}</button>
+          <button type="button" class="primary ws-save" disabled={problems.length > 0 || saving} onClick={() => void save()}><Icon name="check-mark" /> {t('Save calendar')}</button>
         </div>
       </section>
     </div>

@@ -1,3 +1,4 @@
+import { msg } from './i18n.ts';
 import { dateOf, monthsOf } from './dates.ts';
 import type { Calendar, DateText, Entry, EntryType, Relation } from './types.ts';
 
@@ -29,43 +30,43 @@ export const DETAIL_SECTIONS: Record<DetailSection, string> = { basics: 'Basics'
 
 export const DETAIL_FIELDS: Record<EntryType, readonly DetailField[]> = {
   character: [
-    { key: 'gender', label: 'Gender', kind: 'text', section: 'basics', suggest: ['female', 'male', 'non-binary'] },
-    { key: 'title', label: 'Title or rank', kind: 'text', section: 'basics', hint: 'e.g. King, Lady, Captain' },
-    { key: 'occupation', label: 'Occupation', kind: 'text', section: 'basics', hint: 'e.g. caravan master, scribe' },
-    { key: 'languages', label: 'Languages', kind: 'list', section: 'basics', hint: 'Comma-separated' },
-    { key: 'personality', label: 'Personality', kind: 'long', section: 'story' },
-    { key: 'goals', label: 'Goals', kind: 'long', section: 'story' },
-    { key: 'skills', label: 'Skills & abilities', kind: 'long', section: 'story' },
-    { key: 'affiliations', label: 'Affiliations', kind: 'refs', section: 'connections', to: ['faction'], relation: 'member-of' },
-    { key: 'home', label: 'Home', kind: 'ref', section: 'connections', to: ['place'], relation: 'lives-in' },
-    { key: 'possessions', label: 'Notable possessions', kind: 'refs', section: 'connections', to: ['item'], relation: 'owns' },
+    { key: 'gender', label: msg`Gender`, kind: 'text', section: 'basics', suggest: ['female', 'male', 'genderless'] },
+    { key: 'title', label: msg`Title or rank`, kind: 'text', section: 'basics', hint: 'e.g. King, Lady, Captain' },
+    { key: 'occupation', label: msg`Occupation`, kind: 'text', section: 'basics', hint: 'e.g. caravan master, scribe' },
+    { key: 'languages', label: msg`Languages`, kind: 'list', section: 'basics', hint: 'Comma-separated' },
+    { key: 'personality', label: msg`Personality`, kind: 'long', section: 'story' },
+    { key: 'goals', label: msg`Goals`, kind: 'long', section: 'story' },
+    { key: 'skills', label: msg`Skills & abilities`, kind: 'long', section: 'story' },
+    { key: 'affiliations', label: msg`Affiliations`, kind: 'refs', section: 'connections', to: ['faction'], relation: 'member-of' },
+    { key: 'home', label: msg`Home`, kind: 'ref', section: 'connections', to: ['place'], relation: 'lives-in' },
+    { key: 'possessions', label: msg`Notable possessions`, kind: 'refs', section: 'connections', to: ['item'], relation: 'owns' },
   ],
   place: [
-    { key: 'kind', label: 'Kind', kind: 'text', section: 'basics', suggest: ['city', 'village', 'castle', 'palace', 'fortress', 'temple', 'region', 'desert', 'oasis', 'port', 'inn', 'ruin'] },
-    { key: 'population', label: 'Population', kind: 'text', section: 'basics', hint: 'e.g. about 4,000' },
-    { key: 'ruler', label: 'Ruler', kind: 'ref', section: 'connections', to: ['character', 'faction'], relation: 'rules', reverse: true },
-    { key: 'features', label: 'Notable features', kind: 'long', section: 'story' },
+    { key: 'kind', label: msg`Kind`, kind: 'text', section: 'basics', suggest: ['city', 'village', 'castle', 'palace', 'fortress', 'temple', 'region', 'desert', 'oasis', 'port', 'inn', 'ruin'] },
+    { key: 'population', label: msg`Population`, kind: 'text', section: 'basics', hint: 'e.g. about 4,000' },
+    { key: 'ruler', label: msg`Ruler`, kind: 'ref', section: 'connections', to: ['character', 'faction'], relation: 'rules', reverse: true },
+    { key: 'features', label: msg`Notable features`, kind: 'long', section: 'story' },
   ],
   faction: [
-    { key: 'kind', label: 'Kind', kind: 'text', section: 'basics', suggest: ['kingdom', 'guild', 'order', 'cult', 'tribe', 'house', 'army', 'council', 'company'] },
-    { key: 'leader', label: 'Leader', kind: 'ref', section: 'connections', to: ['character'], relation: 'leader-of', reverse: true },
-    { key: 'headquarters', label: 'Headquarters', kind: 'ref', section: 'connections', to: ['place'], relation: 'located-in' },
-    { key: 'ideology', label: 'Ideology & aims', kind: 'long', section: 'story' },
-    { key: 'allies', label: 'Allies', kind: 'refs', section: 'connections', to: ['faction', 'character'], relation: 'ally-of' },
-    { key: 'enemies', label: 'Enemies', kind: 'refs', section: 'connections', to: ['faction', 'character'], relation: 'enemy-of' },
+    { key: 'kind', label: msg`Kind`, kind: 'text', section: 'basics', suggest: ['kingdom', 'guild', 'order', 'cult', 'tribe', 'house', 'army', 'council', 'company'] },
+    { key: 'leader', label: msg`Leader`, kind: 'ref', section: 'connections', to: ['character'], relation: 'leader-of', reverse: true },
+    { key: 'headquarters', label: msg`Headquarters`, kind: 'ref', section: 'connections', to: ['place'], relation: 'located-in' },
+    { key: 'ideology', label: msg`Ideology & aims`, kind: 'long', section: 'story' },
+    { key: 'allies', label: msg`Allies`, kind: 'refs', section: 'connections', to: ['faction', 'character'], relation: 'ally-of' },
+    { key: 'enemies', label: msg`Enemies`, kind: 'refs', section: 'connections', to: ['faction', 'character'], relation: 'enemy-of' },
   ],
   item: [
-    { key: 'kind', label: 'Kind', kind: 'text', section: 'basics', suggest: ['weapon', 'armour', 'jewellery', 'tool', 'book', 'relic', 'potion', 'instrument'] },
-    { key: 'origin', label: 'Origin', kind: 'text', section: 'basics', hint: 'Who made it, where it comes from' },
-    { key: 'location', label: 'Current location', kind: 'ref', section: 'connections', to: ['place'], relation: 'located-in' },
-    { key: 'owners', label: 'Owners over time', kind: 'refs', section: 'connections', to: ['character', 'faction'], relation: 'owns', reverse: true },
-    { key: 'powers', label: 'Powers & properties', kind: 'long', section: 'story' },
+    { key: 'kind', label: msg`Kind`, kind: 'text', section: 'basics', suggest: ['weapon', 'armour', 'jewellery', 'tool', 'book', 'relic', 'potion', 'instrument'] },
+    { key: 'origin', label: msg`Origin`, kind: 'text', section: 'basics', hint: 'Who made it, where it comes from' },
+    { key: 'location', label: msg`Current location`, kind: 'ref', section: 'connections', to: ['place'], relation: 'located-in' },
+    { key: 'owners', label: msg`Owners over time`, kind: 'refs', section: 'connections', to: ['character', 'faction'], relation: 'owns', reverse: true },
+    { key: 'powers', label: msg`Powers & properties`, kind: 'long', section: 'story' },
   ],
   event: [
-    { key: 'kind', label: 'Kind', kind: 'text', section: 'basics', suggest: ['battle', 'siege', 'wedding', 'coronation', 'plague', 'festival', 'treaty', 'founding', 'journey', 'death'] },
-    { key: 'causes', label: 'Causes', kind: 'long', section: 'story' },
-    { key: 'outcome', label: 'Outcome', kind: 'long', section: 'story' },
-    { key: 'consequences', label: 'Consequences', kind: 'long', section: 'story' },
+    { key: 'kind', label: msg`Kind`, kind: 'text', section: 'basics', suggest: ['battle', 'siege', 'wedding', 'coronation', 'plague', 'festival', 'treaty', 'founding', 'journey', 'death'] },
+    { key: 'causes', label: msg`Causes`, kind: 'long', section: 'story' },
+    { key: 'outcome', label: msg`Outcome`, kind: 'long', section: 'story' },
+    { key: 'consequences', label: msg`Consequences`, kind: 'long', section: 'story' },
   ],
   note: [],
 };
@@ -129,5 +130,5 @@ export function ageAtDeath(born: DateText | undefined, died: DateText | undefine
 export function ageAtDeathText(e: Entry, calendar: Calendar): string | undefined {
   if (e.type !== 'character') return undefined;
   const a = ageAtDeath(e.born, e.died, calendar);
-  return a ? `${a.approx ? 'about ' : ''}${a.years}` : undefined;
+  return a ? (a.approx ? msg`about ${a.years}` : `${a.years}`) : undefined;
 }

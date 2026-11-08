@@ -5,19 +5,21 @@ const slug = (s: string): string => s.toLowerCase().normalize('NFKD').replace(/[
 /**
  * Plain Markdown version of a Doc, so AI tools can read it without OCR.
  * `imageHref` maps a world-relative image path to a link usable from where the Markdown is saved.
+ * `t` translates the few words the Markdown adds itself (the contents heading, the comment at the top), for a Doc
+ * that was localized with localizeDoc: pass (s) => localize(s, table).
  */
-export function toMarkdown(doc: Doc, imageHref: (file: string) => string = (f) => f): string {
+export function toMarkdown(doc: Doc, imageHref: (file: string) => string = (f) => f, t: (text: string) => string = (s) => s): string {
   const out: string[] = [];
   const headings = doc.blocks.filter((b): b is Extract<Block, { kind: 'heading' }> => b.kind === 'heading' && !!b.toc);
   const anchor = (b: Extract<Block, { kind: 'heading' }>) => b.anchor ?? slug(b.text);
-  out.push(`<!-- ${doc.kind === 'codex' ? 'Lore-Forge World Codex' : 'Lore-Forge Story Book'}; same content as the PDF. -->`, '');
+  out.push(`<!-- ${t(doc.kind === 'codex' ? 'Lore-Forge World Codex; same content as the PDF.' : 'Lore-Forge Story Book; same content as the PDF.')} -->`, '');
   out.push(`# ${doc.cover.title}`, '', `**${doc.cover.subtitle}**`, '');
   for (const l of doc.cover.lines) out.push(l, '');
 
   const write = (b: Block, depth = 0): void => {
     switch (b.kind) {
       case 'toc':
-        out.push('## Contents', '');
+        out.push(`## ${t('Contents')}`, '');
         for (const h of headings) out.push(`${'  '.repeat(h.level - 1)}- [${h.text}](#${anchor(h)})`);
         out.push('');
         break;

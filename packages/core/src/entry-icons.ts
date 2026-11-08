@@ -12,9 +12,9 @@ type Table = readonly (readonly [RegExp, IconName])[];
 const w = (words: string) => new RegExp(`(?<!\\p{L})(?:${words})(?!\\p{L})`, 'u');
 
 const PLACE: Table = [
-  [w('ruins?|ruined'), 'ancient-ruins'],
+  [w('ruins?|ruined|harabe(si)?|yıkıntı'), 'ancient-ruins'],
   [w('palace|palaces|sarayı?'), 'indian-palace'],
-  [w('castle|fortress|citadel|keep|kale(si)?'), 'castle'],
+  [w('castle|fortress|citadel|keep|kale(si)?|hisar(ı)?'), 'castle'],
   [w('tower|towers|watchtower|spire|kule(si)?'), 'stone-tower'],
   [w('temple|shrine|sanctuary|tapınak'), 'greek-temple'],
   [w('church|cathedral|chapel|abbey|monastery|mosque|cami'), 'church'],
@@ -53,7 +53,7 @@ const ITEM: Table = [
   [w('axe|hatchet|balta'), 'battle-axe'],
   [w('dagger|knife|hançer|bıçak'), 'bowie-knife'],
   [w('spear|lance|pike|mızrak'), 'spears'],
-  [w('hammer|maul|mace'), 'claw-hammer'],
+  [w('hammer|maul|mace|alet|çekiç'), 'claw-hammer'],
   [w('sword|blade|sabre|saber|scimitar|kılıç'), 'broadsword'],
   [w('amulet|necklace|pendant|talisman|kolye'), 'gem-pendant'],
   [w('keys?|anahtar'), 'key'],
@@ -61,8 +61,8 @@ const ITEM: Table = [
   [w('helm|helmet|miğfer'), 'visored-helm'],
   [w('armou?r|breastplate|mail|zırh'), 'breastplate'],
   [w('coins?|gold|treasure|altın'), 'crown-coin'],
-  [w('orb|crystal|gem|jewel|stone'), 'crystal-ball'],
-  [w('harp|lyre|lute|flute|drum'), 'harp'],
+  [w('orb|crystal|gem|jewel|stone|mücevher|kristal'), 'crystal-ball'],
+  [w('harp|lyre|lute|flute|drum|çalgı|arp|lir|ud|kaval|davul'), 'harp'],
   [w('ship|boat|gemi'), 'cargo-ship'],
   [w('hourglass|sandglass'), 'sands-of-time'],
 ];
@@ -70,12 +70,12 @@ const FACTION: Table = [
   [w('pirates?|corsairs?|korsan'), 'pirate-flag'],
   [w('thieves|bandits?|raiders?|brigands?|eşkıya'), 'hood'],
   [w('assassins?'), 'hooded-assassin'],
-  [w('court|crown|kingdom|empire|dynasty|throne|royal|sultanate|saray'), 'crown'],
-  [w('guard|guards|army|legion|watch|soldiers|knights|order'), 'crossed-swords'],
-  [w('cult|church|faith|priests?|temple'), 'church'],
-  [w('guild|merchants?|traders?|company|caravans?'), 'two-coins'],
+  [w('court|crown|kingdom|empire|dynasty|throne|royal|sultanate|saray|krallık|imparatorluk|hanedan|sultanlık'), 'crown'],
+  [w('guard|guards|army|legion|watch|soldiers|knights|order|ordu|lejyon|muhafızlar|şövalyeler|bölük'), 'crossed-swords'],
+  [w('cult|church|faith|priests?|temple|kült|tarikat|rahipler'), 'church'],
+  [w('guild|merchants?|traders?|company|caravans?|lonca|tüccarlar|kervan'), 'two-coins'],
   [w('tribe|clan|nomads?|aşiret|kabile'), 'huts-village'],
-  [w('council|senate|assembly|meclis'), 'meeple-group'],
+  [w('council|senate|assembly|meclis|konsey'), 'meeple-group'],
   [w('scholars?|mages?|wizards?|academy|circle'), 'wizard-staff'],
   [w('winds?|storm'), 'tornado'],
 ];
@@ -87,12 +87,12 @@ const EVENT: Table = [
   [w('plague|pestilence|sickness|epidemic|veba|salgın'), 'plague-doctor-profile'],
   [w('festival|feast|celebration|carnival|bayram|şenlik'), 'party-flags'],
   [w('fall|sack|ruin|destruction|burning|collapse'), 'tower-fall'],
-  [w('death|murder|assassination|funeral|execution'), 'tombstone'],
+  [w('death|murder|assassination|funeral|execution|ölüm|cinayet|suikast|cenaze|idam'), 'tombstone'],
   [w('storm|sandstorm|flood|earthquake|fırtına'), 'lightning-storm'],
   [w('treaty|pact|alliance|truce|peace|dispute|council|antlaşma'), 'shaking-hands'],
   [w('founding|founded|foundation|kuruluş'), 'flying-flag'],
   [w('birth|born'), 'sprout'],
-  [w('journey|voyage|expedition|return|exodus|pilgrimage'), 'treasure-map'],
+  [w('journey|voyage|expedition|return|exodus|pilgrimage|yolculuk|sefer|hac'), 'treasure-map'],
 ];
 const NOTE: Table = [
   [w('songs?|ballad|poem|lament|hymn|şarkı|ağıt'), 'harp'],
@@ -140,13 +140,17 @@ const VERB_ICONS: Record<string, IconName> = {
 };
 
 /**
- * Icon for a word offered in a suggestion list, by what the field holds: a gender (female, male, or a neutral
- * figure), a kind of the entry's type (the same keyword tables as the default pictures, else the type's icon), or
- * an action verb. Undefined for fields whose words have no picture.
+ * Icon for a word offered in a suggestion list, by what the field holds: a gender (the female, male or neuter sign,
+ * else a neutral figure), a kind of the entry's type (the same keyword tables as the default pictures, else the
+ * type's icon), or an action verb. Undefined for fields whose words have no picture.
  */
 export function suggestionIcon(type: Entry['type'], field: string, value: string): IconName | undefined {
   const v = lower(value).trim();
-  if (field === 'gender') return /^(f|female|woman|girl|kadın|kadin|kız|feminine)$/.test(v) ? 'female' : /^(m|male|man|boy|erkek|masculine)$/.test(v) ? 'male' : 'person';
+  if (field === 'gender') {
+    if (/^(f|female|woman|girl|kadın|kadin|kız|feminine)$/.test(v)) return 'female';
+    if (/^(m|male|man|boy|erkek|masculine)$/.test(v)) return 'male';
+    return /^(genderless|agender|neuter|sexless|cinsiyetsiz)$/.test(v) ? 'genderless' : 'person';
+  }
   if (field === 'kind') {
     for (const [re, icon] of TABLES[type] ?? []) if (re.test(v)) return icon;
     return TYPE_ICON[type];

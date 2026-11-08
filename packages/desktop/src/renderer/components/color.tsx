@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { hsvToRgb, parseHex, rgbToHsv, toHex, type Rgba } from '@lore-forge/core';
+import { lower, pct, t } from '../i18n.tsx';
 import { Popover } from './popover.tsx';
 
 /** Theme colours offered in every picker: the app's gold, parchment, type colours and dark cover tones. */
@@ -70,26 +71,26 @@ export function ColorPicker({ value, onChange, alpha = true, swatches = THEME_SW
   const rgbField = (k: 'r' | 'g' | 'b', label: string) => (
     <label class="cp-num">
       <span>{label}</span>
-      <input type="number" min={0} max={255} step={1} value={rgba[k]} aria-label={`${label} (0 to 255)`}
+      <input type="number" min={0} max={255} step={1} value={rgba[k]} aria-label={t('{channel} (0 to 255)', { channel: label })}
         onInput={(e) => { const n = Number(e.currentTarget.value); if (Number.isFinite(n)) setRgba({ ...rgba, [k]: clamp(Math.round(n), 0, 255) }); }} />
     </label>
   );
   return (
     <div class="color-picker" onKeyDown={(e) => e.key === 'Escape' || e.stopPropagation()}>
       <div class="cp-square" style={{ '--hue': pure }} onPointerDown={(e) => drag(e, (x, y) => emit({ ...hsv, s: clamp(x), v: clamp(1 - y) }))}>
-        <span class="cp-square-knob" role="slider" tabIndex={0} aria-label="Saturation and brightness" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(hsv.v * 100)}
-          aria-valuetext={`saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`}
+        <span class="cp-square-knob" role="slider" tabIndex={0} aria-label={t('Saturation and brightness')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(hsv.v * 100)}
+          aria-valuetext={t('saturation {saturation}, brightness {brightness}', { saturation: pct(Math.round(hsv.s * 100)), brightness: pct(Math.round(hsv.v * 100)) })}
           style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: solid }} onKeyDown={svKey} />
       </div>
       <label class="cp-hue">
-        <span class="field-label">Hue</span>
-        <input type="range" min={0} max={359} step={1} value={Math.round(angle)} aria-valuetext={`${Math.round(angle)} degrees`} style={{ '--knob': pure }}
+        <span class="field-label">{t('Hue')}</span>
+        <input type="range" min={0} max={359} step={1} value={Math.round(angle)} aria-valuetext={t('{n} degrees', { n: Math.round(angle) })} style={{ '--knob': pure }}
           onInput={(e) => emit({ ...hsv, h: Number(e.currentTarget.value) / 360 })} />
       </label>
       {alpha && (
         <label class="cp-alpha">
-          <span class="field-label">Opacity</span>
-          <input type="range" min={0} max={100} step={1} value={Math.round(rgba.a * 100)} aria-valuetext={`${Math.round(rgba.a * 100)}%`} style={{ '--solid': solid }}
+          <span class="field-label">{t('Opacity')}</span>
+          <input type="range" min={0} max={100} step={1} value={Math.round(rgba.a * 100)} aria-valuetext={pct(Math.round(rgba.a * 100))} style={{ '--solid': solid }}
             onInput={(e) => setRgba({ ...rgba, a: Number(e.currentTarget.value) / 100 })} />
         </label>
       )}
@@ -97,7 +98,7 @@ export function ColorPicker({ value, onChange, alpha = true, swatches = THEME_SW
         <span class="cp-preview" aria-hidden="true"><span style={{ background: value }} /></span>
         <label class="cp-hex">
           <span>Hex</span>
-          <input type="text" value={hex} spellcheck={false} maxLength={9} aria-label="Hex colour"
+          <input type="text" value={hex} spellcheck={false} maxLength={9} aria-label={t('Hex colour')}
             onInput={(e) => { const t = e.currentTarget.value.trim(); setHexText(t); const c = parseHex(t.startsWith('#') ? t : `#${t}`); if (c) setRgba(c); }} />
         </label>
         {rgbField('r', 'R')}
@@ -106,7 +107,7 @@ export function ColorPicker({ value, onChange, alpha = true, swatches = THEME_SW
         {alpha && (
           <label class="cp-num">
             <span>A</span>
-            <input type="number" min={0} max={100} step={1} value={Math.round(rgba.a * 100)} aria-label="Opacity percent"
+            <input type="number" min={0} max={100} step={1} value={Math.round(rgba.a * 100)} aria-label={t('Opacity percent')}
               onInput={(e) => { const n = Number(e.currentTarget.value); if (Number.isFinite(n)) setRgba({ ...rgba, a: clamp(n / 100) }); }} />
           </label>
         )}
@@ -117,12 +118,13 @@ export function ColorPicker({ value, onChange, alpha = true, swatches = THEME_SW
   );
 }
 
-function Swatches({ title, colours, value, onPick }: { title: string; colours: string[]; value: string; onPick: (c: string) => void }) {
+function Swatches({ title, colours, value, onPick }: { title: 'Theme' | 'Recent'; colours: string[]; value: string; onPick: (c: string) => void }) {
+  const theme = title === 'Theme';
   return (
-    <div class="cp-swatches" role="group" aria-label={`${title} colours`}>
-      <span class="field-label">{title}</span>
+    <div class="cp-swatches" role="group" aria-label={theme ? t('Theme colours') : t('Recent colours')}>
+      <span class="field-label">{theme ? t('Theme') : t('Recent')}</span>
       <div>
-        {colours.map((c) => <button key={c} type="button" class="swatch" aria-pressed={c.toLowerCase() === value.toLowerCase()} aria-label={`${title} colour ${c}`} title={c} onClick={() => onPick(c)}><span style={{ background: c }} /></button>)}
+        {colours.map((c) => <button key={c} type="button" class="swatch" aria-pressed={c.toLowerCase() === value.toLowerCase()} aria-label={theme ? t('Theme colour {colour}', { colour: c }) : t('Recent colour {colour}', { colour: c })} title={c} onClick={() => onPick(c)}><span style={{ background: c }} /></button>)}
       </div>
     </div>
   );
@@ -147,7 +149,7 @@ export function ColorField({ label, value, onChange, alpha = true, swatches, cla
       <button ref={button} type="button" class="color-button" aria-expanded={open} aria-haspopup="dialog" onClick={() => (open ? close() : setOpen(true))}>
         <span class="cp-preview" aria-hidden="true"><span style={{ background: value }} /></span>
         <span class="color-hex">{value}</span>
-        <span class="sr-only">, change {label.toLowerCase()}</span>
+        <span class="sr-only">, {t('change {label}', { label: lower(label) })}</span>
       </button>
       {open && (
         <Popover anchor={button} class="color-popover" role="dialog" aria-label={label} onClose={(why) => close(why === 'escape')}>

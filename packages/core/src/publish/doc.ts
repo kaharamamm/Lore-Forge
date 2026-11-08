@@ -4,6 +4,7 @@
  * Inline text may use **bold** and *italic*; single newlines are kept as line breaks.
  */
 import { formatDate, formatYearless, parseDate, type ParsedDate } from '../dates.ts';
+import { msg, verbatim } from '../i18n.ts';
 import type { IconName } from '../icons.ts';
 import type { CoverArt } from '../cover.ts';
 import type { BookSettings, Calendar, DropCapStyle, TrimSize } from '../types.ts';
@@ -35,7 +36,7 @@ export type Block =
 
 /**
  * Front matter, in book order, each on its own page: title page (title, subtitle, author, publisher), copyright
- * page, then the optional dedication and epigraph (lines: quote, then "— source"). There is no half-title: the
+ * page, then the optional dedication and epigraph (lines: the quote, then its source). There is no half-title: the
  * cover already carries the title alone, and a second title page right after it read as a repeat.
  */
 export type FrontRole = 'title' | 'copyright' | 'dedication' | 'epigraph';
@@ -200,6 +201,6 @@ export function showDate(text: string | undefined, ix: WorldIndex): string | und
   if (text === undefined || text.trim() === '') return undefined;
   const r = parseDate(text, ix.calendar);
   if (r.kind === 'date') return dateWithEra(r.date, ix.calendar);
-  if (r.kind === 'yearless') return `${formatYearless(r)} (year unknown)`;
-  return r.kind === 'unknown' ? 'unknown' : `${text} (unreadable date)`;
+  if (r.kind === 'yearless') return msg`${formatYearless(r)} (year unknown)`;
+  return r.kind === 'unknown' ? msg`unknown` : msg`${verbatim(text)} (unreadable date)`;
 }

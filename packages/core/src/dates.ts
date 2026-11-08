@@ -1,3 +1,4 @@
+import { msg } from './i18n.ts';
 import type { Calendar, DateText, Month } from './types.ts';
 
 export type Precision = 'year' | 'month' | 'day';
@@ -29,10 +30,26 @@ const ISO_RE = /^(-?\d+)(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/;
 const DOT3_RE = /^(\d{1,2})\.(\d{1,2})\.(-?\d+)$/;
 const DOT2_RE = /^(\d{1,2})\.(-?\d+)\.?$/;
 
-export const DATE_FORMATS_HINT = 'YYYY, MM.YYYY, DD.MM.YYYY or DD.MM (year unknown); ~ for approximate, an optional era code, or "unknown"';
+export const DATE_FORMATS_HINT = msg`YYYY, MM.YYYY, DD.MM.YYYY or DD.MM (year unknown); ~ for approximate, an optional era code, or "unknown"`;
 
+/** True for a usable month: a text name and at least one day. */
+export function isMonth(m: unknown): m is Month {
+  return typeof m === 'object' && m !== null && typeof (m as Month).name === 'string' && typeof (m as Month).days === 'number' && Number.isFinite((m as Month).days) && (m as Month).days >= 1;
+}
+
+/** The calendar's months, or 12 months of 30 days when none are set. Unusable months are left out, so a hand-edited world.json never breaks date reading. */
 export function monthsOf(calendar: Calendar): Month[] {
-  return calendar.months && calendar.months.length > 0 ? calendar.months : DEFAULT_MONTHS;
+  const list: unknown = calendar.months;
+  if (!Array.isArray(list) || list.length === 0) return DEFAULT_MONTHS;
+  if (list.every(isMonth)) return list;
+  const ok = list.filter(isMonth);
+  return ok.length ? ok : DEFAULT_MONTHS;
+}
+
+/** How many years `~` widens a date: calendar.approxYears when it is a number of 0 or more, else 5. */
+export function approxYearsOf(calendar: Calendar): number {
+  const n = calendar.approxYears;
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : 5;
 }
 
 function daysPerYear(months: Month[]): number {
@@ -60,21 +77,21 @@ export function parseDate(text: DateText | undefined, calendar: Calendar): DateR
   if (raw === '' || raw === '?' || raw.toLowerCase() === 'unknown') return { kind: 'unknown' };
   const m = DATE_RE.exec(raw);
   const parts = m ? splitBody(m[2]!, m[3] !== undefined) : undefined;
-  if (!m || !parts) return { kind: 'invalid', reason: `"${raw}" is not a date. Use ${DATE_FORMATS_HINT}.` };
+  if (!m || !parts) return { kind: 'invalid', reason: msg`"${raw}" is not a date. Use ${DATE_FORMATS_HINT}.` };
   const [, tilde, , eraCode] = m;
   const approx = tilde === '~';
   const months = monthsOf(calendar);
   const { year, month, day } = parts;
   if (month !== undefined && (month < 1 || month > months.length)) {
-    return { kind: 'invalid', reason: `"${raw}" has month ${month}, but the calendar has ${months.length} months.` };
+    return { kind: 'invalid', reason: msg`"${raw}" has month ${month}, but the calendar has ${months.length} months.` };
   }
   if (month !== undefined && day !== undefined) {
     const max = months[month - 1]!.days;
-    if (day < 1 || day > max) return { kind: 'invalid', reason: `"${raw}" has day ${day}, but ${months[month - 1]!.name} has ${max} days.` };
+    if (day < 1 || day > max) return { kind: 'invalid', reason: msg`"${raw}" has day ${day}, but ${months[month - 1]!.name} has ${max} days.` };
   }
   if (year === undefined) return { kind: 'yearless', day: day!, month: month!, approx };
   const era = calendar.eras.find((e) => e.id.toLowerCase() === (eraCode ?? calendar.defaultEra).toLowerCase());
-  if (!era) return { kind: 'invalid', reason: `"${raw}" uses an unknown era "${eraCode}". Known eras: ${calendar.eras.map((e) => e.id).join(', ')}.` };
+  if (!era) return { kind: 'invalid', reason: msg`"${raw}" uses an unknown era "${eraCode}". Known eras: ${calendar.eras.map((e) => e.id).join(', ')}.` };
   const perYear = daysPerYear(months);
   const absYear = era.start + year - 1;
   const yearStart = absYear * perYear;
@@ -90,7 +107,7 @@ export function parseDate(text: DateText | undefined, calendar: Calendar): DateR
     }
   }
   if (approx) {
-    const margin = (calendar.approxYears ?? 5) * perYear;
+    const margin = approxYearsOf(calendar) * perYear;
     lo -= margin;
     hi += margin;
   }
@@ -117,32 +134,52 @@ export function formatDate(d: ParsedDate, calendar: Calendar): string {
   if (d.month !== undefined) s = `${pad2(d.month)}.${s}`;
   if (d.day !== undefined) s = `${pad2(d.day)}.${s}`;
   if (d.era !== calendar.defaultEra) s += ` ${d.era}`;
-  return d.approx ? `c. ${s}` : s;
+  return d.approx ? msg`c. ${s}` : s;
 }
 
 /** "12.03" for a day and month without a year. */
 export function formatYearless(r: { day: number; month: number; approx: boolean }): string {
   const s = `${pad2(r.day)}.${pad2(r.month)}`;
-  return r.approx ? `c. ${s}` : s;
+  return r.approx ? msg`c. ${s}` : s;
 }
 
-/** "in 1800" or "on 1920-03-12". */
+/**
+ * "in 1800" or "on 1920-03-12". Each shape of date has its own template ("in {0}" for a year, "on {0}.{1}.{2}" for a
+ * day), so a translation can say "in the year" or "on the date" without seeing the numbers.
+ */
 export function atDate(d: ParsedDate, calendar: Calendar): string {
-  return `${d.precision === 'day' && !d.approx ? 'on' : 'in'} ${formatDate(d, calendar)}`;
+  const on = d.precision === 'day' && !d.approx;
+  const y = d.era !== calendar.defaultEra ? `${d.year} ${d.era}` : String(d.year);
+  const dd = d.day !== undefined ? pad2(d.day) : undefined;
+  const mm = d.month !== undefined ? pad2(d.month) : undefined;
+  if (on && dd !== undefined && mm !== undefined) return msg`on ${dd}.${mm}.${y}`;
+  if (!on && d.approx) {
+    if (dd !== undefined && mm !== undefined) return msg`in c. ${dd}.${mm}.${y}`;
+    if (dd === undefined && mm !== undefined) return msg`in c. ${mm}.${y}`;
+    if (dd === undefined && mm === undefined) return msg`in c. ${y}`;
+  }
+  if (!on && !d.approx && dd === undefined) return mm !== undefined ? msg`in ${mm}.${y}` : msg`in ${y}`;
+  // Shapes parseDate never makes (a day without a month, a precision that does not match the fields).
+  return `${on ? 'on' : 'in'} ${formatDate(d, calendar)}`;
 }
 
 /** Describe a parsed date for UI hints, e.g. "Year 1800 of After the Sundering (approximate)". */
 export function describeDate(text: DateText | undefined, calendar: Calendar): string {
   const r = parseDate(text, calendar);
-  if (r.kind === 'unknown') return 'Unknown date';
+  if (r.kind === 'unknown') return msg`Unknown date`;
   if (r.kind === 'invalid') return r.reason;
   const months = monthsOf(calendar);
-  if (r.kind === 'yearless') return `Day ${r.day}, ${months[r.month - 1]!.name}, year unknown${r.approx ? ' (approximate)' : ''}`;
+  if (r.kind === 'yearless') {
+    const month = months[r.month - 1]!.name;
+    return r.approx ? msg`Day ${r.day}, ${month}, year unknown (approximate)` : msg`Day ${r.day}, ${month}, year unknown`;
+  }
   const d = r.date;
-  const era = calendar.eras.find((e) => e.id === d.era);
-  const parts: string[] = [];
-  if (d.day !== undefined) parts.push(`Day ${d.day}`);
-  if (d.month !== undefined) parts.push(months[d.month - 1]!.name);
-  parts.push(`Year ${d.year} of ${era?.name ?? d.era}`);
-  return parts.join(', ') + (d.approx ? ' (approximate)' : '');
+  const era = calendar.eras.find((e) => e.id === d.era)?.name ?? d.era;
+  const month = d.month !== undefined ? months[d.month - 1]!.name : undefined;
+  if (d.day !== undefined && month !== undefined) {
+    return d.approx ? msg`Day ${d.day}, ${month}, Year ${d.year} of ${era} (approximate)` : msg`Day ${d.day}, ${month}, Year ${d.year} of ${era}`;
+  }
+  if (month !== undefined) return d.approx ? msg`${month}, Year ${d.year} of ${era} (approximate)` : msg`${month}, Year ${d.year} of ${era}`;
+  if (d.day !== undefined) return d.approx ? msg`Day ${d.day}, Year ${d.year} of ${era} (approximate)` : msg`Day ${d.day}, Year ${d.year} of ${era}`;
+  return d.approx ? msg`Year ${d.year} of ${era} (approximate)` : msg`Year ${d.year} of ${era}`;
 }

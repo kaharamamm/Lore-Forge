@@ -1,4 +1,5 @@
 import { monthsOf, type ParsedDate } from '../dates.ts';
+import { msg } from '../i18n.ts';
 import { isEnded } from '../lifecycle.ts';
 import type { Calendar, Entry, EntryType, Severity, Warning, World } from '../types.ts';
 import { WorldIndex } from '../world-index.ts';
@@ -74,9 +75,9 @@ export function timelineModel(world: World, warnings: readonly Warning[]): Timel
         const to = point ? r.start!.hi : r.end ? r.end.hi : max;
         const ws = warnings.filter((w) => !w.intended && involvesEntry(w, r.entry.id));
         const worst = ws.reduce<Severity | undefined>((acc, w) => (!acc || RANK[w.severity] > RANK[acc] ? w.severity : acc), undefined);
-        const dates = point
-          ? ix.fmt(r.start!)
-          : `${r.start ? ix.fmt(r.start) : '?'} – ${r.end ? ix.fmt(r.end) : type === 'event' ? '' : '?'}`.trim();
+        const startText = r.start ? ix.fmt(r.start) : '?';
+        const endText = r.end ? ix.fmt(r.end) : type === 'event' ? '' : '?';
+        const dates = point ? ix.fmt(r.start!) : endText ? msg`${startText} – ${endText}` : msg`${startText} –`;
         return { entry: r.entry, from, to: Math.max(to, from), openStart: !r.start, openEnd: !point && !r.end, point, dates, ended: isEnded(r.entry), warnings: ws, ...(worst ? { worst } : {}) };
       })
       .sort((a, b) => a.from - b.from || a.entry.name.localeCompare(b.entry.name)),

@@ -11,14 +11,22 @@ const api: LoreApi = {
   listWorlds: () => ipcRenderer.invoke('listWorlds'),
   settings: () => ipcRenderer.invoke('settings'),
   saveSettings: (s) => ipcRenderer.invoke('saveSettings', s),
+  displayState: () => ipcRenderer.invoke('displayState'),
+  setDisplay: (patch) => ipcRenderer.invoke('setDisplay', patch),
+  onDisplayChanged: (cb) => {
+    const listener = (_e: unknown, state: Parameters<typeof cb>[0]) => cb(state);
+    ipcRenderer.on('display-changed', listener);
+    return () => void ipcRenderer.removeListener('display-changed', listener);
+  },
   chooseFolder: (title, start) => ipcRenderer.invoke('chooseFolder', title, start),
   pickImageFile: () => ipcRenderer.invoke('pickImageFile'),
   readPickedImage: (path) => ipcRenderer.invoke('readPickedImage', path),
   coverImages: (dir) => ipcRenderer.invoke('coverImages', dir),
   systemFonts: () => ipcRenderer.invoke('systemFonts'),
   duplicateWorld: (dir, name) => ipcRenderer.invoke('duplicateWorld', dir, name),
-  listModels: (dir, entryId) => ipcRenderer.invoke('listModels', dir, entryId),
-  importModel: (dir, entryId) => ipcRenderer.invoke('importModel', dir, entryId),
+  listModels: (dir, entryId, look) => ipcRenderer.invoke('listModels', dir, entryId, look),
+  moveLookModels: (dir, entryId, look) => ipcRenderer.invoke('moveLookModels', dir, entryId, look),
+  importModel: (dir, entryId, look) => ipcRenderer.invoke('importModel', dir, entryId, look),
   renameModel: (dir, file, name) => ipcRenderer.invoke('renameModel', dir, file, name),
   deleteModel: (dir, file) => ipcRenderer.invoke('deleteModel', dir, file),
   readModel: (dir, file) => ipcRenderer.invoke('readModel', dir, file),
@@ -30,9 +38,9 @@ const api: LoreApi = {
   trashWorld: (dir) => ipcRenderer.invoke('trashWorld', dir),
   readWorld: (dir) => ipcRenderer.invoke('readWorld', dir),
   peekWorld: (dir) => ipcRenderer.invoke('peekWorld', dir),
-  writeFile: (dir, path, content) => ipcRenderer.invoke('writeFile', dir, path, content),
+  writeFile: (dir, path, content, expect) => ipcRenderer.invoke('writeFile', dir, path, content, expect),
   deleteFile: (dir, path) => ipcRenderer.invoke('deleteFile', dir, path),
-  importImage: (dir, entryId, view) => ipcRenderer.invoke('importImage', dir, entryId, view),
+  importImage: (dir, entryId, view, look) => ipcRenderer.invoke('importImage', dir, entryId, view, look),
   readImage: (dir, path) => ipcRenderer.invoke('readImage', dir, path),
   exportPdf: (dir, kind, options) => ipcRenderer.invoke('exportPdf', dir, kind, options ?? {}),
   exportDocx: (dir, options) => ipcRenderer.invoke('exportDocx', dir, options ?? {}),
@@ -40,7 +48,14 @@ const api: LoreApi = {
   saveCalendar: (dir, calendar) => ipcRenderer.invoke('saveCalendar', dir, calendar),
   saveCover: (dir, cover, picked) => ipcRenderer.invoke('saveCover', dir, cover, picked),
   showInFolder: (path) => ipcRenderer.invoke('showInFolder', path),
+  saveCopy: (dir, path) => ipcRenderer.invoke('saveCopy', dir, path),
   onNavigate: (cb) => void ipcRenderer.on('navigate', (_e, direction: 'back' | 'forward') => cb(direction)),
+  onFlushBeforeClose: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('flush-before-close', listener);
+    return () => void ipcRenderer.removeListener('flush-before-close', listener);
+  },
+  flushed: (ok) => ipcRenderer.send('flushed', ok),
   onWorldChanged: (cb) => {
     const listener = (_e: unknown, change: { dir: string; files: string[] }) => cb(change);
     ipcRenderer.on('world-changed', listener);

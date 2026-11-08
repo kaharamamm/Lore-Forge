@@ -1,16 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { BUNDLED_FONTS, bundledFont, type CoverArt, type WorldCoverSettings } from '@lore-forge/core';
 import type { CoverImage } from '../../shared/api.ts';
+import { t } from '../i18n.tsx';
 import { Popover } from './popover.tsx';
 
 /** "Show title on cover" and "Show emblem on cover": both on unless world.json says false. The spine keeps both. */
 export function CoverSwitches({ art, set }: { art: CoverArt; set: (patch: Partial<WorldCoverSettings>) => void }) {
   return (
     <fieldset class="field cover-switches">
-      <legend class="field-label">On the cover</legend>
-      <label class="check"><input type="checkbox" class="show-title" checked={art.showTitle} onChange={(e) => set({ showTitle: e.currentTarget.checked ? undefined : false })} /> Show title on cover</label>
-      <label class="check"><input type="checkbox" class="show-emblem" checked={art.showEmblem} onChange={(e) => set({ showEmblem: e.currentTarget.checked ? undefined : false })} /> Show emblem on cover</label>
-      <p class="muted font-note">Works with or without a picture. The title always stays on the spine.</p>
+      <legend class="field-label">{t('On the cover')}</legend>
+      <label class="check"><input type="checkbox" class="show-title" checked={art.showTitle} onChange={(e) => set({ showTitle: e.currentTarget.checked ? undefined : false })} /> {t('Show title on cover')}</label>
+      <label class="check"><input type="checkbox" class="show-emblem" checked={art.showEmblem} onChange={(e) => set({ showEmblem: e.currentTarget.checked ? undefined : false })} /> {t('Show emblem on cover')}</label>
+      <p class="muted font-note">{t('Works with or without a picture. The title always stays on the spine.')}</p>
     </fieldset>
   );
 }
@@ -28,9 +29,9 @@ export function RecentPictures({ dir, current, refresh, onPick }: { dir: string 
   }, [dir, refresh]);
   if (!list?.length) return null;
   return (
-    <div class="recent-pictures" role="group" aria-label="Recent pictures">
+    <div class="recent-pictures" role="group" aria-label={t('Recent pictures')}>
       {list.slice(0, 14).map((p) => (
-        <button key={`${p.kind}:${p.path}`} type="button" class={`recent-picture is-${p.kind}`} aria-pressed={current === p.path} title={p.kind === 'world' ? `${p.path} (in this world)` : `${p.path} (uploaded before)`} aria-label={`Use ${p.name}`} onClick={() => onPick(p)}>
+        <button key={`${p.kind}:${p.path}`} type="button" class={`recent-picture is-${p.kind}`} aria-pressed={current === p.path} title={p.kind === 'world' ? t('{path} (in this world)', { path: p.path }) : t('{path} (uploaded before)', { path: p.path })} aria-label={t('Use {name}', { name: p.name })} onClick={() => onPick(p)}>
           <img src={p.thumb ?? ''} alt="" />
         </button>
       ))}
@@ -95,7 +96,7 @@ export function FontPicker({ value, styleLabel, onChange }: { value: string | un
     const match = (n: string) => !q || n.toLowerCase().includes(q);
     const out: Option[] = [];
     if (!q) out.push({ family: undefined, group: 'default', hint: styleLabel });
-    for (const f of BUNDLED_FONTS) if (match(f.family)) out.push({ family: f.family, group: 'bundled', hint: f.kind });
+    for (const f of BUNDLED_FONTS) if (match(f.family)) out.push({ family: f.family, group: 'bundled', hint: t(f.kind) });
     for (const n of (system ?? []).filter(match).slice(0, SHOW_MAX)) out.push({ family: n, group: 'system' });
     return out;
   }, [query, system, styleLabel]);
@@ -133,29 +134,29 @@ export function FontPicker({ value, styleLabel, onChange }: { value: string | un
   const face = (f: string | undefined) => (f ? { fontFamily: `"${f.replace(/["\\]/g, '')}", var(--display)` } : undefined);
   return (
     <div class="font-field">
-      <span class="field-label" id="font-field-label">Title font</span>
+      <span class="field-label" id="font-field-label">{t('Title font')}</span>
       <button ref={button} type="button" class={`select font-button${open ? ' is-open' : ''}`} aria-haspopup="listbox" aria-expanded={open} aria-labelledby="font-field-label font-field-value" onClick={() => (open ? close(true) : setOpen(true))}>
-        <span id="font-field-value" class="select-value font-name" style={face(value)}>{value ?? `Title style (${styleLabel})`}</span>
+        <span id="font-field-value" class="select-value font-name" style={face(value)}>{value ?? t('Title style ({style})', { style: styleLabel })}</span>
         <span class="select-chevron" aria-hidden="true" />
       </button>
       {open && (
-        <Popover anchor={button} class="select-popover font-popover" role="dialog" aria-label="Title font" matchWidth onClose={(why) => close(why === 'escape')}>
-          <input ref={search} type="search" class="font-search" placeholder="Search fonts" value={query} role="combobox" aria-expanded="true" aria-controls="font-options" aria-activedescendant={options[active] ? id(active) : undefined} aria-label="Search fonts"
+        <Popover anchor={button} class="select-popover font-popover" role="dialog" aria-label={t('Title font')} matchWidth onClose={(why) => close(why === 'escape')}>
+          <input ref={search} type="search" class="font-search" placeholder={t('Search fonts')} value={query} role="combobox" aria-expanded="true" aria-controls="font-options" aria-activedescendant={options[active] ? id(active) : undefined} aria-label={t('Search fonts')}
             onInput={(e) => { setQuery(e.currentTarget.value); setActive(0); }} onKeyDown={onKey} />
-          <ul ref={list} id="font-options" class="font-options" role="listbox" aria-label="Fonts">
+          <ul ref={list} id="font-options" class="font-options" role="listbox" aria-label={t('Fonts')}>
             {options.map((o, i) => (
               <>
-                {(i === 0 || options[i - 1]!.group !== o.group) && o.group !== 'default' && <li key={`g-${o.group}`} role="presentation" class="font-group">{o.group === 'bundled' ? 'Bundled' : 'System'}</li>}
+                {(i === 0 || options[i - 1]!.group !== o.group) && o.group !== 'default' && <li key={`g-${o.group}`} role="presentation" class="font-group">{o.group === 'bundled' ? t('Bundled') : t('System')}</li>}
                 <li key={`${o.group}:${o.family ?? ''}`} id={id(i)} role="option" class={`font-option is-${o.group}`} data-family={o.family ?? ''} aria-selected={i === active} aria-checked={o.family === value}
                   onMouseDown={(e) => e.preventDefault()} onMouseMove={() => i !== active && setActive(i)} onClick={() => pick(o)}>
-                  <span class="font-name" style={face(o.family)}>{o.family ?? 'Title style lettering'}</span>
+                  <span class="font-name" style={face(o.family)}>{o.family ?? t('Title style lettering')}</span>
                   {o.hint && <span class="font-hint">{o.hint}</span>}
                 </li>
               </>
             ))}
-            {system === null && <li role="presentation" class="font-group muted">Reading this computer's fonts…</li>}
-            {system && !options.some((o) => o.group === 'system') && <li role="presentation" class="font-group muted">{query ? 'No system font matches' : 'No system fonts found'}</li>}
-            {more > 0 && <li role="presentation" class="font-more muted">{more} more system fonts; type to narrow the list</li>}
+            {system === null && <li role="presentation" class="font-group muted">{t("Reading this computer's fonts…")}</li>}
+            {system && !options.some((o) => o.group === 'system') && <li role="presentation" class="font-group muted">{query ? t('No system font matches') : t('No system fonts found')}</li>}
+            {more > 0 && <li role="presentation" class="font-more muted">{t('{n} more system fonts; type to narrow the list', { n: more })}</li>}
           </ul>
         </Popover>
       )}

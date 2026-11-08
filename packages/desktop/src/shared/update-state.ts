@@ -5,6 +5,8 @@
  * Flow: check -> available (Download / Later / What's new) -> downloading -> ready (Restart to update) -> installing.
  * macOS builds are unsigned and cannot install themselves, so there "Download" opens the download page.
  */
+import { t } from './i18n.ts';
+
 export type UpdateStatus = 'off' | 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'ready' | 'installing' | 'error';
 
 export interface UpdateState {
@@ -90,18 +92,21 @@ export function updateErrorText(message: string): string {
   return (message.split('\n')[0] ?? message).trim().slice(0, 160) || 'unknown error.';
 }
 
-/** One line for the toast and About. */
+/**
+ * One line for the toast and About, in the app's language. The off reason and the error stay English in the state
+ * (updaterOff, updateErrorText) and are translated here, so they follow a change of language.
+ */
 export function updateText(s: UpdateState): string {
   switch (s.status) {
-    case 'off': return s.offReason ?? 'Updates are off.';
+    case 'off': return s.offReason === undefined ? t('Updates are off.') : t(s.offReason);
     case 'idle': return '';
-    case 'checking': return 'Checking for updates…';
-    case 'current': return 'Lore-Forge is up to date.';
-    case 'available': return `Lore-Forge ${s.latest} is available.`;
-    case 'downloading': return `Downloading Lore-Forge ${s.latest ?? ''}… ${s.percent ?? 0}%`.replace('  ', ' ');
-    case 'ready': return s.error ? `Lore-Forge ${s.latest} is ready, but did not install: ${s.error}` : `Lore-Forge ${s.latest} is ready. Restart to update.`;
-    case 'installing': return 'Installing the update…';
-    case 'error': return `Could not check for updates: ${s.error}`;
+    case 'checking': return t('Checking for updates…');
+    case 'current': return t('Lore-Forge is up to date.');
+    case 'available': return t('Lore-Forge {version} is available.', { version: s.latest });
+    case 'downloading': return t('Downloading Lore-Forge {version}… {percent}%', { version: s.latest ?? '', percent: s.percent ?? 0 }).replace('  ', ' ');
+    case 'ready': return s.error ? t('Lore-Forge {version} is ready, but did not install: {error}', { version: s.latest, error: t(s.error) }) : t('Lore-Forge {version} is ready. Restart to update.', { version: s.latest });
+    case 'installing': return t('Installing the update…');
+    case 'error': return t('Could not check for updates: {error}', { error: s.error && t(s.error) });
   }
 }
 

@@ -1,3 +1,4 @@
+import { msg } from '../i18n.ts';
 import { isEnded } from '../lifecycle.ts';
 import { parentEdges } from '../rules/family.ts';
 import type { Character, World } from '../types.ts';
@@ -139,7 +140,8 @@ export function familyTree(world: World, focusId?: string | null, opts: { add?: 
       row.forEach((id, i) => {
         const c = byId.get(id)!;
         const life = ix.life(c);
-        const dates = life.start || life.end ? `${life.start ? ix.fmt(life.start.date) : '?'} – ${life.end ? ix.fmt(life.end.date) : ''}`.trim() : '';
+        const startText = life.start ? ix.fmt(life.start.date) : '?';
+        const dates = !life.start && !life.end ? '' : life.end ? msg`${startText} – ${ix.fmt(life.end.date)}` : msg`${startText} –`;
         nodes.push({ id, entry: c, gen: g, x: start + i * (nodeW + gapX), y: margin + g * (nodeH + gapY), ended: isEnded(c), focus: id === focus?.id, dates });
       });
     });

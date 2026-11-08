@@ -84,6 +84,8 @@ test('default pictures come from gender, names, titles and keywords', () => {
   // Suggestion lists show a picture per word: genders, kinds by entry type (the default-picture tables), verbs.
   assert.equal(suggestionIcon('character', 'gender', 'female'), 'female');
   assert.equal(suggestionIcon('character', 'gender', 'non-binary'), 'person');
+  assert.equal(suggestionIcon('character', 'gender', 'Genderless'), 'genderless');
+  assert.equal(suggestionIcon('character', 'gender', 'cinsiyetsiz'), 'genderless');
   assert.equal(suggestionIcon('place', 'kind', 'port'), 'anchor');
   assert.equal(suggestionIcon('item', 'kind', 'potion'), 'round-potion');
   assert.equal(suggestionIcon('faction', 'kind', 'guild'), 'two-coins');

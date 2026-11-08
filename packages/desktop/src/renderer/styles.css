@@ -425,11 +425,16 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .image-slot-empty:hover .image-slot-hint, .image-slot-empty:focus-visible .image-slot-hint { color: var(--gold); }
 .image-slot:not(.image-slot-empty) { border-color: var(--gold-soft); }
 .image-slot.is-open { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-glow); }
-.image-slot-actions { position: absolute; top: 0.8rem; right: 0.8rem; display: flex; gap: 0.25rem; opacity: 0; transition: opacity var(--ease); }
-.image-slot:hover .image-slot-actions, .image-slot:focus-within .image-slot-actions, .image-slot.is-open .image-slot-actions { opacity: 1; }
-.image-slot-actions button { width: 1.9rem; height: 1.9rem; min-height: 0; padding: 0; display: grid; place-items: center; border-radius: 50%; background: rgb(12 10 8 / 0.82); border: 1px solid var(--gold-soft); }
-.image-slot-actions button .icon { width: 0.95rem; height: 0.95rem; }
-.image-slot-actions button.danger:hover { color: var(--error); border-color: var(--error); background: var(--error-bg); }
+/* The picture's tools: a strip along the bottom of the picture, inside its frame, the buttons sharing its width. */
+.image-slot-actions { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 0.25rem; padding: 1.4rem 0.35rem 0.35rem;
+  background: linear-gradient(to top, rgb(10 8 6 / 0.88), rgb(10 8 6 / 0.55) 55%, transparent); opacity: 0; transform: translateY(0.3rem); transition: opacity var(--ease), transform var(--ease); }
+.image-slot:hover .image-slot-actions, .image-slot:focus-within .image-slot-actions, .image-slot.is-open .image-slot-actions { opacity: 1; transform: none; }
+.image-slot-actions button { flex: 1 1 0; min-width: 0; max-width: 2.1rem; height: 1.75rem; min-height: 0; padding: 0; display: grid; place-items: center; border-radius: 7px;
+  background: rgb(20 16 12 / 0.7); border: 1px solid var(--gold-soft); color: var(--text); }
+.image-slot-actions button .icon { width: 0.92rem; height: 0.92rem; }
+.image-slot-actions button:hover, .image-slot-actions button:focus-visible { border-color: var(--gold); color: var(--gold); background: rgb(36 28 18 / 0.92); }
+.image-slot-actions button[aria-expanded="true"] { border-color: var(--gold); color: var(--gold); }
+.image-slot-actions button.danger:hover, .image-slot-actions button.danger:focus-visible { color: var(--error); border-color: var(--error); background: var(--error-bg); }
 .thumb { width: 100%; height: 100%; object-fit: contain; }
 .thumb-empty { display: grid; place-items: center; align-content: center; gap: 0.2rem; color: var(--muted); font-size: 0.85rem; text-align: center; padding: 0.5rem; overflow-wrap: anywhere; }
 .thumb-empty .icon { color: var(--warning); }
@@ -1181,6 +1186,7 @@ button.danger:hover { background: var(--error-bg); }
 .home-warn.is-warning a { background: var(--warning-bg); }
 .home-warn.is-error a { background: var(--error-bg); }
 .home-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.home-settings-pair { display: inline-flex; gap: 0.5rem; }
 .home-group h3 { display: flex; align-items: center; gap: 0.45rem; margin: 0 0 0.7rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); font-family: var(--display); font-size: 1.1rem; scroll-margin-top: 1rem; }
 .home-group h3 .icon { color: var(--tc); }
 .tile-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 1rem; }
@@ -1495,6 +1501,30 @@ body:has(.modal-backdrop) .toasts { right: auto; left: 1rem; }
 .media-tab { border: 0; border-radius: 999px; background: none; padding: 0.3rem 0.9rem; color: var(--muted); display: inline-flex; gap: 0.4rem; align-items: center; }
 .media-tab:hover { color: var(--text); background: var(--panel-2); }
 .media-tab.is-on { color: var(--selected-ink); background: var(--primary-bg); box-shadow: inset 0 0 0 1px var(--gold-soft); font-weight: 600; }
+
+/* Looks: the Default look and the looks an entry has for a while, as a row of tabs, and the chosen look's card. */
+.looks { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; border-radius: var(--radius); }
+.looks-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; padding: 0.35rem 0.45rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.looks-label { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0 0.45rem 0 0.2rem; font: 600 0.95rem var(--display); color: var(--gold); letter-spacing: 0.03em; }
+.looks-label > .icon { color: var(--muted); }
+.look-pill-wrap { display: inline-flex; min-width: 0; border-radius: 999px; }
+.look-pill { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--panel-2); }
+.look-pill[aria-selected='true'] { background: var(--selected-bg); color: var(--selected-ink); border-color: var(--accent); font-weight: 650; }
+.look-pill[aria-selected='true']:hover { background: var(--selected-hover); }
+button.look-add { border-radius: 999px; border: 1px dashed var(--gold-soft); color: var(--gold); padding: 0.25rem 0.8rem; }
+button.look-add:hover { border-color: var(--gold); background: var(--gold-glow); }
+.look-new { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0; }
+.look-new input { width: 15rem; padding: 0.3rem 0.65rem; }
+.looks-help { margin: 0; }
+.look-card { border: 1px solid var(--gold-soft); border-radius: var(--radius); padding: 0.55rem 0.9rem 0.8rem; margin: 0; min-width: 0; background: var(--panel); display: flex; flex-direction: column; gap: 0.75rem; }
+.look-card legend { display: inline-flex; align-items: center; gap: 0.35rem; max-width: 100%; padding: 0 0.35rem; font: 600 0.95rem var(--display); color: var(--gold); letter-spacing: 0.03em; }
+.look-card legend > .icon { color: var(--muted); }
+.look-card .pill:not([aria-checked='true']) { background: var(--panel-2); }
+.look-when { display: flex; flex-direction: column; gap: 0.3rem; border-radius: 6px; }
+.look-when-label { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
+.look-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; }
+.look-summary { margin: 0; display: inline-flex; align-items: center; gap: 0.4rem; }
+.look-summary > .icon { color: var(--gold); }
 .models { display: flex; flex-direction: column; gap: 0.5rem; }
 .models-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: space-between; }
 .model-picker { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; min-width: 0; }
@@ -1612,9 +1642,39 @@ body:has(.modal-backdrop) .toasts { right: auto; left: 1rem; }
 .credits-box .small-print { margin: 0; padding: 0.2rem 0.9rem 0.8rem; }
 @media (max-width: 700px) { .credits-box .credit { grid-template-columns: minmax(0, 1fr); } }
 
-/* Library settings: grouped sections, labels in one column, the folder as a field with Browse…, Cancel and Save
+/* Patch notes: one fold per version (the newest open), its sections marked by kind, and the bullets as in the changelog. */
+.modal-backdrop > .about.patch-notes { width: min(48rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); margin: auto; }
+.patch-notes .dialog-body { display: flex; flex-direction: column; gap: 0.7rem; }
+.patch-notes .dialog-actions { justify-content: space-between; }
+.release { border: 1px solid var(--border); border-radius: var(--radius); background: rgb(0 0 0 / 0.12); }
+.release.is-current { border-color: var(--gold-soft); }
+.release-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 0.7rem; margin: 0; padding: 0.7rem 0.95rem; cursor: pointer; list-style: none; border-radius: var(--radius); }
+.release-head::-webkit-details-marker { display: none; }
+summary.release-head::after { content: ''; align-self: center; margin-left: auto; width: 0.5rem; height: 0.5rem; border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform var(--ease); }
+.release[open] > summary.release-head::after { transform: rotate(-135deg); }
+summary.release-head:hover { background: rgb(255 255 255 / 0.04); }
+summary.release-head:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.release-version { font-family: var(--display); font-weight: 700; font-size: 1.05rem; color: var(--gold); }
+.release-date { font-size: 0.88rem; }
+.release-badge { font-size: 0.75rem; font-weight: 650; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--selected-gold-bg); color: var(--gold); border: 1px solid var(--gold-soft); }
+.release-body { padding: 0 0.95rem 0.8rem; display: grid; gap: 0.55rem; }
+.release-body > p, .release-section > p { margin: 0; }
+.release-section h4 { display: flex; align-items: center; gap: 0.45rem; margin: 0.35rem 0 0.25rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.release-section.kind-added h4 .icon { color: var(--ok); }
+.release-section.kind-changed h4 .icon { color: var(--accent); }
+.release-section.kind-fixed h4 .icon { color: var(--gold); }
+.note-list { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.3rem; line-height: 1.5; }
+.note-list .note-list { margin-top: 0.25rem; gap: 0.15rem; }
+.note-list li::marker { color: var(--gold-soft); }
+.note-more { margin: 0.35rem 0 0; }
+.release-newer { padding: 0 0 0.8rem; border-color: var(--gold-soft); background: var(--selected-gold-bg); }
+.release-newer .release-head { cursor: default; color: var(--gold); font-family: var(--display); }
+.release-newer > :not(.release-head) { margin-inline: 0.95rem; }
+.release-remote { white-space: pre-line; }
+
+/* Settings: grouped sections, labels in one column, the folder as a field with Browse…, Cancel and Save
    at the bottom right. */
-.modal-backdrop > .about.library-settings { width: min(42rem, calc(100vw - 2rem)); }
+.modal-backdrop > .about.library-settings { width: min(46rem, calc(100vw - 2rem)); }
 .library-settings .dialog-body { display: flex; flex-direction: column; gap: 1rem; }
 .settings-section { display: grid; gap: 0.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
 .settings-section:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -1626,6 +1686,21 @@ body:has(.modal-backdrop) .toasts { right: auto; left: 1rem; }
 .folder-input { flex: 1 1 auto; min-width: 0; font-size: 0.88rem; text-overflow: ellipsis; }
 .folder-browse { flex: none; white-space: nowrap; }
 .library-settings > .dialog-actions { align-items: center; }
+/* Display: rows of pills (each a radio group), the label level with their first line; a size larger than the screen
+   stays in view, greyed, with its reason as a tooltip. */
+.settings-row.is-pills { align-items: start; }
+.settings-row.is-pills > .settings-label { padding-top: 0.3rem; }
+.pill-note { margin-left: 0.35em; font-size: 0.82em; font-weight: 400; color: var(--muted); }
+/* Settings, Language: each language with its flag, 3:2 with a hairline so white edges show on any pill. */
+/* Download…: where the copy of a picture or a 3D model went, with Show in folder. */
+.saved-copy { margin: 0.45rem 0 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+.saved-copy .icon { color: var(--ok); }
+.flag { width: 1.35em; height: 0.9em; object-fit: cover; border-radius: 2px; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22); margin-right: 0.5em; vertical-align: -0.12em; flex: none; }
+.language-choice .pill { display: inline-flex; align-items: center; }
+.pill[aria-checked='true'] .pill-note { color: inherit; opacity: 0.85; }
+.pill[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; }
+.pill[aria-disabled='true']:hover { border-color: var(--border); background-color: var(--panel-2); }
+.pill[aria-disabled='true']:active { transform: none; }
 .settings-status { margin-right: auto; color: var(--muted); font-size: 0.85rem; }
 .settings-status.is-dirty { color: var(--gold); }
 .link-button { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
@@ -1689,6 +1764,9 @@ body:has(.modal-backdrop) .toasts { right: auto; left: 1rem; }
 .topbar .top-end { justify-self: end; display: flex; align-items: center; gap: 0.75rem; }
 .topbar .top-actions { flex-wrap: nowrap; gap: 0.5rem; }
 .topbar :is(.nav-back, .top-settings) { height: var(--bar-h); padding-block: 0; }
+/* Settings (language, display, library) beside World settings: a square gear of the same height. */
+.topbar .top-app-settings { height: var(--bar-h); width: var(--bar-h); padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.top-app-settings .icon { width: 1.15rem; height: 1.15rem; }
 .v-home { --view: var(--v-home); --view-bg: var(--v-home-bg); --view-hover: var(--v-home-hover); }
 .v-editor { --view: var(--v-editor); --view-bg: var(--v-editor-bg); --view-hover: var(--v-editor-hover); }
 .v-timeline { --view: var(--v-timeline); --view-bg: var(--v-timeline-bg); --view-hover: var(--v-timeline-hover); }
@@ -1762,4 +1840,34 @@ body:has(.modal-backdrop) .toasts { right: auto; left: 1rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .shelf-book[data-fresh] .book-spine { animation: none; box-shadow: 0 0 0 2px var(--gold), 0 0 22px 6px var(--gold-soft); }
+}
+
+/* Window sizes and interface scale (Settings, Display). The app is made for a 1920 x 1080 page: Auto zoom
+   gives 2K and 4K screens that page, and windows smaller than 1920 x 1080 80% and a page of 1600 to 1900 px
+   (main/display.ts). The media queries below are for pages the zoom leaves: 1101 to 1440 px wide (100% on a small
+   screen) and 2200 px and up (100% on a 2K screen). A 1920 x 1080 page looks exactly as before: the two rules
+   outside them change nothing there. */
+/* A chapter title gets its own row before its input would cut it off: the input starts at its text's width (the date
+   and word count go under it when they no longer fit beside it) and then grows to fill its row as before. */
+.story-title { field-sizing: content; width: auto; flex: 1 1 auto; min-width: 14rem; max-width: 100%; }
+/* A narrow sidebar folds the group name, never the New button. */
+.type-head > button { flex: none; white-space: nowrap; }
+@media (min-width: 1101px) and (max-width: 1440px) {
+  /* The side panes leave the middle more room. */
+  .app { grid-template-columns: var(--sidebar-w, 300px) minmax(0, 1fr) minmax(14rem, 18rem); }
+  .story { grid-template-columns: minmax(0, 1fr) minmax(14rem, 17rem); }
+  :root { --tl-label: 12.5rem; }
+  /* The library header stays one row: a smaller name, a narrower search, tighter buttons. */
+  .start-hero h1 { font-size: 2.1rem; }
+  .library-search { flex-basis: clamp(12rem, 19vw, 17rem); }
+  .start-actions { gap: 0.45rem; }
+  .start-actions > button { padding-inline: 0.65rem; }
+  /* Entry tiles keep their one-line names. */
+  .tile-name { font-size: 0.93rem; }
+}
+@media (min-width: 2200px) {
+  /* World home uses the wider page instead of a column with wide empty margins. */
+  .home { max-width: 92rem; }
+  /* The sidebar keeps its width in pixels while the text grows: its group names stay their 1920 size, on one line. */
+  .type-head h2 { font-size: 0.85rem; }
 }

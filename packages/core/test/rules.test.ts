@@ -184,8 +184,8 @@ test('image-view: an unusual view label is info, usual views for the type are fi
     { id: 'char-b', type: 'character', name: 'B', images: [{ file: 'c.png', view: 'a-pose' }, { file: 'd.png', view: 'fornt' }] },
     { id: 'place-c', type: 'place', name: 'C', images: [{ file: 'e.png', view: 'establishing' }] },
   ], 'image-view');
-  assert.deepEqual(ws.map((w) => [w.id, w.severity]), [['image-view:char-b:1', 'info'], ['image-view:item-a:1', 'info']].sort());
-  assert.match(ws.find((w) => w.id === 'image-view:item-a:1')!.message, /"a-pose", which is not a usual view for an item \(usual: Front, Back, Side, Top, Detail, Concept\)/);
+  assert.deepEqual(ws.map((w) => [w.id, w.severity]), [['image-view:char-b:d.png', 'info'], ['image-view:item-a:b.png', 'info']].sort(), 'ids name the image file, not its position');
+  assert.match(ws.find((w) => w.id === 'image-view:item-a:b.png')!.message, /"a-pose", which is not a usual view for an item \(usual: Front, Back, Side, Top, Detail, Concept\)/);
 });
 
 test('a dated note is checked like any other date', () => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { memo } from 'preact/compat';
 import { ENTRY_TYPES, isEnded, LIFECYCLE, raceLabel, racesOf, searchEntries, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, type Entry, type EntryType, type Warning } from '@lore-forge/core';
+import { lower, t, tm } from '../i18n.tsx';
 import { CountBadge } from './severity.tsx';
 import { ENTRY_DRAG } from './link-edit.tsx';
 import { Icon } from './icon.tsx';
@@ -41,16 +42,16 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
       sub={e.type === 'character' && e.race ? racesOf(e).map((r) => raceLabel(r, (x) => names.get(x))).join(', ') : undefined} />
   );
   return (
-    <nav class="sidebar" aria-label="Entries">
+    <nav class="sidebar" aria-label={t('Entries')}>
       <div class="search">
-        <label for="search" class="sr-only">Search entries</label>
-        <input id="search" type="search" placeholder="Search..." value={query} onInput={(e) => onQuery(e.currentTarget.value)} />
+        <label for="search" class="sr-only">{t('Search entries')}</label>
+        <input id="search" type="search" placeholder={t('Search...')} value={query} onInput={(e) => onQuery(e.currentTarget.value)} />
       </div>
       {hits && (
         <section class="search-results" aria-labelledby="search-results-title">
-          <div class="type-head"><h2 id="search-results-title"><Icon name="magnifying-glass" /> Results <span class="muted">({hits.length})</span></h2></div>
-          <p class="sr-only" aria-live="polite">{hits.length} {hits.length === 1 ? 'entry matches' : 'entries match'}</p>
-          {hits.length === 0 && <p class="muted empty-hint">No entry mentions “{query.trim()}”.</p>}
+          <div class="type-head"><h2 id="search-results-title"><Icon name="magnifying-glass" /> {t('Results')} <span class="muted">({hits.length})</span></h2></div>
+          <p class="sr-only" aria-live="polite">{hits.length === 1 ? t('{n} entry matches', { n: hits.length }) : t('{n} entries match', { n: hits.length })}</p>
+          {hits.length === 0 && <p class="muted empty-hint">{t('No entry mentions “{query}”.', { query: query.trim() })}</p>}
           <ul ref={animated}>
             {hits.map((h) => <li key={h.entry.id}>{link(h.entry, h.field === 'Name' ? undefined : <Snippet hit={h} />)}</li>)}
           </ul>
@@ -61,14 +62,14 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
         return (
           <section class={`type-group t-${type}`} key={type} aria-labelledby={`group-${type}`}>
             <div class="type-head">
-              <h2 id={`group-${type}`}><Icon name={TYPE_ICON[type]} /> {TYPE_LABELS[type]} <span class="muted">({list.length})</span></h2>
-              <button type="button" class="ghost small" aria-label={`New ${TYPE_SINGULAR[type].toLowerCase()}`} onClick={() => { setCreating(type); setName(''); }}>+ New</button>
+              <h2 id={`group-${type}`}><Icon name={TYPE_ICON[type]} /> {tm(TYPE_LABELS[type])} <span class="muted">({list.length})</span></h2>
+              <button type="button" class="ghost small" aria-label={t('New {type}', { type: lower(tm(TYPE_SINGULAR[type])) })} onClick={() => { setCreating(type); setName(''); }}>{t('+ New')}</button>
             </div>
             {creating === type && (
               <NewEntryForm type={type} name={name} onName={setName} onCreate={(n) => { onCreate(type, n); setCreating(null); }} onCancel={() => setCreating(null)} />
             )}
             {list.length === 0 && (
-              <p class="muted empty-hint">No {TYPE_LABELS[type].toLowerCase()} yet. “+ New” adds one.</p>
+              <p class="muted empty-hint">{t('No {types} yet. “+ New” adds one.', { types: lower(tm(TYPE_LABELS[type])) })}</p>
             )}
             <ul ref={animated}>
               {list.map((e) => <li key={e.id}>{link(e)}</li>)}
@@ -90,7 +91,7 @@ const EntryRow = memo(function EntryRow({ entry: e, selected, warnings, sub, sni
     <button type="button" class={`entry-link t-${e.type}${ended ? ' is-ended' : ''}${snippet ? ' has-snippet' : ''}`} aria-current={selected ? 'page' : undefined} data-entry-id={e.id} onClick={() => onSelect(e.id)}
       draggable onDragStart={(ev) => { ev.dataTransfer?.setData(ENTRY_DRAG, e.id); ev.dataTransfer?.setData('text/plain', e.name); if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'copy'; }}>
       <Portrait entry={e} size="xs" />
-      <span class="entry-name" title={e.name}>{e.name}{ended && lc && <span class="ended-mark" title={lc.endedWord}> <Icon name={lc.endedIcon} /><span class="sr-only">({lc.endedWord})</span></span>}</span>
+      <span class="entry-name" title={e.name}>{e.name}{ended && lc && <span class="ended-mark" title={tm(lc.endedWord)}> <Icon name={lc.endedIcon} /><span class="sr-only">({tm(lc.endedWord)})</span></span>}</span>
       {sub && <span class="entry-sub">{sub}</span>}
       <CountBadge warnings={warnings} />
       {snippet}
@@ -114,11 +115,11 @@ function NewEntryForm({ type, name, onName, onCreate, onCancel }: { type: EntryT
   }, []);
   return (
     <form ref={form} class="new-entry" onSubmit={(e) => { e.preventDefault(); if (name.trim()) onCreate(name.trim()); else onCancel(); }}>
-      <label for={`new-${type}`} class="sr-only">Name of the new entry</label>
-      <input id={`new-${type}`} type="text" placeholder="Name, then Enter" value={name} ref={input} onInput={(e) => onName(e.currentTarget.value)}
+      <label for={`new-${type}`} class="sr-only">{t('Name of the new entry')}</label>
+      <input id={`new-${type}`} type="text" placeholder={t('Name, then Enter')} value={name} ref={input} onInput={(e) => onName(e.currentTarget.value)}
         onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onCancel(); } }}
         onBlur={(e) => { if (!e.currentTarget.value.trim() && !form.current?.contains(e.relatedTarget as Node)) onCancel(); }} />
-      <button type="button" class="ghost small icon-only new-entry-cancel" aria-label="Cancel" title="Cancel (Esc)" onClick={onCancel}><Icon name="cancel" /></button>
+      <button type="button" class="ghost small icon-only new-entry-cancel" aria-label={t('Cancel')} title={t('Cancel (Esc)')} onClick={onCancel}><Icon name="cancel" /></button>
     </form>
   );
 }

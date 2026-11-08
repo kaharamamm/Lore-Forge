@@ -1,5 +1,7 @@
 import type { ModelFile } from '@lore-forge/core/node';
 import type { UpdateState } from './update-state.ts';
+import type { DisplaySettings, DisplayState } from './display.ts';
+import type { Lang } from './i18n.ts';
 import type { CodexOptions, BookOptions, BookSettings, Calendar, ImageView, WorldCoverSettings, WorldFile } from '@lore-forge/core';
 
 export type PdfKind = 'codex' | 'book';
@@ -16,10 +18,14 @@ export interface Settings {
   tourDone?: boolean;
   /** Check for updates on launch and every few hours (default on). */
   autoUpdate?: boolean;
-  /** The sample world was removed from the library (Library settings "Show sample world" brings it back). */
+  /** The sample world was removed from the library (Settings "Show sample world" brings it back). */
   hideSample?: boolean;
   /** The library shelf in the order the user arranged it: world folder paths (see shared/library.ts orderShelf). */
   shelfOrder?: string[];
+  /** Window mode, page size in a window and interface scale; only what differs from the defaults (see shared/display.ts). */
+  display?: Partial<DisplaySettings>;
+  /** The app's language, once picked in Settings; until then the system's (Turkish on a Turkish system, else English). */
+  language?: Lang;
 }
 export interface CreateWorldOptions {
   name: string;
@@ -83,6 +89,12 @@ export interface LoreApi {
   listWorlds(): Promise<string[]>;
   settings(): Promise<Settings & Required<Pick<Settings, 'worldsDir'>> & { defaultWorldsDir: string }>;
   saveSettings(settings: Settings): Promise<void>;
+  /** Display settings and the window and screen they apply to; null when there are none (the smoke test). */
+  displayState(): Promise<DisplayState | null>;
+  /** Change the display settings: applied to the window at once and saved. Returns the new state. */
+  setDisplay(patch: Partial<DisplaySettings>): Promise<DisplayState | null>;
+  /** The window changed mode, size, screen or zoom (also by F11 or its title bar). Returns a function that stops listening. */
+  onDisplayChanged(cb: (state: DisplayState) => void): () => void;
   /** Folder picker; null when cancelled. */
   chooseFolder(title: string, start?: string): Promise<string | null>;
   /** Pick an image file anywhere (for a new world's cover). Returns its path. */
@@ -99,9 +111,12 @@ export interface LoreApi {
    */
   duplicateWorld(dir: string, name: string): Promise<{ dir: string; files: WorldFile[] }>;
   /** 3D models of an entry (models/<entryId>/), sorted by name. */
-  listModels(dir: string, entryId: string): Promise<ModelFile[]>;
+  /** Models of an entry's look (none: the Default look). */
+  listModels(dir: string, entryId: string, look?: string): Promise<ModelFile[]>;
+  /** A deleted look's models go to the Default look. */
+  moveLookModels(dir: string, entryId: string, look: string): Promise<void>;
   /** Pick a .glb, .gltf, .obj or .fbx file and copy it into models/<entryId>/. Returns its path inside the world. */
-  importModel(dir: string, entryId: string): Promise<string | null>;
+  importModel(dir: string, entryId: string, look?: string): Promise<string | null>;
   /** Rename a model (the extension stays). Returns its new path. */
   renameModel(dir: string, file: string, name: string): Promise<string>;
   deleteModel(dir: string, file: string): Promise<void>;
@@ -118,10 +133,16 @@ export interface LoreApi {
   readWorld(dir: string): Promise<WorldFile[]>;
   /** Read a world for its cover card without adding it to the recent list. Null if the folder is gone or not a world. */
   peekWorld(dir: string): Promise<WorldFile[] | null>;
-  writeFile(dir: string, path: string, content: string): Promise<void>;
+  /**
+   * Write a file of the world. `expect` is the content the edit started from (null: the file must not exist yet):
+   * when the file changed outside the app since, nothing is written and the promise fails with CHANGED_OUTSIDE, so
+   * the app can merge first. Without `expect` the file is written as it is.
+   */
+  writeFile(dir: string, path: string, content: string, expect?: string | null): Promise<void>;
   deleteFile(dir: string, path: string): Promise<void>;
   /** Pick an image file and copy it into images/<entryId>/. Returns its path inside the world. */
-  importImage(dir: string, entryId: string, view: ImageView): Promise<string | null>;
+  /** Copy a picture into images/<entry-id>/ (images/<entry-id>/<look-id>/ for a look); its path, or null when cancelled. */
+  importImage(dir: string, entryId: string, view: ImageView, look?: string): Promise<string | null>;
   /** Image as a data: URL, or null if missing. */
   readImage(dir: string, path: string): Promise<string | null>;
   /** Ask where to save, then write the World Codex or Story Book PDF (with these options) and its .md sidecar. Null if cancelled. */
@@ -139,8 +160,14 @@ export interface LoreApi {
   saveCover(dir: string, cover: WorldCoverSettings, picked?: string): Promise<WorldCoverSettings>;
   /** Reveal a saved file in the system file manager. */
   showInFolder(path: string): Promise<void>;
+  /** Save a copy of a file of the world (a picture, a 3D model) where the user picks; its new path, or null when cancelled. */
+  saveCopy(dir: string, path: string): Promise<string | null>;
   /** Back/forward from the OS (Windows app-command: mouse buttons 4/5, media keys). */
   onNavigate(cb: (direction: 'back' | 'forward') => void): void;
+  /** The window is about to close: write everything waiting to be saved, then call flushed(). Returns a function that stops listening. */
+  onFlushBeforeClose(cb: () => void): () => void;
+  /** Everything was written (ok), or something could not be (the window then asks before closing). */
+  flushed(ok: boolean): void;
   /**
    * Files of the open world changed outside the app (an AI assistant through `lore mcp`, an editor, git): paths
    * relative to the world folder. Returns a function that stops listening.

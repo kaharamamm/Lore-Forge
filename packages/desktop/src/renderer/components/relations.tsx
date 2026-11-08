@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { detailField, detailRelations, entryIcon, familyTree, inverseLabel, RELATION_GROUPS, relationKind, relationLabel, relationWeb, TYPE_SINGULAR, type Entry, type IconName, type RelationGroup, type World } from '@lore-forge/core';
 import { worldIndex } from '../hooks.ts';
+import { same } from '../merge.ts';
 import { ENTRY_DRAG, LinkDialog, type GraphLink, type LinkDraft } from './link-edit.tsx';
 import { FamilyTreeSvg } from './graphs.tsx';
 import { RelationWebFlow } from './web.tsx';
 import { EntryLabel, EntryLink } from './type.tsx';
 import { Icon } from './icon.tsx';
 import { Select } from './select.tsx';
+import { lower, t, tj, tm } from '../i18n.tsx';
 
 interface Link {
   /** e.g. "parent of", "killed by". */
@@ -21,7 +23,7 @@ interface Link {
 }
 
 type ViewState = { add: string[]; hide: string[] };
-type Undo = { kind: 'entries'; before: Entry[]; what: string } | { kind: 'view'; before: ViewState; what: string };
+type Undo = { kind: 'entries'; before: Entry[]; after: Entry[]; what: string } | { kind: 'view'; before: ViewState; what: string };
 const EMPTY_VIEW: ViewState = { add: [], hide: [] };
 
 export type RelationMode = 'web' | 'tree';
@@ -52,11 +54,13 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
   const ix = worldIndex(world);
   const nameOf = (id: string) => ix.byIdOf(id)?.name ?? id;
 
+  const latest = useRef(world);
+  latest.current = world;
   const write = (changed: Entry[], what: string) => {
     const before = changed.flatMap((c) => world.entries.filter((e) => e.id === c.id));
-    setUndo((u) => [...u.slice(-49), { kind: 'entries', before, what }]);
+    setUndo((u) => [...u.slice(-49), { kind: 'entries', before, after: changed, what }]);
     onWrite(changed);
-    setNotice(`${what}. Saved to ${changed.map((c) => c.name).join(' and ')}. Ctrl+Z undoes it.`);
+    setNotice(t('{what}. Saved to {names}. Ctrl+Z undoes it.', { what, names: changed.map((c) => c.name).join(` ${t('and')} `) }));
   };
   const setView = (next: ViewState, what: string) => {
     setUndo((u) => [...u.slice(-49), { kind: 'view', before: shown, what }]);
@@ -66,9 +70,9 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
     const last = undo[undo.length - 1];
     if (!last) return;
     setUndo((u) => u.slice(0, -1));
-    if (last.kind === 'entries') onWrite(last.before);
+    if (last.kind === 'entries') onWrite(undoChange(last.before, last.after, latest.current.entries));
     else setShown(last.before);
-    setNotice(`Undone: ${last.what.toLowerCase()}.`);
+    setNotice(t('Undone: {what}.', { what: lower(last.what) }));
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -84,14 +88,14 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
   const addToView = (id: string) => {
     const e = ix.byIdOf(id);
     if (!e || !entry) return;
-    if (mode === 'tree' && e.type !== 'character') return setNotice(`Only characters go in the family tree; ${e.name} is a ${TYPE_SINGULAR[e.type].toLowerCase()}. Try the relationship web.`);
-    if (id === entry.id || (!shown.hide.includes(id) && (tree?.nodes ?? web?.nodes ?? []).some((n) => n.id === id))) return setNotice(`${e.name} is already on the canvas.`);
-    setView({ add: [...shown.add.filter((x) => x !== id), id], hide: shown.hide.filter((x) => x !== id) }, `Added ${e.name} to the view`);
-    setNotice(`${e.name} added to the view. Drag from its gold dot to link it, or use Connect below.`);
+    if (mode === 'tree' && e.type !== 'character') return setNotice(t('Only characters go in the family tree; {name} is a {type}. Try the relationship web.', { name: e.name, type: lower(tm(TYPE_SINGULAR[e.type])) }));
+    if (id === entry.id || (!shown.hide.includes(id) && (tree?.nodes ?? web?.nodes ?? []).some((n) => n.id === id))) return setNotice(t('{name} is already on the canvas.', { name: e.name }));
+    setView({ add: [...shown.add.filter((x) => x !== id), id], hide: shown.hide.filter((x) => x !== id) }, t('Added {name} to the view', { name: e.name }));
+    setNotice(t('{name} added to the view. Drag from its gold dot to link it, or use Connect below.', { name: e.name }));
   };
   const hideNode = (id: string) => {
-    setView({ add: shown.add.filter((x) => x !== id), hide: [...shown.hide, id] }, `Removed ${nameOf(id)} from the view`);
-    setNotice(`${nameOf(id)} removed from this view only. The entry and its relationships are unchanged. Ctrl+Z brings it back.`);
+    setView({ add: shown.add.filter((x) => x !== id), hide: [...shown.hide, id] }, t('Removed {name} from the view', { name: nameOf(id) }));
+    setNotice(t('{name} removed from this view only. The entry and its relationships are unchanged. Ctrl+Z brings it back.', { name: nameOf(id) }));
   };
   const connect = (from: string, to: string) => { if (from !== to) setDraft({ kind: 'new', from, to }); };
   const drop = {
@@ -108,8 +112,8 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
   if (!entry) {
     return (
       <section class="relations">
-        <h2><Icon name="spider-web" /> Relationships</h2>
-        <div class={`empty-state drop-zone${over ? ' is-over' : ''}`} {...drop}><Icon class="empty-icon" name="compass" /><p>Pick an entry in the sidebar, or drag one here, to see who and what it is tied to.</p></div>
+        <h2><Icon name="spider-web" /> {t('Relationships')}</h2>
+        <div class={`empty-state drop-zone${over ? ' is-over' : ''}`} {...drop}><Icon class="empty-icon" name="compass" /><p>{t('Pick an entry in the sidebar, or drag one here, to see who and what it is tied to.')}</p></div>
       </section>
     );
   }
@@ -133,12 +137,12 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
   }
   const events = world.entries.filter((e) => e.type === 'event' && [...(e.participants ?? []).map((p) => p.id), ...(e.actions ?? []).flatMap((a) => [a.actor, a.target ?? '']), e.place ?? ''].some((ref) => ix.resolve(ref)?.id === entry.id));
   const groups = (Object.keys(RELATION_GROUPS) as RelationGroup[]).map((g) => [g, links.filter((l) => l.group === g)] as const).filter(([, ls]) => ls.length > 0);
-  const modes: [Mode, IconName, string][] = [['tree', 'family-tree', 'Family tree'], ['web', 'spider-web', 'Relationship web']];
+  const modes: [Mode, IconName, string][] = [['tree', 'family-tree', t('Family tree')], ['web', 'spider-web', t('Relationship web')]];
   return (
     <section class="relations" aria-labelledby="relations-title">
       <header class="view-head">
-        <h2 id="relations-title" tabIndex={-1}>Relationships of <EntryLabel entry={entry} /></h2>
-        <div class="segmented" role="group" aria-label="Show">
+        <h2 id="relations-title" tabIndex={-1}>{tj('Relationships of {entry}', { entry: <EntryLabel entry={entry} /> })}</h2>
+        <div class="segmented" role="group" aria-label={t('Show')}>
           {modes.map(([m, icon, label]) => (
             <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}><Icon name={icon} /> {label}</button>
           ))}
@@ -149,37 +153,37 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
         {mode === 'tree' && tree && (tree.nodes.length ? (
           <>
             <p class="muted graph-note">
-              {entry.type === 'character' && tree.nodes.some((n) => n.focus) ? `${entry.name}'s family` : 'Every family in this world'}, oldest generation on top. Select a card to open it; drag a card's gold dot onto another to link them; click a line to edit it.
+              {entry.type === 'character' && tree.nodes.some((n) => n.focus) ? t("{name}'s family, oldest generation on top. Select a card to open it; drag a card's gold dot onto another to link them; click a line to edit it.", { name: entry.name }) : t("Every family in this world, oldest generation on top. Select a card to open it; drag a card's gold dot onto another to link them; click a line to edit it.")}
             </p>
             <FamilyTreeSvg tree={tree} onOpen={onOpen} onConnect={connect} onHide={hideNode}
               onEdit={(ed) => { const h = ix.byIdOf(ed.holder); const r = h?.relations?.[ed.index]; if (r) setDraft({ kind: 'edit', link: { from: ed.from, to: ed.to, type: r.type, holder: ed.holder, index: ed.index } }); }} />
-            <ul class="legend" aria-label="Legend">
-              <li><span class="lg lg-parent" aria-hidden="true" /> parent → child</li>
-              <li><Icon name="diamond-ring" /> spouses</li>
-              <li><span class="lg lg-sibling" aria-hidden="true" /> siblings</li>
-              <li><Icon name="tombstone" /> dead</li>
+            <ul class="legend" aria-label={t('Legend')}>
+              <li><span class="lg lg-parent" aria-hidden="true" /> {t('parent → child')}</li>
+              <li><Icon name="diamond-ring" /> {t('spouses')}</li>
+              <li><span class="lg lg-sibling" aria-hidden="true" /> {t('siblings')}</li>
+              <li><Icon name="tombstone" /> {t('dead')}</li>
             </ul>
           </>
         ) : (
-          <div class="empty-state"><Icon class="empty-icon" name="sprout" /><p>{entry.type === 'character' ? `${entry.name} has no family yet.` : 'No families yet.'} Add <strong>parent of</strong>, <strong>child of</strong>, <strong>spouse of</strong> or <strong>sibling of</strong> relationships in the editor to grow a tree.</p></div>
+          <div class="empty-state"><Icon class="empty-icon" name="sprout" /><p>{entry.type === 'character' ? t('{name} has no family yet.', { name: entry.name }) : t('No families yet.')} {tj('Add {parent}, {child}, {spouse} or {sibling} relationships in the editor to grow a tree.', { parent: <strong>{tm('parent of')}</strong>, child: <strong>{tm('child of')}</strong>, spouse: <strong>{tm('spouse of')}</strong>, sibling: <strong>{tm('sibling of')}</strong> })}</p></div>
         ))}
         {mode === 'web' && web && (web.nodes.length > 1 ? (
           <>
-            <p class="muted graph-note">{entry.name} in the middle; arrows read “from → to”. Drag a card's gold dot onto another to link them; click a line to edit it; drag entries in from the sidebar.</p>
+            <p class="muted graph-note">{t("{name} in the middle; arrows read “from → to”. Drag a card's gold dot onto another to link them; click a line to edit it; drag entries in from the sidebar.", { name: entry.name })}</p>
             <RelationWebFlow world={world} web={web} onOpen={onOpen} onConnect={connect} onHide={hideNode}
               onEdit={(ed) => setDraft({ kind: 'edit', link: { from: ed.from, to: ed.to, type: ed.type, holder: ed.holder, ...(ed.index !== undefined ? { index: ed.index } : {}), ...(ed.field ? { field: ed.field } : {}) } })} />
           </>
         ) : (
-          <div class="empty-state"><Icon class="empty-icon" name="spider-web" /><p>Nothing is tied to {entry.name} yet. Add allies, enemies, members, rulers or owners in the editor.</p></div>
+          <div class="empty-state"><Icon class="empty-icon" name="spider-web" /><p>{t('Nothing is tied to {name} yet. Add allies, enemies, members, rulers or owners in the editor.', { name: entry.name })}</p></div>
         ))}
         <div class="graph-tools">
           <form class="connect-form" onSubmit={(e) => { e.preventDefault(); if (target) connect(entry.id, target); }}>
-            <label for="connect-target">Connect {entry.name} to</label>
-            <Select id="connect-target" value={target} onChange={setTarget} placeholder="Pick an entry…" options={[...world.entries].filter((e) => e.id !== entry.id && (mode === 'web' || e.type === 'character')).sort((a, b) => a.name.localeCompare(b.name)).map((e) => ({ value: e.id, label: `${e.name} · ${TYPE_SINGULAR[e.type].toLowerCase()}`, icon: entryIcon(e), tone: `t-${e.type}` }))} />
-            <button type="submit" class="ghost small" disabled={!target}><Icon name="spider-web" /> Connect…</button>
+            <label for="connect-target">{t('Connect {name} to', { name: entry.name })}</label>
+            <Select id="connect-target" value={target} onChange={setTarget} placeholder={t('Pick an entry…')} options={[...world.entries].filter((e) => e.id !== entry.id && (mode === 'web' || e.type === 'character')).sort((a, b) => a.name.localeCompare(b.name)).map((e) => ({ value: e.id, label: `${e.name} · ${lower(tm(TYPE_SINGULAR[e.type]))}`, icon: entryIcon(e), tone: `t-${e.type}` }))} />
+            <button type="submit" class="ghost small" disabled={!target}><Icon name="spider-web" /> {t('Connect…')}</button>
           </form>
-          <button type="button" class="ghost small undo-btn" disabled={!undo.length} onClick={undoLast} title={undo.length ? `Undo: ${undo[undo.length - 1]!.what}` : 'Nothing to undo'}><Icon name="fast-backward-button" /> Undo</button>
-          {shown.hide.length > 0 && <button type="button" class="ghost small" onClick={() => setView({ ...shown, hide: [] }, 'Showed hidden cards')}>Show {shown.hide.length} hidden</button>}
+          <button type="button" class="ghost small undo-btn" disabled={!undo.length} onClick={undoLast} title={undo.length ? t('Undo: {what}', { what: undo[undo.length - 1]!.what }) : t('Nothing to undo')}><Icon name="fast-backward-button" /> {t('Undo')}</button>
+          {shown.hide.length > 0 && <button type="button" class="ghost small" onClick={() => setView({ ...shown, hide: [] }, t('Showed hidden cards'))}>{t('Show {n} hidden', { n: shown.hide.length })}</button>}
         </div>
         <p class="graph-notice muted" role="status" aria-live="polite">{notice}</p>
       </div>
@@ -187,25 +191,25 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
       <div class="rel-grid">
         {groups.map(([g, ls]) => (
           <section class={`rel-card g-${g}`} key={g}>
-            <h3><Icon name={RELATION_GROUPS[g].icon} /> {RELATION_GROUPS[g].label}</h3>
+            <h3><Icon name={RELATION_GROUPS[g].icon} /> {tm(RELATION_GROUPS[g].label)}</h3>
             <ul>
               {ls.map((l, i) => (
                 <li key={i} class="rel-row">
-                  <span class="rel-label">{l.label}</span>
+                  <span class="rel-label">{tm(l.label)}</span>
                   <span class="rel-line">
-                    {l.other ? <EntryLink entry={l.other} onOpen={onOpen} /> : <span class="missing"><Icon name="cancel" /> {l.otherRef} (missing)</span>}
+                    {l.other ? <EntryLink entry={l.other} onOpen={onOpen} /> : <span class="missing"><Icon name="cancel" /> {t('{ref} (missing)', { ref: l.otherRef })}</span>}
                     {l.when && <span class="rel-meta">{l.when}</span>}
-                    {l.via && <span class="rel-meta">from {l.via}</span>}
+                    {l.via && <span class="rel-meta">{t('from {field}', { field: tm(l.via) })}</span>}
                   </span>
-                  <button type="button" class="ghost small icon-only rel-edit" aria-label={`Edit ${l.label} ${l.other?.name ?? l.otherRef}`} title="Edit or delete this link" onClick={() => setDraft({ kind: 'edit', link: l.link })}><Icon name="quill" /></button>
+                  <button type="button" class="ghost small icon-only rel-edit" aria-label={t('Edit {relation} {name}', { relation: tm(l.label), name: l.other?.name ?? l.otherRef })} title={t('Edit or delete this link')} onClick={() => setDraft({ kind: 'edit', link: l.link })}><Icon name="quill" /></button>
                 </li>
               ))}
             </ul>
           </section>
         ))}
         <section class="rel-card">
-          <h3><Icon name="crossed-swords" /> Events</h3>
-          {events.length === 0 ? <p class="muted">Not in any event yet.</p> : (
+          <h3><Icon name="crossed-swords" /> {t('Events')}</h3>
+          {events.length === 0 ? <p class="muted">{t('Not in any event yet.')}</p> : (
             <ul>
               {events.map((e) => (
                 <li key={e.id}>
@@ -219,8 +223,28 @@ export function RelationsView({ world, entry, mode: chosen, onMode, onOpen, onWr
       </div>
       {draft && (
         <LinkDialog world={world} draft={draft} {...(mode === 'tree' ? { prefer: 'family' as RelationGroup } : {})} onClose={() => setDraft(null)} onOpen={onOpen}
-          onWrite={(changed) => write(changed, draft.kind === 'new' ? 'Linked' : 'Changed a link')} />
+          onWrite={(changed) => write(changed, draft.kind === 'new' ? t('Linked') : t('Changed a link'))} />
       )}
     </section>
   );
+}
+
+/**
+ * Undo of a link change: only the fields that change touched go back to how they were. Edits made to the same
+ * entries since (in the editor, or by an AI assistant) stay.
+ */
+function undoChange(before: readonly Entry[], after: readonly Entry[], now: readonly Entry[]): Entry[] {
+  return before.map((b) => {
+    const a = after.find((x) => x.id === b.id) as Record<string, unknown> | undefined;
+    const cur = now.find((e) => e.id === b.id);
+    if (!a || !cur) return b;
+    const was = b as unknown as Record<string, unknown>;
+    const out = { ...cur } as Record<string, unknown>;
+    for (const k of new Set([...Object.keys(was), ...Object.keys(a)])) {
+      if (same(was[k], a[k])) continue;
+      if (was[k] === undefined) delete out[k];
+      else out[k] = was[k];
+    }
+    return out as unknown as Entry;
+  });
 }

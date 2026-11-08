@@ -1,13 +1,12 @@
 import type { Finding, Rule } from '../engine.ts';
+import { msg } from '../i18n.ts';
 import { LIFECYCLE } from '../lifecycle.ts';
-import type { FactRef } from '../types.ts';
-
-const DEATH_VERBS = new Set(['killed', 'murdered', 'slew', 'slain', 'executed']);
+import { statusWord } from '../words.ts';
 
 export const deadMarkedAlive: Rule = {
   id: 'dead-marked-alive',
   title: 'Dead or destroyed entry marked as still there',
-  description: 'A character is marked "alive" although a death date or a killing says they died; or a place, faction or item is marked standing, active or intact although it has a destroyed or dissolved date. Hidden date fields still count.',
+  description: 'A character is marked "alive" although a death date or a killing (an event or a "killed" relation) says they died; or a place, faction or item is marked standing, active or intact although it has a destroyed or dissolved date. Hidden date fields still count.',
   severity: 'error',
   check: ({ ix }) => {
     const out: Finding[] = [];
@@ -18,27 +17,23 @@ export const deadMarkedAlive: Rule = {
       if (!x.status || x.status === 'lost' || !lc.ongoing.includes(x.status) || !end || end.trim() === '') continue;
       const d = ix.date(end);
       const at = ix.fact(x, lc.endField);
-      out.push({ key: x.id, message: `${x.name} is marked ${x.status}, but was ${lc.endedWord} ${d ? ix.at(d) : '(date unknown)'} (source: ${at.source}).`, offending: ix.fact(x, 'status'), conflicting: at });
+      out.push({ key: x.id, message: msg`${x.name} is marked ${statusWord(x.status)}, but was ${lc.endedWord} ${d ? ix.at(d) : msg`(date unknown)`} (source: ${at.source}).`, offending: ix.fact(x, 'status'), conflicting: at });
     }
     for (const c of ix.entries) {
       if (c.type !== 'character' || c.status !== 'alive') continue;
-      let because: { text: string; at: FactRef } | undefined;
       if (c.died !== undefined && c.died.trim() !== '') {
         const d = ix.date(c.died);
-        because = { text: `${c.name} died ${d ? ix.at(d) : '(date unknown)'}`, at: ix.fact(c, 'died') };
+        const at = ix.fact(c, 'died');
+        out.push({ key: c.id, message: msg`${c.name} is marked alive, but ${c.name} died ${d ? ix.at(d) : msg`(date unknown)`} (source: ${at.source}).`, offending: ix.fact(c, 'status'), conflicting: at });
+        continue;
       }
-      for (const e of ix.entries) {
-        if (because) break;
-        if (e.type !== 'event') continue;
-        e.actions?.forEach((a, i) => {
-          if (!because && a.target && ix.resolve(a.target)?.id === c.id && DEATH_VERBS.has(a.verb.toLowerCase())) {
-            const d = ix.date(e.date);
-            because = { text: `${c.name} was ${a.verb} by ${ix.nameOf(a.actor)}${d ? ` ${ix.at(d)}` : ''}`, at: ix.fact(e, `actions[${i}]`) };
-          }
-        });
-      }
-      if (because) {
-        out.push({ key: c.id, message: `${c.name} is marked alive, but ${because.text} (source: ${because.at.source}).`, offending: ix.fact(c, 'status'), conflicting: because.at });
+      // Killings are gathered once for the whole world (WorldIndex.killingsOf), not searched per character.
+      const k = ix.killingsOf(c.id)[0];
+      if (k) {
+        const message = k.date
+          ? msg`${c.name} is marked alive, but ${c.name} ${k.word} ${ix.at(k.date)} (source: ${k.at.source}).`
+          : msg`${c.name} is marked alive, but ${c.name} ${k.word} (source: ${k.at.source}).`;
+        out.push({ key: c.id, message, offending: ix.fact(c, 'status'), conflicting: k.at });
       }
     }
     return out;

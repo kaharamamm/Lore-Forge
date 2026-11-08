@@ -1,6 +1,8 @@
 import { Fragment, type ComponentChildren } from 'preact';
-import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { bodyLinks, LIFECYCLE, MentionMatcher, statusOf, TYPE_SINGULAR, WorldIndex, type Entry, type Mention, type World } from '@lore-forge/core';
+import { worldIndex } from '../hooks.ts';
+import { lower, t, tj, tm } from '../i18n.tsx';
 import { EntryLabel, TypeBadge } from './type.tsx';
 import { Portrait } from './cover.tsx';
 import { Icon } from './icon.tsx';
@@ -8,16 +10,46 @@ import { Icon } from './icon.tsx';
 const IS_MAC = navigator.platform.toLowerCase().includes('mac');
 const MOD = IS_MAC ? '⌘' : 'Ctrl';
 
-/** Re-build the matcher only when names or aliases change, not on every keystroke. */
+/** The names and aliases of a world's entries, worked out once per entries array. */
+const namesKeys = new WeakMap<readonly Entry[], string>();
+function namesKey(entries: readonly Entry[]): string {
+  let key = namesKeys.get(entries);
+  if (key === undefined) namesKeys.set(entries, (key = entries.map((e) => `${e.id}\u0000${e.name}\u0000${(e.aliases ?? []).join('\u0001')}`).join('\u0002')));
+  return key;
+}
+
+/**
+ * One name matcher, shared by every text box. It is built again only when names or aliases change, and then once
+ * typing in a name pauses: until then the previous one keeps highlighting, so typing a name never waits for it.
+ * Another world gets its matcher at once.
+ */
+const shared = { world: '', key: '', matcher: null as MentionMatcher | null, timer: 0 as ReturnType<typeof setTimeout> | 0, redraw: new Set<() => void>() };
 function useMatcher(world: World): MentionMatcher {
-  const key = world.entries.map((e) => `${e.id}\u0000${e.name}\u0000${(e.aliases ?? []).join('\u0001')}`).join('\u0002');
-  return useMemo(() => new MentionMatcher(world.entries), [key]);
+  const key = namesKey(world.entries);
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    const r = () => redraw((n) => n + 1);
+    shared.redraw.add(r);
+    return () => void shared.redraw.delete(r);
+  }, []);
+  if (!shared.matcher || shared.world !== world.manifest.id) {
+    clearTimeout(shared.timer);
+    Object.assign(shared, { world: world.manifest.id, key, matcher: new MentionMatcher(world.entries) });
+  } else if (shared.key !== key) {
+    clearTimeout(shared.timer);
+    const entries = world.entries;
+    shared.timer = setTimeout(() => {
+      Object.assign(shared, { key, matcher: new MentionMatcher(entries) });
+      for (const r of shared.redraw) r();
+    }, 200);
+  }
+  return shared.matcher!;
 }
 
 /** Small card: type, dates, status. */
 function EntryCard({ ix, entry }: { ix: WorldIndex; entry: Entry }) {
   const life = ix.life(entry);
-  const dates = life.start || life.end ? `${life.start ? ix.fmt(life.start.date) : '?'} – ${life.end ? ix.fmt(life.end.date) : ''}` : 'No dates';
+  const dates = life.start || life.end ? `${life.start ? tm(ix.fmt(life.start.date)) : '?'} – ${life.end ? tm(ix.fmt(life.end.date)) : ''}` : t('No dates');
   const status = LIFECYCLE[entry.type]?.statuses.find((x) => x.value === statusOf(entry));
   const race = entry.type === 'character' && entry.race ? ix.nameOf(entry.race) : undefined;
   return (
@@ -25,7 +57,7 @@ function EntryCard({ ix, entry }: { ix: WorldIndex; entry: Entry }) {
       <Portrait entry={entry} raceName={race} size="md" />
       <div class="card-text">
       <div class="card-title"><EntryLabel entry={entry} /></div>
-      <div class="card-meta"><TypeBadge type={entry.type} />{race && <span class="card-race"> {race}</span>} <span>{dates}</span>{status && <span> · <Icon name={status.icon} /> {status.label}</span>}</div>
+      <div class="card-meta"><TypeBadge type={entry.type} />{race && <span class="card-race"> {race}</span>} <span>{dates}</span>{status && <span> · <Icon name={status.icon} /> {tm(status.label)}</span>}</div>
       {entry.summary && <p class="card-summary">{entry.summary}</p>}
       </div>
     </div>
@@ -92,7 +124,7 @@ export interface ProseEditorProps {
  * (or a picker when the name is shared). Keyboard: Ctrl/⌘+Enter on a name.
  */
 export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, marks = [], reveal, label, describedBy, onPick }: ProseEditorProps) {
-  const ix = useMemo(() => new WorldIndex(world), [world]);
+  const ix = worldIndex(world);
   const matcher = useMatcher(world);
   const mentions = useMemo(() => matcher.find(value, exclude ? { exclude } : {}), [matcher, value, exclude]);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -116,12 +148,18 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
   const [linkCursor, setLinkCursor] = useState(false);
   const [flash, setFlash] = useState<{ start: number; end: number } | null>(null);
 
-  // Grow with the text so the mirror never has to scroll (entry bodies only).
+  // Grow with the text so the mirror never has to scroll (entry bodies only). A keystroke only checks whether the
+  // text no longer fits, and grows the box when it does (a new line). Setting the height back to auto to measure it
+  // makes the whole page lay out again, which is slow in a big world: shrinking waits for a pause in typing.
   useLayoutEffect(() => {
     const el = area.current;
     if (!el || fill) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.max(el.scrollHeight, 224)}px`;
+    if (el.scrollHeight > el.clientHeight) el.style.height = `${Math.max(el.scrollHeight, 224)}px`;
+    const t = setTimeout(() => {
+      el.style.height = 'auto';
+      el.style.height = `${Math.max(el.scrollHeight, 224)}px`;
+    }, 500);
+    return () => clearTimeout(t);
   }, [value, fill]);
 
   // Jump to a sentence: select it, scroll it to the upper third, flash it.
@@ -280,21 +318,21 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
   return (
     <div class={`prose${fill ? ' prose-fill' : ''}${linkCursor ? ' prose-link-cursor' : ''}`} ref={wrap} onMouseLeave={() => { setLinkCursor(false); if (!popup?.pick) setPopup(null); }}>
       <div class="prose-mirror body-text" ref={mirror} aria-hidden="true">{parts}</div>
-      <textarea id={id} ref={area} class="prose-input body-text" value={value} spellcheck aria-label={label} aria-describedby={describedBy}
+      <textarea id={id} ref={area} class="prose-input body-text" value={boxValue(area.current, value)} spellcheck aria-label={label} aria-describedby={describedBy}
         onInput={(e) => { onPick?.(null); onInput(e.currentTarget.value); }} onMouseMove={onMove} onMouseDown={onDown} onKeyDown={onKey}
         onMouseUp={onPick ? (e) => { if (e.button === 0) setTimeout(() => pick('select', { x: e.clientX, y: e.clientY + 14 }), 0); } : undefined}
         onKeyUp={onPick ? (e) => { if (e.shiftKey && /^(Arrow|Home|End|Page)/.test(e.key)) pick('select'); else if (/^(Arrow|Home|End|Page)/.test(e.key)) onPick(null); } : undefined}
         onContextMenu={onPick ? (e) => { if (pick('menu', { x: e.clientX, y: e.clientY })) e.preventDefault(); } : undefined}
         onScroll={(e) => { onPick?.(null); if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop; }} />
       {popup && (
-        <div ref={card} class={`mention-card${popup.pick ? ' is-picker' : ''}`} role={popup.pick ? 'dialog' : 'tooltip'} aria-label={popup.pick && popup.mention ? `Which “${popup.mention.text}”?` : undefined}>
+        <div ref={card} class={`mention-card${popup.pick ? ' is-picker' : ''}`} role={popup.pick ? 'dialog' : 'tooltip'} aria-label={popup.pick && popup.mention ? t('Which “{name}”?', { name: popup.mention.text }) : undefined}>
           {popup.mark && (
             <>
               <p class="card-title">{popup.mark.title}</p>
               {popup.mark.detail && <p class="card-summary">{popup.mark.detail}</p>}
             </>
           )}
-          {popup.mention && popup.pick && <p class="card-pick-title">“{popup.mention.text}” is shared. Open which one?</p>}
+          {popup.mention && popup.pick && <p class="card-pick-title">{t('“{name}” is shared. Open which one?', { name: popup.mention.text })}</p>}
           {popup.mention?.ids.map((eid) => {
             const t = ix.byIdOf(eid);
             if (!t) return null;
@@ -305,9 +343,9 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
             ) : <EntryCard key={eid} ix={ix} entry={t} />;
           })}
           {popup.mention && (popup.pick ? (
-            <button type="button" class="ghost small" onClick={() => { setPopup(null); area.current?.focus(); }}>Cancel</button>
+            <button type="button" class="ghost small" onClick={() => { setPopup(null); area.current?.focus(); }}>{t('Cancel')}</button>
           ) : (
-            <p class="card-hint">{popup.mention.ids.length > 1 ? `Shared name: ${MOD}+click to choose` : `${MOD}+click to open`}</p>
+            <p class="card-hint">{popup.mention.ids.length > 1 ? t('Shared name: {key}+click to choose', { key: MOD }) : t('{key}+click to open', { key: MOD })}</p>
           ))}
         </div>
       )}
@@ -317,7 +355,7 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
 
 /** An entry's body text: the prose editor, a hint and chips for the names it mentions. */
 export function ProseField({ world, entry, onInput, onOpen }: { world: World; entry: Entry; onInput: (body: string) => void; onOpen: (id: string) => void }) {
-  const ix = useMemo(() => new WorldIndex(world), [world]);
+  const ix = worldIndex(world);
   const matcher = useMatcher(world);
   const value = entry.body;
   const mentions = useMemo(() => matcher.find(value, { exclude: entry.id }), [matcher, value, entry.id]);
@@ -325,32 +363,32 @@ export function ProseField({ world, entry, onInput, onOpen }: { world: World; en
   const links = bodyLinks(value);
   return (
     <div class="field body-field" data-field="body">
-      <label for="entry-body">Text</label>
+      <label for="entry-body">{t('Text')}</label>
       <ProseEditor id="entry-body" world={world} value={value} exclude={entry.id} onInput={onInput} onOpen={onOpen} describedBy="body-hint" />
       <div class="hint" id="body-hint">
-        Markdown. Names and aliases you type are linked automatically. Hover one for details; {MOD}+click (or {MOD}+Enter) opens it. Explicit links: <code>[[id]]</code>, <code>[[Name]]</code>, <code>[[id|label]]</code>, <code>@id</code>.
+        {tj('Markdown. Names and aliases you type are linked automatically. Hover one for details; {key}+click (or {key}+Enter) opens it. Explicit links: {id}, {name}, {label}, {short}.', { key: MOD, id: <code>[[id]]</code>, name: <code>[[Name]]</code>, label: <code>[[id|label]]</code>, short: <code>@id</code> })}
       </div>
       {(unique.length > 0 || links.length > 0) && (
         <div class="mention-chips">
-          <span class="chips-label">Mentioned here</span>
-          <ul class="link-chips" aria-label="Entries mentioned in this text">
+          <span class="chips-label">{t('Mentioned here')}</span>
+          <ul class="link-chips" aria-label={t('Entries mentioned in this text')}>
             {unique.map((m) => {
               const es = m.ids.map((id) => ix.byIdOf(id)).filter((x): x is Entry => !!x);
               return es.length === 1 ? (
-                <li key={m.ids[0]}><button type="button" class="entry-chip" onClick={() => onOpen(es[0]!.id)}><EntryLabel entry={es[0]!} /><span class="sr-only">, {TYPE_SINGULAR[es[0]!.type].toLowerCase()}</span></button></li>
+                <li key={m.ids[0]}><button type="button" class="entry-chip" onClick={() => onOpen(es[0]!.id)}><EntryLabel entry={es[0]!} /><span class="sr-only">, {lower(tm(TYPE_SINGULAR[es[0]!.type]))}</span></button></li>
               ) : (
                 <li key={m.ids.join('+')} class="chip-ambiguous">
-                  <span class="chip-shared"><Icon name="uncertainty" /> “{m.text}” is shared:</span>
-                  {es.map((x) => <button key={x.id} type="button" class="entry-chip" onClick={() => onOpen(x.id)}><EntryLabel entry={x} /><span class="sr-only">, {TYPE_SINGULAR[x.type].toLowerCase()}</span></button>)}
+                  <span class="chip-shared"><Icon name="uncertainty" /> {t('“{name}” is shared:', { name: m.text })}</span>
+                  {es.map((x) => <button key={x.id} type="button" class="entry-chip" onClick={() => onOpen(x.id)}><EntryLabel entry={x} /><span class="sr-only">, {lower(tm(TYPE_SINGULAR[x.type]))}</span></button>)}
                 </li>
               );
             })}
             {links.map((l, i) => {
-              const t = ix.resolve(l.ref);
-              return t ? (
-                <li key={`l${i}`}><button type="button" class="entry-chip chip-explicit" onClick={() => onOpen(t.id)} title="Explicit link"><Icon name="linked-rings" /> <EntryLabel entry={t} /></button></li>
+              const target = ix.resolve(l.ref);
+              return target ? (
+                <li key={`l${i}`}><button type="button" class="entry-chip chip-explicit" onClick={() => onOpen(target.id)} title={t('Explicit link')}><Icon name="linked-rings" /> <EntryLabel entry={target} /></button></li>
               ) : (
-                <li key={`l${i}`} class="chip chip-missing"><Icon name="cancel" /> {l.ref} (missing)</li>
+                <li key={`l${i}`} class="chip chip-missing"><Icon name="cancel" /> {t('{ref} (missing)', { ref: l.ref })}</li>
               );
             })}
           </ul>
@@ -358,4 +396,13 @@ export function ProseField({ world, entry, onInput, onOpen }: { world: World; en
       )}
     </div>
   );
+}
+
+/**
+ * What the text box shows. Saving ends the text with a newline the box may not have: when a live update brings the
+ * text back with only that difference, the box keeps its own text, so the caret and the scroll stay where they are.
+ */
+function boxValue(box: HTMLTextAreaElement | null, value: string): string {
+  const own = box?.value;
+  return own !== undefined && own !== value && own.replace(/\n+$/, '') === value.replace(/\n+$/, '') ? own : value;
 }

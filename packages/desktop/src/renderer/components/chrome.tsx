@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 
 export type SaveState = { kind: 'saved' } | { kind: 'saving' } | { kind: 'failed'; message: string };
@@ -22,7 +23,7 @@ export function SaveIndicator({ save }: { save: SaveState }) {
   }, [save]);
   return (
     <span class={`save save-${save.kind}${shown || save.kind === 'failed' ? ' is-shown' : ''}`} role="status">
-      {save.kind === 'saved' ? <><Icon name="check-mark" /> Saved</> : save.kind === 'saving' ? 'Saving…' : <><Icon name="cancel" /> Save failed: {save.message}</>}
+      {save.kind === 'saved' ? <><Icon name="check-mark" /> {t('Saved')}</> : save.kind === 'saving' ? t('Saving…') : <><Icon name="cancel" /> {t('Save failed: {message}', { message: save.message })}</>}
     </span>
   );
 }
@@ -36,18 +37,28 @@ const clampWidth = (w: number) => Math.round(Math.max(SIDEBAR_MIN, Math.min(side
 
 /** Sidebar width in px, remembered between sessions. */
 export function useSidebarWidth(): [number, (w: number) => void] {
-  const [w, setW] = useState(() => clampWidth(Number(localStorage.getItem(WIDTH_KEY)) || SIDEBAR_DEFAULT));
+  // The width the user chose is kept; it is fitted to the window only when drawn, so a narrow window (or a large
+  // interface scale) squeezes the sidebar only while it lasts, and a wider one gives the chosen width back.
+  const [chosen, setChosen] = useState(() => Number(localStorage.getItem(WIDTH_KEY)) || SIDEBAR_DEFAULT);
+  const [, redraw] = useState(0);
   const set = (next: number) => {
     const c = clampWidth(next);
-    setW(c);
+    setChosen(c);
     localStorage.setItem(WIDTH_KEY, String(c));
   };
   useEffect(() => {
-    const onResize = () => setW((cur) => clampWidth(cur));
+    let frame = 0;
+    const onResize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => redraw((n) => n + 1));
+    };
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', onResize);
+    };
   }, []);
-  return [w, set];
+  return [clampWidth(chosen), set];
 }
 
 /** Drag handle on the sidebar's right edge (arrow keys work too). */
@@ -70,7 +81,7 @@ export function PaneResizer({ width, onWidth }: { width: number; onWidth: (w: nu
     e.preventDefault();
   };
   return (
-    <div class="pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize the sidebar" tabIndex={0}
+    <div class="pane-resizer" role="separator" aria-orientation="vertical" aria-label={t('Resize the sidebar')} tabIndex={0}
       aria-valuenow={width} aria-valuemin={SIDEBAR_MIN} aria-valuemax={sidebarMax()}
       onPointerDown={drag} onDblClick={() => onWidth(SIDEBAR_DEFAULT)}
       onKeyDown={(e) => {

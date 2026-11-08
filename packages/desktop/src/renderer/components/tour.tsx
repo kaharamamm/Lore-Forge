@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 
 /** One coach mark: where to go first (idempotent, so Back works), what to point at, and what to say. */
@@ -99,15 +100,15 @@ export function Tour({ steps, step: i, onStep: setI, onClose }: { steps: TourSte
       <div class="tour-block" onMouseDown={(e) => e.preventDefault()} />
       <div class={`tour-spot${box ? '' : ' is-none'}`} style={box ? { top: `${box.top - PAD}px`, left: `${box.left - PAD}px`, width: `${box.width + 2 * PAD}px`, height: `${box.height + 2 * PAD}px` } : undefined} />
       <div ref={card} class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-text" style={{ top: `${at.top}px`, left: `${at.left}px`, width: `${CARD_W}px` }}>
-        <p class="tour-count"><Icon name="direction-signs" /> Tour · {i + 1} of {steps.length}</p>
+        <p class="tour-count"><Icon name="direction-signs" /> {t('Tour · {step} of {count}', { step: i + 1, count: steps.length })}</p>
         <h2 id="tour-title" class="tour-title">{step.title}</h2>
         <p id="tour-text" class="tour-text">{step.text}</p>
         <div class="tour-dots" aria-hidden="true">{steps.map((_, n) => <span key={n} class={n === i ? 'is-on' : ''} />)}</div>
         <div class="tour-actions">
-          <button type="button" class="ghost small tour-skip" onClick={() => onClose(false)}>{last ? 'Close' : 'Skip tour'}</button>
+          <button type="button" class="ghost small tour-skip" onClick={() => onClose(false)}>{last ? t('Close') : t('Skip tour')}</button>
           <span class="tour-move">
-            <button type="button" class="ghost small tour-back" disabled={i === 0} onClick={() => setI(i - 1)}>Back</button>
-            <button ref={next} type="button" class="primary small tour-next" disabled={!ready} onClick={() => (last ? onClose(true) : setI(i + 1))}>{last ? 'Finish' : 'Next'}</button>
+            <button type="button" class="ghost small tour-back" disabled={i === 0} onClick={() => setI(i - 1)}>{t('Back')}</button>
+            <button ref={next} type="button" class="primary small tour-next" disabled={!ready} onClick={() => (last ? onClose(true) : setI(i + 1))}>{last ? t('Finish') : t('Next')}</button>
           </span>
         </div>
       </div>

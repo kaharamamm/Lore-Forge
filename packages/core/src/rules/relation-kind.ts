@@ -1,9 +1,11 @@
 import type { Finding, Rule } from '../engine.ts';
+import { msg, verbatim } from '../i18n.ts';
 import { relationFits, relationKind } from '../relation-kinds.ts';
-import { TYPE_SINGULAR, type EntryType } from '../types.ts';
+import type { EntryType } from '../types.ts';
+import { A_TYPE, orList, TYPE_WORD } from '../words.ts';
 
-const a = (t: EntryType) => `${/^[aeiou]/i.test(t) ? 'an' : 'a'} ${t}`;
-const list = (ts: readonly EntryType[]) => (ts.length > 4 ? 'any entry' : ts.map(a).join(' or '));
+/** "a character or a faction", or "any entry" for more than four types. */
+const list = (ts: readonly EntryType[]) => (ts.length > 4 ? msg`any entry` : orList(ts.map((t) => A_TYPE[t])));
 
 export const relationKindRule: Rule = {
   id: 'relation-kind',
@@ -17,10 +19,11 @@ export const relationKindRule: Rule = {
         const kind = relationKind(r.type);
         const target = ix.resolve(r.target);
         if (!kind || !target || relationFits(kind, e.type, target.type)) return;
-        const fits = kind.sameType ? `one entry to another of the same type` : `${list(kind.from)} to ${list(kind.to)}`;
+        const fits = kind.sameType ? msg`one entry to another of the same type` : msg`${list(kind.from)} to ${list(kind.to)}`;
         out.push({
-          key: `${e.id}:${i}`,
-          message: `${e.name} (${TYPE_SINGULAR[e.type].toLowerCase()}) is "${r.type}" ${target.name} (${TYPE_SINGULAR[target.type].toLowerCase()}), but "${r.type}" only goes from ${fits} (source: ${ix.source(e)}).`,
+          key: `${e.id}:${ix.rowKeys(e).relations[i]}`,
+          legacyKey: `${e.id}:${i}`,
+          message: msg`${e.name} (${TYPE_WORD[e.type]}) is "${verbatim(r.type)}" ${target.name} (${TYPE_WORD[target.type]}), but "${verbatim(r.type)}" only goes from ${fits} (source: ${ix.source(e)}).`,
           offending: ix.fact(e, `relations[${i}]`),
           conflicting: ix.fact(target, 'type'),
         });

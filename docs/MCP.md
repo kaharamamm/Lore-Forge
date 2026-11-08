@@ -89,12 +89,13 @@ The server gives the assistant these tools. Most apps show them under **lore-for
 | `lore_forge_guide` | The playbook for writing a whole book, and every field name of the format |
 | `list_books`, `get_book` | The books on your shelf; one book at a glance (entries, chapters, warning counts) |
 | `create_book`, `update_book`, `duplicate_book` | A new book with its calendar, cover and Story Book details; change them; copy a book (such as the read-only sample) |
-| `get_entry`, `save_entries`, `delete_entry` | Read, create and update up to 40 entries at once (by name; entries can refer to each other in the same call), delete one |
+| `get_entry`, `save_entries`, `delete_entry` | Read, create and update up to 40 entries at once (by name; entries can refer to each other in the same call), delete one. Looks are added, changed or removed one at a time, by id or name |
+| `look_at` | How entries look on an in-world date: the look in effect (or the Default look), why, and the full visual description. Without an entry, everyone who is not in their Default look then |
 | `link_entries` | Relationships: family, friends and enemies, rulers, owners, places, who killed whom |
-| `write_chapter`, `read_story` | Write or replace a chapter; read the chapter list or one chapter |
+| `write_chapter`, `read_story` | Write or replace a chapter; read the chapter list or one chapter. For a dated chapter, the answer also lists the looks of the entries it names |
 | `story_proposals` | What the chapters mention that the book does not have yet: add it or ignore it |
 | `check_book`, `mark_intended` | The consistency rules the app runs; keep a contradiction on purpose with a note |
-| `create_image`, `add_image` | Make a picture with your service, or attach one, for an entry or the cover |
+| `create_image`, `add_image` | Make a picture with your service, or attach one, for an entry, one of its looks, or the cover |
 | `export_book` | The Story Book (PDF or Word) or the World Codex (PDF), to the book's `exports/` folder or a path you give |
 
 Apps that show MCP prompts also list **Write a story in Lore-Forge** (`write_story`): give it the idea, and optionally the number of chapters, the audience and a style.
@@ -103,9 +104,9 @@ To change a book you already have, name it: *"Add a chapter to Camelamamm where 
 
 ## Where books go
 
-- New books go to your worlds folder (**Library settings**), like books made in the app.
+- New books go to your worlds folder (**Settings**), like books made in the app.
 - The assistant sees the same shelf as the app: the worlds folder, the worlds you opened from elsewhere and the sample world.
-- While Lore-Forge is open, new books appear on the shelf and an open book updates as the assistant writes. If you are typing in the same book at that moment, its changes are loaded right after your edit is saved, so nothing you type is lost. The same goes for changes from a text editor or `git pull`.
+- While Lore-Forge is open, new books appear on the shelf and an open book updates as the assistant writes. If you are typing in the same entry or chapter at that moment, both are kept: what the assistant changed and what you typed. Where you both changed the same field, your typing wins. The same goes for changes from a text editor or `git pull`.
 - Lore-Forge does not need to be open. The assistant works on the files, and the next time you open the book it is all there.
 
 ## Privacy
@@ -122,7 +123,7 @@ The server reads these environment variables, which can be set in the AI app's s
 | Variable | Means |
 | --- | --- |
 | `LORE_FORGE_DATA` | Lore-Forge's user-data folder (library settings, recent worlds, picture settings). Default: the app's own |
-| `LORE_FORGE_WORLDS` | The worlds folder, when **Library settings** has not chosen one |
+| `LORE_FORGE_WORLDS` | The worlds folder, when **Settings** has not chosen one |
 | `OPENAI_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `XAI_API_KEY` | A key, when none is saved in Connect AI |
 | `LORE_FORGE_IMAGE_PROVIDER`, `LORE_FORGE_IMAGE_MODEL` | The service (`openai`, `gemini`, `xai` or `none`) and model, when none is chosen in Connect AI |
 | `LORE_FORGE_FONTS`, `LORE_FORGE_COVER_FONTS` | Fonts for `export_book` (default: the app's bundled fonts) |

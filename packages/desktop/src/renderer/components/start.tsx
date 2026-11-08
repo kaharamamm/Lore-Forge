@@ -14,6 +14,9 @@ import { ConnectAi } from './connect-ai.tsx';
 import { AboutDialog } from './about.tsx';
 import { fitText } from '../fit.ts';
 import { moveBook, removeKind, type RemoveKind } from '../../shared/library.ts';
+import { AppSettings, reopenSettings } from './settings.tsx';
+import { PatchNotes } from './patch-notes.tsx';
+import { t, tj, tm, tx } from '../i18n.tsx';
 
 /** Shelf key of the blank "New book". */
 /** Changes when the window size changes the book scale, so titles are fitted again. */
@@ -238,19 +241,19 @@ const Book = memo(function Book({ dir, remove, place, hover, onOpen, onDelete, o
   }, [name, font?.fontFamily, art.titleStyle, art.showTitle, scale, world === undefined]);
   return (
     <li ref={li} class={`world-card shelf-book${placeClass(place)}`} data-key={dir} data-name={name} data-near={near ? '' : undefined} style={style} {...hover}>
-      <button type="button" class="world-book" onClick={() => onOpen(dir)} disabled={world === null} aria-label={`Open ${name}`} aria-describedby={id}>
+      <button type="button" class="world-book" onClick={() => onOpen(dir)} disabled={world === null} aria-label={tx('book', 'Open {name}', { name })} aria-describedby={id}>
         <BookBox
           spine={<span class="book-face book-spine"><span class={`spine-title title-${art.titleStyle}${font ? ' has-font' : ''}`} style={font}>{name}</span>{art.icon && <Icon name={art.icon} class="spine-mark" />}</span>}
           cover={
             <span class="book-face book-cover world-cover">
               <WorldCover art={art} image={image} title={name} />
               <span class="world-meta" id={id}>
-                {world === undefined && <span>Reading…</span>}
-                {world === null && <span><Icon name="hazard-sign" /> This book cannot be opened</span>}
+                {world === undefined && <span>{t('Reading…')}</span>}
+                {world === null && <span><Icon name="hazard-sign" /> {t('This book cannot be opened')}</span>}
                 {world && (
                   <>
-                    <span class="world-count">{world.entries.length} {world.entries.length === 1 ? 'entry' : 'entries'}</span>
-                    <span class="world-types">{counts.map(([t, n]) => <span key={t} class={`t-${t}`} title={TYPE_LABELS[t]}><Icon name={TYPE_ICON[t]} label={TYPE_LABELS[t]} /> {n}</span>)}</span>
+                    <span class="world-count">{world.entries.length === 1 ? t('{n} entry', { n: world.entries.length }) : t('{n} entries', { n: world.entries.length })}</span>
+                    <span class="world-types">{counts.map(([type, n]) => <span key={type} class={`t-${type}`} title={tm(TYPE_LABELS[type])}><Icon name={TYPE_ICON[type]} label={tm(TYPE_LABELS[type])} /> {n}</span>)}</span>
                   </>
                 )}
               </span>
@@ -264,10 +267,10 @@ const Book = memo(function Book({ dir, remove, place, hover, onOpen, onDelete, o
             <span class="book-body">
               <span class="book-face lid-face">
                 <span class="book-buttons">
-                  {world && <button type="button" class="book-button book-duplicate" onClick={() => onDuplicate(dir, name)} aria-label={`Duplicate ${name}`} title="Make an editable copy of this world"><Icon name="files" /></button>}
+                  {world && <button type="button" class="book-button book-duplicate" onClick={() => onDuplicate(dir, name)} aria-label={t('Duplicate {name}', { name })} title={t('Make an editable copy of this world')}><Icon name="files" /></button>}
                   {remove === 'hide'
-                    ? <button type="button" class="book-button book-delete is-remove" onClick={() => onDelete(dir, name, world)} aria-label={`Remove ${name} from the library`} title="Remove the sample world from the library (Library settings can show it again)"><Icon name="trash-can" /></button>
-                    : <button type="button" class="book-button book-delete" onClick={() => onDelete(dir, name, world)} aria-label={`Delete ${name}`} title="Move this world to the trash"><Icon name="trash-can" /></button>}
+                    ? <button type="button" class="book-button book-delete is-remove" onClick={() => onDelete(dir, name, world)} aria-label={t('Remove {name} from the library', { name })} title={t('Remove the sample world from the library (Settings can show it again)')}><Icon name="trash-can" /></button>
+                    : <button type="button" class="book-button book-delete" onClick={() => onDelete(dir, name, world)} aria-label={t('Delete {name}', { name })} title={t('Move this world to the trash')}><Icon name="trash-can" /></button>}
                 </span>
               </span>
             </span>
@@ -703,51 +706,51 @@ function CreateBook({ worldsDir, onClose, onCreated }: { worldsDir: string; onCl
     }
   };
   return (
-    <Dialog title="New book" onClose={onClose}>
+    <Dialog title={t('New book')} onClose={onClose}>
       <form class="create-book" onSubmit={(e) => void submit(e)}>
         <div class="create-side">
           <div class="create-preview" aria-hidden="true">
             <span class="world-cover">
-              <WorldCover art={art} image={preview} title={name || 'Untitled world'} />
+              <WorldCover art={art} image={preview} title={name || t('Untitled world')} />
             </span>
-            <span class="spine-sample create-spine" style={{ background: art.spine, color: art.spineInk }}><span>{name || 'Untitled world'}</span></span>
+            <span class="spine-sample create-spine" style={{ background: art.spine, color: art.spineInk }}><span>{name || t('Untitled world')}</span></span>
           </div>
           <CoverSwitches art={art} set={set} />
         </div>
         <div class="create-fields">
           <label class="field">
-            <span class="field-label">Name</span>
-            <input ref={input} id="new-world-name" type="text" value={name} placeholder="e.g. The Shifting Sands" onInput={(e) => setName(e.currentTarget.value)} />
+            <span class="field-label">{t('Name')}</span>
+            <input ref={input} id="new-world-name" type="text" value={name} placeholder={t('e.g. The Shifting Sands')} onInput={(e) => setName(e.currentTarget.value)} />
           </label>
           <div class="field create-look">
             <div class="create-look-row">
-              <ColorField label="Cover colour" value={cover.color ?? art.top} swatches={SWATCHES} onChange={(c) => set({ color: c })} class="create-colour" />
-              <button type="button" class="ghost small shuffle-cover" onClick={() => setCover((c) => ({ ...c, ...randomCover() }))} title="A random colour and emblem"><Icon name="perspective-dice-six-faces-random" /> Shuffle</button>
+              <ColorField label={t('Cover colour')} value={cover.color ?? art.top} swatches={SWATCHES} onChange={(c) => set({ color: c })} class="create-colour" />
+              <button type="button" class="ghost small shuffle-cover" onClick={() => setCover((c) => ({ ...c, ...randomCover() }))} title={t('A random colour and emblem')}><Icon name="perspective-dice-six-faces-random" /> {t('Shuffle')}</button>
             </div>
           </div>
           <div class="field create-emblem">
-            <span class="field-label">Emblem</span>
-            <IconPicker label="Emblem" choices={EMBLEM_CHOICES} value={art.icon} none="No emblem" onPick={(n) => set({ icon: n ?? 'none' })} />
+            <span class="field-label">{t('Emblem')}</span>
+            <IconPicker label={t('Emblem')} choices={EMBLEM_CHOICES} value={art.icon} none={t('No emblem')} onPick={(n) => set({ icon: n ?? 'none' })} />
           </div>
           <div class="field">
-            <span class="field-label">Cover picture (optional)</span>
+            <span class="field-label">{t('Cover picture (optional)')}</span>
             <div class="row-actions">
-              <button type="button" class="ghost small" onClick={() => void pick()}><Icon name="photo-camera" /> {image ? 'Change picture…' : 'Choose picture…'}</button>
-              {image && <button type="button" class="ghost small" onClick={() => { setImage(null); setPreview(null); }}>No picture</button>}
+              <button type="button" class="ghost small" onClick={() => void pick()}><Icon name="photo-camera" /> {image ? t('Change picture…') : t('Choose picture…')}</button>
+              {image && <button type="button" class="ghost small" onClick={() => { setImage(null); setPreview(null); }}>{t('No picture')}</button>}
             </div>
             <RecentPictures dir={null} current={image ?? undefined} refresh={uploads} onPick={(p) => void use(p.path)} />
           </div>
           <div class="field">
-            <span class="field-label">Location</span>
+            <span class="field-label">{t('Location')}</span>
             <div class="location-line">
               <span class="location-path" title={parent}>{parent}</span>
-              <button type="button" class="ghost small" onClick={() => void window.lore.chooseFolder('Where to keep this world', parent).then((d) => d && setParent(d))}><Icon name="open-folder" /> Change…</button>
+              <button type="button" class="ghost small" onClick={() => void window.lore.chooseFolder(t('Where to keep this world'), parent).then((d) => d && setParent(d))}><Icon name="open-folder" /> {t('Change…')}</button>
             </div>
           </div>
           {problem && <p class="error-line" role="alert"><Icon name="cancel" /> {problem}</p>}
           <div class="dialog-actions">
-            <button type="button" class="ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" class="primary" disabled={!name.trim()}><Icon name="sprout" /> Create book</button>
+            <button type="button" class="ghost" onClick={onClose}>{t('Cancel')}</button>
+            <button type="submit" class="primary" disabled={!name.trim()}><Icon name="sprout" /> {t('Create book')}</button>
           </div>
         </div>
       </form>
@@ -762,9 +765,9 @@ function DeleteBook({ dir, name, world, kind, onClose, onConfirm }: { dir: strin
   const counts = world ? ENTRY_TYPES.map((t) => [t, world.entries.filter((e) => e.type === t).length] as const).filter(([, n]) => n) : [];
   return (
     <ConfirmDialog
-      title={kind === 'hide' ? `Remove “${name}” from the library?` : `Delete “${name}”?`}
-      confirmLabel={kind === 'hide' ? 'Remove from library' : 'Move to trash'}
-      cancelLabel="Keep it"
+      title={kind === 'hide' ? t('Remove “{name}” from the library?', { name }) : t('Delete “{name}”?', { name })}
+      confirmLabel={kind === 'hide' ? t('Remove from library') : t('Move to trash')}
+      cancelLabel={t('Keep it')}
       onClose={onClose}
       onConfirm={onConfirm}
       subject={
@@ -772,15 +775,15 @@ function DeleteBook({ dir, name, world, kind, onClose, onConfirm }: { dir: strin
           <span class="world-cover confirm-cover" aria-hidden="true"><WorldCover art={art} image={image} /></span>
           <div>
             <strong class="confirm-name">{name}</strong>
-            <span class="muted">{world ? `${world.entries.length} ${world.entries.length === 1 ? 'entry' : 'entries'}${world.story?.length ? `, ${world.story.length} ${world.story.length === 1 ? 'chapter' : 'chapters'}` : ''}` : 'This book cannot be read'}</span>
-            {counts.length > 0 && <span class="world-types">{counts.map(([t, n]) => <span key={t} class={`t-${t}`} title={TYPE_LABELS[t]}><Icon name={TYPE_ICON[t]} label={TYPE_LABELS[t]} /> {n}</span>)}</span>}
+            <span class="muted">{world ? `${world.entries.length === 1 ? t('{n} entry', { n: world.entries.length }) : t('{n} entries', { n: world.entries.length })}${world.story?.length ? `, ${world.story.length === 1 ? t('{n} chapter', { n: world.story.length }) : t('{n} chapters', { n: world.story.length })}` : ''}` : t('This book cannot be read')}</span>
+            {counts.length > 0 && <span class="world-types">{counts.map(([type, n]) => <span key={type} class={`t-${type}`} title={tm(TYPE_LABELS[type])}><Icon name={TYPE_ICON[type]} label={tm(TYPE_LABELS[type])} /> {n}</span>)}</span>}
           </div>
         </div>
       }
     >
       {kind === 'hide'
-        ? <p>The sample world comes with Lore-Forge, so nothing is deleted: it only leaves your shelf. Turn on Show sample world in Library settings to bring it back.</p>
-        : <p>Moves the folder to the system trash, with its entries, story and images. You can restore it from there.</p>}
+        ? <p>{t('The sample world comes with Lore-Forge, so nothing is deleted: it only leaves your shelf. Turn on Show sample world in Settings to bring it back.')}</p>
+        : <p>{t('Moves the folder to the system trash, with its entries, story and images. You can restore it from there.')}</p>}
     </ConfirmDialog>
   );
 }
@@ -790,7 +793,7 @@ function DeleteBook({ dir, name, world, kind, onClose, onConfirm }: { dir: strin
  * which then opens. Works for the read-only sample too: that is how it becomes editable.
  */
 export function DuplicateBook({ dir, name, onClose, onDone }: { dir: string; name: string; onClose: () => void; onDone: (copy: string) => void }) {
-  const [value, setValue] = useState(`${name} (copy)`);
+  const [value, setValue] = useState(t('{name} (copy)', { name }));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [where, setWhere] = useState('');
@@ -815,88 +818,21 @@ export function DuplicateBook({ dir, name, onClose, onDone }: { dir: string; nam
     }
   };
   return (
-    <Dialog title={`Duplicate “${name}”`} onClose={onClose}>
+    <Dialog title={t('Duplicate “{name}”', { name })} onClose={onClose}>
       <form class="duplicate-book" onSubmit={(e) => void submit(e)}>
         <label class="field">
-          <span class="field-label">Name of the copy</span>
+          <span class="field-label">{t('Name of the copy')}</span>
           <input ref={input} id="duplicate-name" type="text" value={value} onInput={(e) => setValue(e.currentTarget.value)} />
         </label>
-        <p class="muted">A full copy with its entries, story, images, 3D models and cover{where ? <> goes to <span class="location-path" title={where}>{where}</span></> : ''}. The original stays as it is.</p>
+        <p class="muted">{where
+          ? tj('A full copy with its entries, story, images, 3D models and cover goes to {folder}. The original stays as it is.', { folder: <span class="location-path" title={where}>{where}</span> })
+          : t('A full copy with its entries, story, images, 3D models and cover. The original stays as it is.')}</p>
         {problem && <p class="error-line" role="alert"><Icon name="cancel" /> {problem}</p>}
         <div class="dialog-actions">
-          <button type="button" class="ghost" onClick={onClose}>Cancel</button>
-          <button type="submit" class="primary" disabled={!value.trim() || busy}><Icon name="files" /> {busy ? 'Copying…' : 'Duplicate'}</button>
+          <button type="button" class="ghost" onClick={onClose}>{t('Cancel')}</button>
+          <button type="submit" class="primary" disabled={!value.trim() || busy}><Icon name="files" /> {busy ? t('Copying…') : t('Duplicate')}</button>
         </div>
       </form>
-    </Dialog>
-  );
-}
-
-/**
- * Library settings: where new worlds go (a folder field with Browse…) and whether the sample world is on the shelf.
- * Changes are a draft until Save; Cancel, Escape or a click outside leave everything as it was.
- */
-function LibrarySettings({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [s, setS] = useState<{ worldsDir: string; defaultWorldsDir: string; hideSample: boolean } | null>(null);
-  const [dir, setDir] = useState('');
-  const [showSample, setShowSample] = useState(true);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => void window.lore.settings().then((x) => {
-    setS({ worldsDir: x.worldsDir, defaultWorldsDir: x.defaultWorldsDir, hideSample: !!x.hideSample });
-    setDir(x.worldsDir);
-    setShowSample(!x.hideSample);
-  }), []);
-  const dirty = !!s && (dir !== s.worldsDir || showSample === s.hideSample);
-  const save = async () => {
-    if (!s) return;
-    setBusy(true);
-    if (dirty) {
-      await window.lore.saveSettings({ worldsDir: dir === s.defaultWorldsDir ? '' : dir, hideSample: !showSample });
-      onSaved();
-    }
-    onClose();
-  };
-  return (
-    <Dialog title="Library settings" onClose={onClose} class="library-settings"
-      footer={<>
-        <span class={`settings-status${dirty ? ' is-dirty' : ''}`} role="status">{dirty ? 'Unsaved changes' : ''}</span>
-        <button type="button" class="ghost settings-cancel" onClick={onClose}>Cancel</button>
-        <button type="button" class="primary settings-save" disabled={!s || busy} onClick={() => void save()}><Icon name="check-mark" /> Save</button>
-      </>}>
-      {s && (
-        <>
-          <section class="settings-section" aria-labelledby="settings-where">
-            <h3 id="settings-where" class="settings-heading">Where new worlds go</h3>
-            <div class="settings-row">
-              <label class="settings-label" for="worlds-dir">Folder</label>
-              <div class="folder-picker">
-                <input id="worlds-dir" class="folder-input" type="text" readOnly value={dir} title={dir} aria-describedby="worlds-dir-help" />
-                <button type="button" class="ghost folder-browse" onClick={() => void window.lore.chooseFolder('Default folder for new worlds', dir).then((d) => { if (d) setDir(d); })}><Icon name="open-folder" /> Browse…</button>
-              </div>
-            </div>
-            <div class="settings-row">
-              <span class="settings-label" aria-hidden="true" />
-              <p id="worlds-dir-help" class="muted settings-help">
-                New books and copies go here.{' '}
-                {dir !== s.defaultWorldsDir
-                  ? <button type="button" class="link-button folder-default" onClick={() => setDir(s.defaultWorldsDir)}>Use the app's worlds folder</button>
-                  : 'This is the app\'s own worlds folder.'}
-              </p>
-            </div>
-          </section>
-          <section class="settings-section" aria-labelledby="settings-sample">
-            <h3 id="settings-sample" class="settings-heading">Sample world</h3>
-            <div class="settings-row">
-              <span class="settings-label">Camelamamm</span>
-              <label class="check"><input type="checkbox" class="show-sample" checked={showSample} onChange={(e) => setShowSample(e.currentTarget.checked)} /> Show sample world on the shelf</label>
-            </div>
-            <div class="settings-row">
-              <span class="settings-label" aria-hidden="true" />
-              <p class="muted settings-help">The sample comes with Lore-Forge and the tour uses it. Hiding it deletes nothing.</p>
-            </div>
-          </section>
-        </>
-      )}
     </Dialog>
   );
 }
@@ -906,7 +842,8 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
   const [shelf, setShelf] = useState<string[]>([]);
   const [sample, setSample] = useState<string | null>(null);
   const [worldsDir, setWorldsDir] = useState('');
-  const [dialog, setDialog] = useState<{ kind: 'create' } | { kind: 'settings' } | { kind: 'about' } | { kind: 'ai' } | { kind: 'delete'; dir: string; name: string; world: World | null | undefined } | { kind: 'duplicate'; dir: string; name: string } | null>(null);
+  // Settings opens again when the library is drawn anew after a language change made in it.
+  const [dialog, setDialog] = useState<{ kind: 'create' } | { kind: 'settings' } | { kind: 'about' } | { kind: 'notes' } | { kind: 'ai' } | { kind: 'delete'; dir: string; name: string; world: World | null | undefined } | { kind: 'duplicate'; dir: string; name: string } | null>(() => (reopenSettings() ? { kind: 'settings' } : null));
   const [problem, setProblem] = useState<string | null>(null);
   // Books moved to the trash this session never come back from a refresh that raced the move.
   const trashed = useRef(new Set<string>());
@@ -936,7 +873,7 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
     };
   }, []);
   const trash = async (dir: string) => {
-    // The app's own sample only leaves the shelf (Library settings shows it again); other folders go to the trash.
+    // The app's own sample only leaves the shelf (Settings shows it again); other folders go to the trash.
     if (removeKind(dir, sample) === 'hide') await window.lore.saveSettings({ hideSample: true });
     else {
       await window.lore.trashWorld(dir);
@@ -962,7 +899,7 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
     setShelf(next);
     void window.lore.saveSettings({ shelfOrder: next });
     const name = info[key]?.name ?? folderName(key);
-    setMoved(`Moved ${name} to place ${next.indexOf(key) + 1} of ${next.length}.`);
+    setMoved(t('Moved {name} to place {place} of {count}.', { name, place: next.indexOf(key) + 1, count: next.length }));
   };
   const reorder = useShelfDrag(shelfBox, {
     enabled: () => !searching,
@@ -991,7 +928,7 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
     settleFocus();
     li.setAttribute('data-fresh', '');
     li.scrollIntoView({ block: 'nearest', behavior: calm() ? 'auto' : 'smooth' });
-    setMoved(`Made a copy, ${li.dataset['name'] ?? folderName(fresh)}, next to the original.`);
+    setMoved(t('Made a copy, {name}, next to the original.', { name: li.dataset['name'] ?? folderName(fresh) }));
     const spine = li.querySelector('.book-spine');
     let timer = 0;
     const clear = () => {
@@ -1020,7 +957,7 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
     if (!li || li.classList.contains('new-book') || !shelfBox.current) return;
     e.preventDefault();
     e.stopPropagation();
-    if (searching) { setMoved('Clear the search to rearrange the shelf.'); return; }
+    if (searching) { setMoved(t('Clear the search to rearrange the shelf.')); return; }
     const list = shelfBooks(shelfBox.current);
     const i = list.indexOf(li);
     let to = i;
@@ -1086,46 +1023,49 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
         </div>
         <div class="library-search" role="search">
           <Icon name="magnifying-glass" class="search-mark" />
-          <input ref={search} type="search" value={query} placeholder="Search books..." aria-label="Search books" aria-keyshortcuts="Control+F /" aria-controls="library-shelf"
+          <input ref={search} type="search" value={query} placeholder={t('Search books...')} aria-label={t('Search books')} aria-keyshortcuts="Control+F /" aria-controls="library-shelf"
             onInput={(e) => setSearch(e.currentTarget.value)} onKeyDown={onSearchKey} />
-          {query && <button type="button" class="ghost icon-only search-clear" onClick={() => { setSearch(''); search.current?.focus(); }} aria-label="Clear search" title="Clear search (Esc)"><Icon name="cancel" /></button>}
+          {query && <button type="button" class="ghost icon-only search-clear" onClick={() => { setSearch(''); search.current?.focus(); }} aria-label={t('Clear search')} title={t('Clear search (Esc)')}><Icon name="cancel" /></button>}
         </div>
         <div class="start-actions">
-          <button type="button" class="ghost" onClick={() => void openFolder()}><Icon name="open-folder" /> Open a world folder…</button>
-          <button type="button" class="ghost start-tour" onClick={onTour} title="A short guided tour of Lore-Forge, using the sample world"><Icon name="direction-signs" /> Take the tour</button>
-          <button type="button" class="ghost start-ai has-label" onClick={() => setDialog({ kind: 'ai' })} aria-label="Connect AI" title="Let Claude, Codex or another AI app write worlds and stories in Lore-Forge, with pictures"><Icon name="magic-lamp" /><span class="btn-label">Connect AI</span></button>
-          <button type="button" class="ghost start-about has-label" onClick={() => setDialog({ kind: 'about' })} aria-label="About and credits" title="About Lore-Forge, credits and licences"><Icon name="laurels" /><span class="btn-label">About</span></button>
-          <button type="button" class="ghost start-settings has-label" onClick={() => setDialog({ kind: 'settings' })} aria-label="Library settings" title="Library settings"><Icon name="cog" /><span class="btn-label">Settings</span></button>
+          <button type="button" class="ghost" onClick={() => void openFolder()}><Icon name="open-folder" /> {t('Open a world folder…')}</button>
+          <button type="button" class="ghost start-tour" onClick={onTour} title={t('A short guided tour of Lore-Forge, using the sample world')}><Icon name="direction-signs" /> {t('Take the tour')}</button>
+          <button type="button" class="ghost start-ai has-label" onClick={() => setDialog({ kind: 'ai' })} aria-label={t('Connect AI')} title={t('Let Claude, Codex or another AI app write worlds and stories in Lore-Forge, with pictures')}><Icon name="magic-lamp" /><span class="btn-label">{t('Connect AI')}</span></button>
+          <button type="button" class="ghost start-notes has-label" onClick={() => setDialog({ kind: 'notes' })} aria-label={t('Patch notes')} title={t('Patch notes: what is new in each version of Lore-Forge')}><Icon name="tied-scroll" /><span class="btn-label">{t('Patch notes')}</span></button>
+          <button type="button" class="ghost start-about has-label" onClick={() => setDialog({ kind: 'about' })} aria-label={t('About and credits')} title={t('About Lore-Forge, credits and licences')}><Icon name="laurels" /><span class="btn-label">{t('About')}</span></button>
+          <button type="button" class="ghost start-settings has-label" onClick={() => setDialog({ kind: 'settings' })} aria-label={t('Settings')} title={t('Settings: language, display and the library')}><Icon name="cog" /><span class="btn-label">{t('Settings')}</span></button>
         </div>
       </header>
       {(error || problem) && <p class="error-line" role="alert"><Icon name="cancel" /> {error ?? problem}</p>}
       <section class="bookcase" aria-labelledby="shelf-title" aria-describedby="shelf-hint">
         <div class="shelf-head">
-          <h2 id="shelf-title">Your worlds</h2>
-          <span class="muted shelf-count" aria-live="polite">{searching ? `${found.length} of ${shelf.length} ${shelf.length === 1 ? 'book' : 'books'}` : `${shelf.length} ${shelf.length === 1 ? 'book' : 'books'}`}</span>
+          <h2 id="shelf-title">{t('Your worlds')}</h2>
+          <span class="muted shelf-count" aria-live="polite">{searching
+            ? (shelf.length === 1 ? t('{n} of {total} book', { n: found.length, total: shelf.length }) : t('{n} of {total} books', { n: found.length, total: shelf.length }))
+            : (shelf.length === 1 ? t('{n} book', { n: shelf.length }) : t('{n} books', { n: shelf.length }))}</span>
         </div>
         {/* No visible hint: the books say what they do when pointed at. Screen readers still hear how to use the shelf,
             and when a search leaves one book, that Enter opens it. */}
-        <p class="sr-only shelf-hint" id="shelf-hint" role="status">{searching && found.length === 1 ? 'One book matches. Press Enter to open it.' : 'Each book is one world. Click a book or press Enter on it to open it. Drag a book, or press Alt with an arrow key, Home or End, to move it on the shelf.'}</p>
+        <p class="sr-only shelf-hint" id="shelf-hint" role="status">{searching && found.length === 1 ? t('One book matches. Press Enter to open it.') : t('Each book is one world. Click a book or press Enter on it to open it. Drag a book, or press Alt with an arrow key, Home or End, to move it on the shelf.')}</p>
         {searching && found.length === 0 && (
           <div class="shelf-empty" role="status">
             <Icon name="book-cover" class="shelf-empty-mark" />
-            <p>No book on the shelf matches “{query.trim()}”.</p>
-            <p class="muted">Try another word from its title, author or description.</p>
-            <button type="button" class="ghost small" onClick={() => { setSearch(''); search.current?.focus(); }}><Icon name="cancel" /> Clear search</button>
+            <p>{t('No book on the shelf matches “{query}”.', { query: query.trim() })}</p>
+            <p class="muted">{t('Try another word from its title, author or description.')}</p>
+            <button type="button" class="ghost small" onClick={() => { setSearch(''); search.current?.focus(); }}><Icon name="cancel" /> {t('Clear search')}</button>
           </div>
         )}
         <ul class={`shelf${reorder.drag ? ' is-dragging' : ''}`} id="library-shelf" ref={shelfBox} {...reorder.handlers} onKeyDown={onShelfKey} hidden={searching && found.length === 0} style={{ '--hx': books.hinge === null ? '50%' : `${books.hinge}px`, ...(books.hingeY === null ? {} : { '--hy': `${books.hingeY}px` }) }}>
           {/* The New book always comes first, and stays there. */}
           {!searching && <li class={`world-card shelf-book new-book${placeClass(books.place(NEW))}`} data-key={NEW} style={{ '--h': 'calc(var(--bk, 1) * 13.6rem)', '--w': 'calc(var(--bk, 1) * 10.2rem)', '--d': 'calc(var(--bk, 1) * 2.8rem)', ...placeStyle(books.place(NEW)) }} {...books.hover(NEW)}>
-            <button type="button" class="world-book" onClick={() => setDialog({ kind: 'create' })} aria-label="New book: start a new world">
+            <button type="button" class="world-book" onClick={() => setDialog({ kind: 'create' })} aria-label={t('New book: start a new world')}>
               <BookBox
-                spine={<span class="book-face book-spine"><span class="spine-title title-display">New book</span><Icon name="quill-ink" class="spine-mark" /></span>}
+                spine={<span class="book-face book-spine"><span class="spine-title title-display">{t('New book')}</span><Icon name="quill-ink" class="spine-mark" /></span>}
                 cover={
                   <span class="book-face book-cover world-cover blank-cover">
                     <Icon name="quill-ink" class="blank-mark" />
-                    <span class="cover-title title-display">New book</span>
-                    <span class="world-meta"><span>Start a new world</span></span>
+                    <span class="cover-title title-display">{t('New book')}</span>
+                    <span class="world-meta"><span>{t('Start a new world')}</span></span>
                   </span>
                 }
               />
@@ -1139,7 +1079,8 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
       {dialog?.kind === 'about' && <AboutDialog onClose={() => setDialog(null)} onTour={() => { setDialog(null); onTour(); }} />}
       {dialog?.kind === 'duplicate' && <DuplicateBook dir={dialog.dir} name={dialog.name} onClose={() => setDialog(null)} onDone={(copy) => { setDialog(null); void refresh().then(() => setFresh(copy)); }} />}
       {dialog?.kind === 'ai' && <ConnectAi onClose={() => setDialog(null)} />}
-      {dialog?.kind === 'settings' && <LibrarySettings onClose={() => setDialog(null)} onSaved={() => void refresh()} />}
+      {dialog?.kind === 'notes' && <PatchNotes onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'settings' && <AppSettings onClose={() => setDialog(null)} onSaved={() => void refresh()} />}
       {dialog?.kind === 'delete' && (
         <DeleteBook dir={dialog.dir} name={dialog.name} world={dialog.world} kind={removeKind(dialog.dir, sample)} onClose={() => setDialog(null)} onConfirm={() => trash(dialog.dir)} />
       )}

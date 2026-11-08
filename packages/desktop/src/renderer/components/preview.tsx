@@ -6,14 +6,15 @@ import { Icon } from './icon.tsx';
 import { Aura } from './aura.tsx';
 import { Select } from './select.tsx';
 import { titleFont, titlePlace, useImage, WorldCover } from './cover.tsx';
+import { t, tm, tmDoc, tx } from '../i18n.tsx';
 
 const ALL_TYPES: EntryType[] = ['character', 'place', 'faction', 'item', 'event', 'note'];
 const TITLE: Record<PdfKind, string> = { codex: 'World Codex', book: 'Story Book' };
 const TITLE_ICON = { codex: 'book-cover', book: 'open-book' } as const;
 
-/** Build the Doc exactly as the PDF export does (same core function, same options). */
+/** Build the Doc exactly as the PDF export does (same core function, same options, the same language). */
 export function previewDoc(world: World, kind: PdfKind, options: PublishOptions): Doc {
-  return kind === 'codex' ? worldCodex(world, options) : storyBook(world, options);
+  return tmDoc(kind === 'codex' ? worldCodex(world, options) : storyBook(world, options));
 }
 
 export const sheetsOf = docSheets;
@@ -39,8 +40,8 @@ function DocImage({ dir, file, caption }: { dir: string; file: string; caption: 
     void window.lore.readImage(dir, file).then((s) => live && setSrc(s));
     return () => void (live = false);
   }, [dir, file]);
-  if (src === undefined) return <div class="doc-img-missing">Loading image…</div>;
-  if (src === null) return <div class="doc-img-missing"><Icon name="photo-camera" /> Image file missing: {file}</div>;
+  if (src === undefined) return <div class="doc-img-missing">{t('Loading image…')}</div>;
+  if (src === null) return <div class="doc-img-missing"><Icon name="photo-camera" /> {t('Image file missing: {file}', { file })}</div>;
   return <img src={src} alt={caption} />;
 }
 
@@ -75,7 +76,7 @@ export function CoverSheet({ doc, dir }: { doc: Doc; dir: string }) {
     );
   }
   return (
-    <section class={`sheet sheet-cover has-art${trim}`} aria-label="Cover">
+    <section class={`sheet sheet-cover has-art${trim}`} aria-label={t('Cover')}>
       <span class="world-cover"><WorldCover art={c.art} image={image} /></span>
       {/* A title with a chosen place sits there, as in the PDF; the subtitle and lines stay where they are. */}
       {c.art.showTitle && c.art.titlePos && <p class={`sheet-title is-placed title-${c.art.titleStyle}${c.art.font ? ' has-font' : ''}`} style={{ color: c.art.titleColor, ...titleFont(c.art), ...titlePlace(c.art) }}>{c.title}</p>}
@@ -93,7 +94,7 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
     case 'heading': {
       const H = (`h${b.level + 1}`) as 'h2' | 'h3' | 'h4';
       if (b.opener) {
-        const m = /^(Chapter \d+)\.\s+(.*)$/.exec(b.text);
+        const m = /^((?:Chapter|Bölüm) \d+)\.\s+(.*)$/.exec(b.text);
         // The chapter's date sits at the top right of its first page, as in the PDF and Word.
         return (
           <>
@@ -151,8 +152,8 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
     case 'toc': {
       const heads = doc.blocks.map((h, j) => [h, j] as const).filter(([h]) => h.kind === 'heading' && h.toc) as [Extract<Block, { kind: 'heading' }>, number][];
       return (
-        <nav class="doc-toc" aria-label="Contents">
-          <p class="doc-h doc-h1">Contents</p>
+        <nav class="doc-toc" aria-label={tm('Contents')}>
+          <p class="doc-h doc-h1">{tm('Contents')}</p>
           <ol>
             {heads.map(([h, j]) => (
               <li key={j} class={`toc-l${h.level}`}>
@@ -160,7 +161,7 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
               </li>
             ))}
           </ol>
-          <p class="doc-small">Page numbers are added in the PDF{doc.print ? ' and in Word' : ''}.</p>
+          <p class="doc-small">{doc.print ? t('Page numbers are added in the PDF and in Word.') : t('Page numbers are added in the PDF.')}</p>
         </nav>
       );
     }
@@ -210,64 +211,64 @@ function BookToolbar({ look, trim, coverColor, onTrim, onLook, onReset, custom }
   custom: boolean;
 }) {
   return (
-    <div class="book-toolbar" role="region" aria-label="Book style">
-      <div class="bt-group" role="group" aria-label="Page">
-        <span class="bt-title"><Icon name="book-cover" /> Page</span>
+    <div class="book-toolbar" role="region" aria-label={t('Book style')}>
+      <div class="bt-group" role="group" aria-label={t('Page')}>
+        <span class="bt-title"><Icon name="book-cover" /> {t('Page')}</span>
         <label class="bt-field">
-          <span class="bt-label">Size</span>
-          <Select class="trim-select" aria-label="Page size" value={trim} onChange={(v) => onTrim(v as TrimSize)} options={(Object.keys(TRIMS) as TrimSize[]).map((t) => ({ value: t, label: TRIM_LABEL[t] }))} />
+          <span class="bt-label">{t('Size')}</span>
+          <Select class="trim-select" aria-label={t('Page size')} value={trim} onChange={(v) => onTrim(v as TrimSize)} options={(Object.keys(TRIMS) as TrimSize[]).map((size) => ({ value: size, label: t(TRIM_LABEL[size]) }))} />
         </label>
         <label class="bt-field">
-          <span class="bt-label">Margins</span>
-          <Select class="margins-select" aria-label="Margins" value={look.margins} onChange={(v) => onLook({ margins: v === 'normal' ? undefined : (v as BookLook['margins']) })} options={[{ value: 'narrow', label: 'Narrow' }, { value: 'normal', label: 'Normal' }, { value: 'wide', label: 'Wide' }]} />
+          <span class="bt-label">{t('Margins')}</span>
+          <Select class="margins-select" aria-label={t('Margins')} value={look.margins} onChange={(v) => onLook({ margins: v === 'normal' ? undefined : (v as BookLook['margins']) })} options={[{ value: 'narrow', label: t('Narrow') }, { value: 'normal', label: t('Normal') }, { value: 'wide', label: t('Wide') }]} />
         </label>
       </div>
-      <div class="bt-group" role="group" aria-label="Text">
-        <span class="bt-title"><Icon name="quill-ink" /> Text</span>
+      <div class="bt-group" role="group" aria-label={t('Text')}>
+        <span class="bt-title"><Icon name="quill-ink" /> {t('Text')}</span>
         <label class="bt-field bt-font">
-          <span class="bt-label">Font</span>
-          <Select class="body-font-select" aria-label="Text font" value={look.bodyFont} onChange={(v) => onLook({ bodyFont: v })} options={fontOptions(BOOK_FONTS)} />
+          <span class="bt-label">{t('Font')}</span>
+          <Select class="body-font-select" aria-label={t('Text font')} value={look.bodyFont} onChange={(v) => onLook({ bodyFont: v })} options={fontOptions(BOOK_FONTS)} />
         </label>
-        <NumberField label="Size" name="book-body-size" value={look.bodySize} min={8} max={16} step={0.5} unit="pt" onCommit={(n) => onLook({ bodySize: n })} />
-        <ColorField label="Colour" name="book-body-color" value={look.bodyColor} onCommit={(c) => onLook({ bodyColor: c })} />
+        <NumberField label={t('Size')} name="book-body-size" value={look.bodySize} min={8} max={16} step={0.5} unit="pt" onCommit={(n) => onLook({ bodySize: n })} />
+        <ColorField label={t('Colour')} name="book-body-color" value={look.bodyColor} onCommit={(c) => onLook({ bodyColor: c })} />
         <label class="bt-field">
-          <span class="bt-label">Spacing</span>
-          <Select class="spacing-select" aria-label="Line spacing" value={String(SPACINGS.reduce((a, b) => (Math.abs(b - look.lineSpacing) < Math.abs(a - look.lineSpacing) ? b : a)))} onChange={(v) => onLook({ lineSpacing: Number(v) })} options={SPACINGS.map((n) => ({ value: String(n), label: n.toFixed(2).replace(/0$/, '') }))} />
+          <span class="bt-label">{t('Spacing')}</span>
+          <Select class="spacing-select" aria-label={t('Line spacing')} value={String(SPACINGS.reduce((a, b) => (Math.abs(b - look.lineSpacing) < Math.abs(a - look.lineSpacing) ? b : a)))} onChange={(v) => onLook({ lineSpacing: Number(v) })} options={SPACINGS.map((n) => ({ value: String(n), label: n.toFixed(2).replace(/0$/, '') }))} />
         </label>
       </div>
-      <div class="bt-group" role="group" aria-label="Chapter titles">
-        <span class="bt-title"><Icon name="scroll-unfurled" /> Chapter titles</span>
+      <div class="bt-group" role="group" aria-label={t('Chapter titles')}>
+        <span class="bt-title"><Icon name="scroll-unfurled" /> {t('Chapter titles')}</span>
         <label class="bt-field bt-font">
-          <span class="bt-label">Font</span>
-          <Select class="chapter-font-select" aria-label="Chapter title font" value={look.chapterFont} onChange={(v) => onLook({ chapterFont: v })} options={[...fontOptions(BOOK_FONTS, 'Book fonts'), ...fontOptions(TITLE_FONTS, 'Display fonts')]} />
+          <span class="bt-label">{t('Font')}</span>
+          <Select class="chapter-font-select" aria-label={t('Chapter title font')} value={look.chapterFont} onChange={(v) => onLook({ chapterFont: v })} options={[...fontOptions(BOOK_FONTS, t('Book fonts')), ...fontOptions(TITLE_FONTS, t('Display fonts'))]} />
         </label>
-        <NumberField label="Size" name="book-chapter-size" value={look.chapterSize} min={12} max={40} step={1} unit="pt" onCommit={(n) => onLook({ chapterSize: n })} />
-        <ColorField label="Colour" name="book-chapter-color" value={look.chapterColor} onCommit={(c) => onLook({ chapterColor: c })} />
+        <NumberField label={t('Size')} name="book-chapter-size" value={look.chapterSize} min={12} max={40} step={1} unit="pt" onCommit={(n) => onLook({ chapterSize: n })} />
+        <ColorField label={t('Colour')} name="book-chapter-color" value={look.chapterColor} onCommit={(c) => onLook({ chapterColor: c })} />
       </div>
-      <div class="bt-group" role="group" aria-label="Chapter openings">
-        <span class="bt-title"><Icon name="spell-book" /> Openings</span>
+      <div class="bt-group" role="group" aria-label={t('Chapter openings')}>
+        <span class="bt-title"><Icon name="spell-book" /> {t('Openings')}</span>
         <div class="bt-field">
-          <span class="bt-label" id="bt-cap-label">First letter</span>
+          <span class="bt-label" id="bt-cap-label">{t('First letter')}</span>
           <div class="bt-seg" role="group" aria-labelledby="bt-cap-label">
             {([['none', 'None'], ['raised', 'Raised'], ['dropped', 'Dropped']] as [DropCapStyle, string][]).map(([v, label]) => (
-              <button key={v} type="button" class={`bt-cap-${v}`} aria-pressed={look.dropCap === v} onClick={() => onLook({ dropCap: v === 'raised' ? undefined : v })}>{label}</button>
+              <button key={v} type="button" class={`bt-cap-${v}`} aria-pressed={look.dropCap === v} onClick={() => onLook({ dropCap: v === 'raised' ? undefined : v })}>{t(label)}</button>
             ))}
           </div>
         </div>
         <div class="bt-field">
-          <span class="bt-label">Dates</span>
+          <span class="bt-label">{t('Dates')}</span>
           <button type="button" class="bt-toggle bt-dates" aria-pressed={look.dateStamps} onClick={() => onLook({ dateStamps: look.dateStamps ? false : undefined })}>
-            <Icon name="calendar" /> {look.dateStamps ? 'Shown' : 'Hidden'}
+            <Icon name="calendar" /> {look.dateStamps ? t('Shown') : t('Hidden')}
           </button>
         </div>
       </div>
-      <div class="bt-group" role="group" aria-label="Cover">
-        <span class="bt-title"><Icon name="palette" /> Cover</span>
-        <ColorField label="Title colour" name="book-cover-color" value={coverColor} onCommit={(c) => onLook({ coverTitleColor: c })} />
-        <NumberField label="Title size" name="book-cover-size" value={Math.round(look.coverTitleScale * 100)} min={50} max={200} step={5} unit="%" onCommit={(n) => onLook({ coverTitleSize: n === 100 ? undefined : n })} />
-        <NumberField label="Author size" name="book-author-size" value={Math.round(look.authorScale * 100)} min={50} max={200} step={5} unit="%" onCommit={(n) => onLook({ authorSize: n === 100 ? undefined : n })} />
+      <div class="bt-group" role="group" aria-label={t('Cover')}>
+        <span class="bt-title"><Icon name="palette" /> {t('Cover')}</span>
+        <ColorField label={t('Title colour')} name="book-cover-color" value={coverColor} onCommit={(c) => onLook({ coverTitleColor: c })} />
+        <NumberField label={t('Title size')} name="book-cover-size" value={Math.round(look.coverTitleScale * 100)} min={50} max={200} step={5} unit="%" onCommit={(n) => onLook({ coverTitleSize: n === 100 ? undefined : n })} />
+        <NumberField label={t('Author size')} name="book-author-size" value={Math.round(look.authorScale * 100)} min={50} max={200} step={5} unit="%" onCommit={(n) => onLook({ authorSize: n === 100 ? undefined : n })} />
       </div>
-      <button type="button" class="ghost bt-reset" disabled={!custom} onClick={onReset} title="Back to the default book look"><Icon name="clockwise-rotation" /> Reset style</button>
+      <button type="button" class="ghost bt-reset" disabled={!custom} onClick={onReset} title={t('Back to the default book look')}><Icon name="clockwise-rotation" /> {t('Reset style')}</button>
     </div>
   );
 }
@@ -380,90 +381,92 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
     <div class="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="preview" role="dialog" aria-modal="true" aria-labelledby="preview-title" ref={dialog}>
         <header class="preview-head">
-          <h2 id="preview-title" tabIndex={-1}><Icon name={TITLE_ICON[kind]} /> {TITLE[kind]} <span class="muted">preview</span></h2>
+          <h2 id="preview-title" tabIndex={-1}><Icon name={TITLE_ICON[kind]} /> {t(TITLE[kind])} <span class="muted">{tx('title', 'preview')}</span></h2>
           <p class="muted">{doc.print
-            ? `${TRIM_LABEL[doc.print.trim]}, print layout. ${sheetCount} sheets here; the PDF paginates further${doc.print.rightHand ? ', adds running heads and page numbers, and starts each chapter on a right-hand page.' : ' and adds running heads and page numbers.'}`
-            : `${sheetCount} sheets here; the PDF paginates further. This is the same content the PDF gets.`}</p>
+            ? doc.print.rightHand
+              ? t('{trim}, print layout. {n} sheets here; the PDF paginates further, adds running heads and page numbers, and starts each chapter on a right-hand page.', { trim: t(TRIM_LABEL[doc.print.trim]), n: sheetCount })
+              : t('{trim}, print layout. {n} sheets here; the PDF paginates further and adds running heads and page numbers.', { trim: t(TRIM_LABEL[doc.print.trim]), n: sheetCount })
+            : t('{n} sheets here; the PDF paginates further. This is the same content the PDF gets.', { n: sheetCount })}</p>
           <div class="preview-actions">
             <button type="button" class="primary" disabled={busy || (kind === 'codex' && types.length === 0)} onClick={() => void save()}>
-              <Icon name="save" /> {busy ? 'Saving…' : 'Save PDF…'}
+              <Icon name="save" /> {busy ? t('Saving…') : t('Save PDF…')}
             </button>
             {kind === 'book' && onSaveDocx && (
               <button type="button" class="save-docx" disabled={busy} onClick={() => void saveDocx()}>
-                <Icon name="quill-ink" /> Save Word (.docx)…
+                <Icon name="quill-ink" /> {t('Save Word (.docx)…')}
               </button>
             )}
-            <button type="button" class="ghost" onClick={onClose}>Close <kbd>Esc</kbd></button>
+            <button type="button" class="ghost" onClick={onClose}>{t('Close')} <kbd>Esc</kbd></button>
           </div>
         </header>
         <div class="preview-body">
           <Aura calm local />
-          <aside class="preview-options" aria-label="Options">
+          <aside class="preview-options" aria-label={t('Options')}>
             {kind === 'codex' ? (
               <>
                 <fieldset>
-                  <legend>Entry types</legend>
+                  <legend>{t('Entry types')}</legend>
                   {ALL_TYPES.map((t) => (
                     <label key={t} class={`check t-${t}`}>
                       <input type="checkbox" checked={types.includes(t)} onChange={() => toggleType(t)} />
-                      <Icon name={TYPE_ICON[t]} /> {TYPE_LABELS[t]}
+                      <Icon name={TYPE_ICON[t]} /> {tm(TYPE_LABELS[t])}
                     </label>
                   ))}
-                  <p class="hint">{count} entries included{types.length === 0 ? ' — pick at least one type' : ''}.</p>
+                  <p class="hint">{types.length === 0 ? t('{n} entries included. Pick at least one type.', { n: count }) : t('{n} entries included.', { n: count })}</p>
                 </fieldset>
                 <fieldset>
-                  <legend>Extras</legend>
-                  <label class="check"><input type="checkbox" checked={artBriefs} onChange={() => setArtBriefs(!artBriefs)} /> <Icon name="palette" /> Art briefs and image prompts</label>
-                  <label class="check"><input type="checkbox" checked={warnings} onChange={() => setWarnings(!warnings)} /> <Icon name="hazard-sign" /> Warnings appendix</label>
+                  <legend>{t('Extras')}</legend>
+                  <label class="check"><input type="checkbox" checked={artBriefs} onChange={() => setArtBriefs(!artBriefs)} /> <Icon name="palette" /> {t('Art briefs and image prompts')}</label>
+                  <label class="check"><input type="checkbox" checked={warnings} onChange={() => setWarnings(!warnings)} /> <Icon name="hazard-sign" /> {t('Warnings appendix')}</label>
                 </fieldset>
               </>
             ) : (
               <>
               <fieldset>
-                <legend>Print</legend>
-                <p class="hint">Page size, margins, fonts and colours are in the style bar above the pages. Margins are mirrored with a wider inside edge for the binding.</p>
+                <legend>{t('Print')}</legend>
+                <p class="hint">{t('Page size, margins, fonts and colours are in the style bar above the pages. Margins are mirrored with a wider inside edge for the binding.')}</p>
                 <label class="check right-hand">
                   <input type="checkbox" name="right-hand-chapters" checked={rightHand} onChange={() => { const v = !rightHand; setRightHand(v); persist({ rightHandChapters: v || undefined }); }} />
-                  <Icon name="open-book" /> Start chapters on right-hand pages
+                  <Icon name="open-book" /> {t('Start chapters on right-hand pages')}
                 </label>
-                <p class="hint">{rightHand ? 'For a printed book: blank pages are added so each chapter opens on the right.' : 'Off: every chapter starts on the next page, with no blank pages.'}</p>
+                <p class="hint">{rightHand ? t('For a printed book: blank pages are added so each chapter opens on the right.') : t('Off: every chapter starts on the next page, with no blank pages.')}</p>
               </fieldset>
               <fieldset class="book-details">
-                <legend>Book details</legend>
+                <legend>{t('Book details')}</legend>
                 {DETAILS.map(([k, label, empty, long]) => (
                   <label key={k} class="field">
-                    <span>{label}</span>
+                    <span>{t(label)}</span>
                     {long ? (
-                      <textarea name={`book-${k}`} rows={k === 'copyright' ? 3 : 2} placeholder={empty} value={book[k] ?? ''} onInput={(e) => editBook(k, e.currentTarget.value)} onBlur={(e) => persist({ [k]: e.currentTarget.value.trim() })} />
+                      <textarea name={`book-${k}`} rows={k === 'copyright' ? 3 : 2} placeholder={t(empty)} value={book[k] ?? ''} onInput={(e) => editBook(k, e.currentTarget.value)} onBlur={(e) => persist({ [k]: e.currentTarget.value.trim() })} />
                     ) : (
-                      <input name={`book-${k}`} placeholder={empty} value={book[k] ?? ''} onInput={(e) => editBook(k, e.currentTarget.value)} onBlur={(e) => persist({ [k]: e.currentTarget.value.trim() })} />
+                      <input name={`book-${k}`} placeholder={t(empty)} value={book[k] ?? ''} onInput={(e) => editBook(k, e.currentTarget.value)} onBlur={(e) => persist({ [k]: e.currentTarget.value.trim() })} />
                     )}
                   </label>
                 ))}
-                <p class="hint">All optional. Saved in world.json.</p>
+                <p class="hint">{t('All optional. Saved in world.json.')}</p>
               </fieldset>
               {hasStory && (
                 <fieldset>
-                  <legend>Story</legend>
-                  <p class="hint">Your written chapters are the book. The chronicle of events and notes follows them.</p>
-                  <label class="check"><input type="checkbox" checked={appendix} onChange={() => setAppendix(!appendix)} /> <Icon name="hourglass" /> Chronicle appendix</label>
+                  <legend>{t('Story')}</legend>
+                  <p class="hint">{t('Your written chapters are the book. The chronicle of events and notes follows them.')}</p>
+                  <label class="check"><input type="checkbox" checked={appendix} onChange={() => setAppendix(!appendix)} /> <Icon name="hourglass" /> {t('Chronicle appendix')}</label>
                 </fieldset>
               )}
               {(!hasStory || appendix) && (
               <fieldset>
-                <legend>{hasStory ? 'Chronicle chapters' : 'Chapters'}</legend>
+                <legend>{hasStory ? t('Chronicle chapters') : t('Chapters')}</legend>
                 {([['era', 'One per era'], ['years', 'By year ranges'], ['single', 'One chapter']] as const).map(([g, label]) => (
                   <label key={g} class="check">
-                    <input type="radio" name="grouping" checked={grouping === g} onChange={() => setGrouping(g)} /> {label}
+                    <input type="radio" name="grouping" checked={grouping === g} onChange={() => setGrouping(g)} /> {t(label)}
                   </label>
                 ))}
                 {grouping === 'years' && (
                   <label class="field inline-field">
-                    <span>Years per chapter</span>
+                    <span>{t('Years per chapter')}</span>
                     <input type="number" min={1} step={1} value={chapterYears} onInput={(e) => { const n = Number(e.currentTarget.value); if (n >= 1) setChapterYears(Math.floor(n)); }} />
                   </label>
                 )}
-                <p class="hint">A page's own “chapter:” always wins.</p>
+                <p class="hint">{t("A page's own “chapter:” always wins.")}</p>
               </fieldset>
               )}
               </>
@@ -474,7 +477,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
               <BookToolbar look={look} trim={trim} coverColor={look.coverTitleColor ?? doc.cover.art?.titleColor ?? '#fbf3df'} custom={customLook}
                 onTrim={(t) => { setTrim(t); persist({ trim: t }); }} onLook={changeLook} onReset={resetLook} />
             )}
-            <div class={`preview-pages${doc.print ? ` is-book cap-${look.dropCap}` : ''}`} tabIndex={0} aria-label="Preview pages" style={doc.print ? lookVars(look, look.margins === 'narrow' ? 0.75 : look.margins === 'wide' ? 1.3 : 1) : undefined}>
+            <div class={`preview-pages${doc.print ? ` is-book cap-${look.dropCap}` : ''}`} tabIndex={0} aria-label={t('Preview pages')} style={doc.print ? lookVars(look, look.margins === 'narrow' ? 0.75 : look.margins === 'wide' ? 1.3 : 1) : undefined}>
               {hasCover && <CoverSheet doc={doc} dir={dir} />}
               {sheets.map((s, i) => (
                 <section class={doc.print ? `sheet is-print ${trimClass(doc.print.trim)}${s[0]?.kind === 'front' ? ' is-front' : ''}` : 'sheet'} key={i}>

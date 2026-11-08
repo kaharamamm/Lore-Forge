@@ -1,5 +1,6 @@
 /** The story manuscript: chapter files in story/ and the list of ignored proposals. */
 import { Document, isScalar, visit } from 'yaml';
+import { msg, verbatim } from './i18n.ts';
 import { splitFrontMatter } from './parse.ts';
 import { SCHEMA_VERSION, type StoryChapter, type StoryIgnore } from './types.ts';
 
@@ -17,7 +18,7 @@ export function slugify(s: string, fallback = 'entry'): string {
 /** Title from a file name like story/02-the-salt-road.md -> "The salt road". */
 function titleFromFile(file: string): string {
   const base = file.split('/').pop()!.replace(/\.md$/, '').replace(/^\d+-/, '').replace(/-/g, ' ').trim();
-  return base ? base.charAt(0).toUpperCase() + base.slice(1) : 'Untitled chapter';
+  return base ? base.charAt(0).toUpperCase() + base.slice(1) : msg`Untitled chapter`;
 }
 
 /** Parse one chapter file. A missing title or order is filled in from the file name, so a bare Markdown file works too. */
@@ -29,7 +30,7 @@ export function parseChapter(content: string, file: string): { chapter: StoryCha
   if (text.startsWith('---\n')) {
     const split = splitFrontMatter(text);
     if ('error' in split) problems.push(split.error);
-    else if (!isObj(split.data)) problems.push('The header must be a set of "key: value" lines.');
+    else if (!isObj(split.data)) problems.push(msg`The header must be a set of "key: value" lines.`);
     else {
       data = split.data;
       body = split.body.replace(/^\n+/, '');
@@ -39,14 +40,14 @@ export function parseChapter(content: string, file: string): { chapter: StoryCha
     const v = data[k];
     if (v === undefined || v === null) return undefined;
     if (typeof v === 'string' || typeof v === 'number') return String(v);
-    problems.push(`"${k}" should be text.`);
+    problems.push(msg`"${verbatim(k)}" should be text.`);
     return undefined;
   };
   const prefix = /^(\d+)-/.exec(file.split('/').pop() ?? '');
   let order = prefix ? Number(prefix[1]) : 0;
   if (data['order'] !== undefined) {
     if (typeof data['order'] === 'number' && Number.isFinite(data['order'])) order = data['order'];
-    else problems.push('"order" should be a number.');
+    else problems.push(msg`"order" should be a number.`);
   }
   const title = str('title')?.trim() || titleFromFile(file);
   const date = str('date');
@@ -87,9 +88,9 @@ export function parseStoryIgnored(content: string): { ignored: StoryIgnore[]; pr
     if (isObj(o) && Array.isArray(o['ignored'])) {
       return { ignored: o['ignored'].filter((x): x is StoryIgnore => isObj(x) && typeof x['key'] === 'string'), problems: [] };
     }
-    return { ignored: [], problems: [`${STORY_IGNORED_FILE} must look like { "schemaVersion": 1, "ignored": [...] }.`] };
+    return { ignored: [], problems: [msg`${STORY_IGNORED_FILE} must look like { "schemaVersion": 1, "ignored": [...] }.`] };
   } catch (e) {
-    return { ignored: [], problems: [`${STORY_IGNORED_FILE} is not valid JSON: ${(e as Error).message}`] };
+    return { ignored: [], problems: [msg`${STORY_IGNORED_FILE} is not valid JSON: ${(e as Error).message}`] };
   }
 }
 

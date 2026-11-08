@@ -1,4 +1,5 @@
-import { VISUAL_FIELDS, type Entry } from '../types.ts';
+import { lookAt, lookVisual } from '../looks.ts';
+import { VISUAL_FIELDS, type Entry, type Look } from '../types.ts';
 import type { WorldIndex } from '../world-index.ts';
 import { showDate } from './doc.ts';
 
@@ -17,15 +18,19 @@ const sentence = (s: string): string => {
   return /[.!?]$/.test(t) ? t : `${t}.`;
 };
 
-/** Build an art brief from an entry's name, summary and visual description. Characters, places, items and events only. */
-export function artBrief(entry: Entry, ix: WorldIndex): ArtBrief | undefined {
+/**
+ * Build an art brief from an entry's name, summary and visual description. Characters, places, items and events only.
+ * With a look: that look's description (the Default one with what the look changes), and why it looks that way.
+ */
+export function artBrief(entry: Entry, ix: WorldIndex, look?: Look): ArtBrief | undefined {
   if (!ART_TYPES.has(entry.type)) return undefined;
-  const v = entry.visual ?? {};
+  const v = lookVisual(entry, look);
   const fields = VISUAL_FIELDS[entry.type];
   const missing = fields.filter((f) => !v[f.key]?.trim()).map((f) => f.label);
   const described = fields.filter((f) => v[f.key]?.trim()).map((f) => `${f.label}: ${sentence(v[f.key]!)}`);
-  const look = (keys: string[]) => fields.filter((f) => keys.includes(f.key) && v[f.key]?.trim()).map((f) => `${f.label}: ${sentence(v[f.key]!)}`);
-  const about = entry.summary ? ` ${sentence(entry.summary)}` : '';
+  const traits = (keys: string[]) => fields.filter((f) => keys.includes(f.key) && v[f.key]?.trim()).map((f) => `${f.label}: ${sentence(v[f.key]!)}`);
+  const lookLine = look ? ` As they look in "${look.name || look.id}"${look.reason?.trim() ? `: ${look.reason.trim().replace(/\.$/, '')}` : ''}.` : '';
+  const about = `${entry.summary ? ` ${sentence(entry.summary)}` : ''}${lookLine}`;
   const world = `Setting: the world of ${ix.world.manifest.name}.`;
   const join = (...parts: (string | undefined | false)[]) => parts.filter(Boolean).join(' ');
 
@@ -45,7 +50,7 @@ export function artBrief(entry: Entry, ix: WorldIndex): ArtBrief | undefined {
           `Five views side by side: front, back, left, right and three-quarter, same scale and the same height in every view${build ? ` (${build.replace(/\.$/, '')})` : ''}.`,
           'Plain light-grey background, flat even lighting, no cast shadows, no motion blur, no text.',
           props ? `Props: only ${props.replace(/\.$/, '')}.` : 'No props.',
-          ...look(['appearance', 'clothing', 'palette', 'features']),
+          ...traits(['appearance', 'clothing', 'palette', 'features']),
         ),
         missing,
       };
@@ -59,7 +64,7 @@ export function artBrief(entry: Entry, ix: WorldIndex): ArtBrief | undefined {
           'Neutral resting orientation, centred, not held by anyone.',
           `Views side by side: front, back, left, right, three-quarter and top, same scale in every view${size ? ` (${size.replace(/\.$/, '')})` : ''}.`,
           'Plain light-grey background, flat even lighting, no cast shadows, no other props, no text.',
-          ...look(['material', 'details']),
+          ...traits(['material', 'details']),
         ),
         missing,
       };
@@ -70,11 +75,21 @@ export function artBrief(entry: Entry, ix: WorldIndex): ArtBrief | undefined {
       const place = entry.place ? ix.nameOf(entry.place) : undefined;
       const date = showDate(entry.date, ix);
       const who = (entry.participants ?? []).map((p) => ix.nameOf(p.id));
+      // Each one as they look on the day: a look that started before the event shows, not the Default one.
+      const when = ix.date(entry.date);
+      const looks = when ? (entry.participants ?? []).flatMap((p) => {
+        const e = ix.resolve(p.id);
+        const lk = e && lookAt(e, when, ix);
+        if (!e || !lk) return [];
+        const changed = VISUAL_FIELDS[e.type].filter((f) => lk.visual?.[f.key]?.trim()).map((f) => `${f.label.toLowerCase()}: ${lk.visual![f.key]!.trim().replace(/\.$/, '')}`);
+        return [`${e.name} as in "${lk.name || lk.id}"${lk.reason?.trim() ? ` (${lk.reason.trim().replace(/\.$/, '')})` : ''}${changed.length ? `: ${changed.join('; ')}` : ''}.`];
+      }) : [];
       return {
         prompt: join(
           `Illustration of the scene "${entry.name}"${place ? ` at ${place}` : ''}${date ? ` (${date})` : ''}.${about}`,
           ...described,
           who.length ? `Shows: ${who.join(', ')}.` : undefined,
+          ...looks,
           world, 'Cinematic composition, no text.',
         ),
         missing,

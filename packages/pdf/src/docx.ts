@@ -8,9 +8,8 @@
  * the front pages and chapters open on right-hand pages, the copyright page on the back of the title page.
  * Word fills in the contents page numbers when it opens the file (it asks to update fields).
  */
-import { existsSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 import {
   AlignmentType,
   Document,
@@ -37,6 +36,8 @@ import {
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { DEFAULT_LOOK, DEFAULT_TRIM, inlineRuns, splitAlpha, trimFor, type Block, type BookLook, type Doc } from '@lore-forge/core';
 import { chapterParts } from './index.ts';
+import { english, type Translate } from './words.ts';
+import { readPicture } from './gif.ts';
 
 const MUTED = '6B6B6B';
 const tw = (pt: number) => Math.round(pt * 20);
@@ -102,17 +103,19 @@ function frontPage(b: Extract<Block, { kind: 'front' }>, pageH: number): Paragra
 }
 
 function image(b: Extract<Block, { kind: 'image' }>, worldDir: string, maxW: number, maxH: number): Paragraph[] {
-  const path = join(worldDir, b.file);
-  const ext = extname(b.file).toLowerCase();
   const note = (t: string) => [new Paragraph({ children: [new TextRun({ text: t, italics: true, color: MUTED, size: 19 })] })];
-  if (!['.png', '.jpg', '.jpeg'].includes(ext)) return note(`[Image not embedded: ${b.file}. Export embeds PNG and JPEG only.]`);
-  if (!existsSync(path)) return note(`[Image file missing: ${b.file}]`);
-  const data = readFileSync(path);
-  const size = imageSize(data, ext);
-  if (!size) return note(`[Image could not be read: ${b.file}]`);
+  // PNG and JPEG go in as they are, a GIF as its first frame.
+  const pic = readPicture(join(worldDir, b.file));
+  if ('problem' in pic) {
+    if (pic.problem === 'type') return note(say('[Image not embedded: {file}. Export embeds PNG, JPEG and GIF only.]', { file: b.file }));
+    return note(say(pic.problem === 'missing' ? '[Image file missing: {file}]' : '[Image could not be read: {file}]', { file: b.file }));
+  }
+  const data = pic.data;
+  const size = imageSize(data, pic.type === 'png' ? '.png' : '.jpg');
+  if (!size) return note(say('[Image could not be read: {file}]', { file: b.file }));
   const s = Math.min(maxW / size.w, maxH / size.h);
   return [
-    new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 120, after: 60 }, children: [new ImageRun({ type: ext === '.png' ? 'png' : 'jpg', data, transformation: { width: Math.round(size.w * s), height: Math.round(size.h * s) }, altText: { name: b.caption, description: b.caption, title: b.caption } })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 120, after: 60 }, children: [new ImageRun({ type: pic.type, data, transformation: { width: Math.round(size.w * s), height: Math.round(size.h * s) }, altText: { name: b.caption, description: b.caption, title: b.caption } })] }),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: b.caption, italics: true, size: 18, color: MUTED })] }),
   ];
 }
@@ -140,7 +143,7 @@ function sections(doc: Doc, worldDir: string, pageH: number, textW: number): Sec
       continue;
     }
     if (b.kind === 'toc') {
-      out.push({ kind: 'toc', children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: tw(pageH * 0.12), after: 360 }, children: [new TextRun({ text: 'Contents', size: Math.round(K.look.chapterSize * 2), color: K.accent, font: K.headFont })] }), new TableOfContents('Contents', { hyperlink: true, headingStyleRange: '1-2' }) as unknown as Paragraph] });
+      out.push({ kind: 'toc', children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: tw(pageH * 0.12), after: 360 }, children: [new TextRun({ text: say('Contents'), size: Math.round(K.look.chapterSize * 2), color: K.accent, font: K.headFont })] }), new TableOfContents('Contents', { hyperlink: true, headingStyleRange: '1-2' }) as unknown as Paragraph] });
       continue;
     }
     if (b.kind === 'heading' && (b.opener || (b.level === 1 && b.newPage))) {
@@ -223,7 +226,12 @@ export interface DocxOptions {
    * page. Without it the first page gets the cover picture (when the world has one) with the title, subtitle and author.
    */
   cover?: Uint8Array;
+  /** The exporter's own words ("Contents", picture notes) in the app's language (English without it). */
+  t?: Translate;
 }
+
+/** The words of the document being written (set by renderDocx, like K). */
+let say: Translate = english;
 
 const px = (pt: number) => Math.round((pt * 96) / 72);
 /** A picture that fills the page, behind any text. */
@@ -243,18 +251,16 @@ function fullPage(data: Uint8Array, type: 'png' | 'jpg', w: number, h: number, n
 /** The cover page: the app's cover picture, else the world's picture with the cover text over it. */
 function coverPage(doc: Doc, worldDir: string, w: number, h: number, png: Uint8Array | undefined): Paragraph[] {
   const c = doc.cover;
-  if (png) return [fullPage(png, 'png', w, h, `Cover: ${c.title}`)];
+  if (png) return [fullPage(png, 'png', w, h, say('Cover: {title}', { title: c.title }))];
   const out: Paragraph[] = [];
   const art = c.art;
-  const file = art?.image && join(worldDir, art.image);
-  const ext = file ? extname(file).toLowerCase() : '';
-  if (file && ['.png', '.jpg', '.jpeg'].includes(ext) && existsSync(file)) {
-    const data = readFileSync(file);
-    const size = imageSize(data, ext);
+  const pic = art?.image ? readPicture(join(worldDir, art.image)) : null;
+  if (pic && 'data' in pic) {
+    const size = imageSize(pic.data, pic.type === 'png' ? '.png' : '.jpg');
     if (size) {
       // Cover the page like the PDF does (centre crop is Word's to do: scale to fill, overflow is clipped by the page).
       const s = Math.max(w / size.w, h / size.h);
-      out.push(fullPage(data, ext === '.png' ? 'png' : 'jpg', size.w * s, size.h * s, `Cover: ${c.title}`));
+      out.push(fullPage(pic.data, pic.type, size.w * s, size.h * s, say('Cover: {title}', { title: c.title })));
     }
   }
   const color = K.look.coverTitleColor ? hex(K.look.coverTitleColor) : art ? hex(art.titleColor) : K.accent;
@@ -270,6 +276,7 @@ function coverPage(doc: Doc, worldDir: string, w: number, h: number, png: Uint8A
 /** Render a Story Book Doc to .docx bytes. Uses the doc's print trim (default 6x9) and look. */
 export async function renderDocx(doc: Doc, worldDir: string, options: DocxOptions = {}): Promise<Buffer> {
   K = styleOf(doc.print?.look ?? DEFAULT_LOOK);
+  say = options.t ?? english;
   const trim = trimFor(doc.print?.trim ?? DEFAULT_TRIM, K.look.margins);
   const textW = trim.width - trim.inside - trim.outside;
   const page = {

@@ -1,11 +1,12 @@
 /** Node-only helpers for reading and writing world folders. The main entry point stays free of fs. */
-import { chmod, copyFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, cp, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, extname, join, relative, sep } from 'node:path';
 import { INTENDED_FILE, MANIFEST_FILE, parseWorld, serializeEntry, serializeIntended, serializeManifest, entryPath, type WorldFile } from './parse.ts';
 import { SCHEMA_VERSION, TYPE_FOLDERS, type Entry, type IntendedMark, type StoryChapter, type StoryIgnore, type World, type WorldManifest, type WorldCoverSettings } from './types.ts';
 import { serializeChapter, serializeStoryIgnored, STORY_FOLDER, STORY_IGNORED_FILE } from './story.ts';
 import { coverSeed } from './cover.ts';
+import { msg } from './i18n.ts';
 
 /** Read world.json, intended.json, story-ignored.json and every Markdown file in the type folders and story/. */
 export async function readWorldFiles(dir: string): Promise<WorldFile[]> {
@@ -130,11 +131,16 @@ export interface ModelFile {
 }
 
 const ENTRY_ID = /^[a-z0-9][a-z0-9-]*$/;
+/** Look ids name folders too (models/<entry-id>/<look-id>/): the same plain shape. */
+const LOOK_ID = ENTRY_ID;
 
-function modelDir(dir: string, entryId: string): string {
+/** The folder of an entry's models: models/<entry-id>/ for the Default look, models/<entry-id>/<look-id>/ for a look. */
+function modelDir(dir: string, entryId: string, look?: string): string {
   if (!ENTRY_ID.test(entryId)) throw new Error(`Not an entry id: ${entryId}`);
-  return join(dir, MODELS_FOLDER, entryId);
+  if (look !== undefined && !LOOK_ID.test(look)) throw new Error(`Not a look id: ${look}`);
+  return look ? join(dir, MODELS_FOLDER, entryId, look) : join(dir, MODELS_FOLDER, entryId);
 }
+const modelsPath = (entryId: string, look?: string): string => (look ? `${MODELS_FOLDER}/${entryId}/${look}` : `${MODELS_FOLDER}/${entryId}`);
 
 /** A model's file name from a display name: no path parts, no odd characters. */
 function modelFileName(name: string, ext: string): string {
@@ -146,16 +152,37 @@ function isModel(file: string): boolean {
   return (MODEL_EXTS as readonly string[]).includes(extname(file).toLowerCase());
 }
 
-/** Models of one entry, sorted by name. The models folder is optional: none means []. */
-export async function listModels(dir: string, entryId: string): Promise<ModelFile[]> {
-  const folder = modelDir(dir, entryId);
+/**
+ * Models of one entry for one look (none: the Default look, the files right in models/<entry-id>/), sorted by name.
+ * The models folder is optional: none means [].
+ */
+export async function listModels(dir: string, entryId: string, look?: string): Promise<ModelFile[]> {
+  const folder = modelDir(dir, entryId, look);
   if (!existsSync(folder)) return [];
   const out: ModelFile[] = [];
   for (const d of await readdir(folder, { withFileTypes: true })) {
     if (!d.isFile() || !isModel(d.name)) continue;
-    out.push({ file: `${MODELS_FOLDER}/${entryId}/${d.name}`, name: d.name.slice(0, -extname(d.name).length), bytes: (await stat(join(folder, d.name))).size });
+    out.push({ file: `${modelsPath(entryId, look)}/${d.name}`, name: d.name.slice(0, -extname(d.name).length), bytes: (await stat(join(folder, d.name))).size });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Move a look's models to another look (none: the Default look), when the look is deleted. Names that are taken get
+ * a number ("Mr Camel 2.glb"); the emptied folder goes.
+ */
+export async function moveModels(dir: string, entryId: string, from: string, to?: string): Promise<void> {
+  const source = modelDir(dir, entryId, from);
+  if (!existsSync(source)) return;
+  const target = modelDir(dir, entryId, to);
+  await mkdir(target, { recursive: true });
+  for (const d of await readdir(source, { withFileTypes: true })) {
+    if (!d.isFile() || !isModel(d.name)) continue;
+    const ext = extname(d.name);
+    await rename(join(source, d.name), join(target, freeName(target, d.name.slice(0, -ext.length), ext)));
+  }
+  // Only an empty folder goes: anything else someone put there stays.
+  await rmdir(source).catch(() => undefined);
 }
 
 /** Free file name in a folder: "name.ext", then "name 2.ext", ... */
@@ -166,16 +193,16 @@ function freeName(folder: string, base: string, ext: string): string {
   }
 }
 
-/** Copy a model file into models/<entry-id>/. Returns its path relative to the world folder. */
-export async function importModel(dir: string, entryId: string, source: string, name = basename(source, extname(source))): Promise<string> {
+/** Copy a model file into models/<entry-id>/ (or a look's folder in it). Returns its path relative to the world folder. */
+export async function importModel(dir: string, entryId: string, source: string, name = basename(source, extname(source)), look?: string): Promise<string> {
   const ext = extname(source).toLowerCase();
-  if (!isModel(source)) throw new Error(`3D models must be ${MODEL_EXTS.join(', ')} files.`);
+  if (!isModel(source)) throw new Error(msg`3D models must be ${MODEL_EXTS.join(', ')} files.`);
   if (ext === '.gltf') gltfMustBeEmbedded(await readFile(source, 'utf8'));
-  const folder = modelDir(dir, entryId);
+  const folder = modelDir(dir, entryId, look);
   await mkdir(folder, { recursive: true });
   const file = freeName(folder, modelFileName(name, ''), ext);
   await copyFile(source, join(folder, file));
-  return `${MODELS_FOLDER}/${entryId}/${file}`;
+  return `${modelsPath(entryId, look)}/${file}`;
 }
 
 /** A .gltf is copied alone, so its buffers and textures must be inside it (data: URIs); otherwise ask for a .glb. */
@@ -184,29 +211,32 @@ export function gltfMustBeEmbedded(json: string): void {
   try {
     gltf = JSON.parse(json) as typeof gltf;
   } catch {
-    throw new Error('That .gltf file is not valid glTF JSON.');
+    throw new Error(msg`That .gltf file is not valid glTF JSON.`);
   }
   const outside = [...(gltf.buffers ?? []), ...(gltf.images ?? [])].find((b) => b.uri && !b.uri.startsWith('data:'));
-  if (outside) throw new Error(`That .gltf needs a separate file (${outside.uri}). Export it as .glb or as embedded .gltf instead.`);
+  if (outside) throw new Error(msg`That .gltf needs a separate file (${outside.uri}). Export it as .glb or as embedded .gltf instead.`);
 }
 
-/** Check that `file` is a model inside models/<entry-id>/ of this world. Returns its full path. */
+/** Check that `file` is a model inside models/<entry-id>/ (or a look's folder in it) of this world. Returns its full path. */
 function modelPath(dir: string, file: string): string {
   const parts = file.split('/');
-  if (parts.length !== 3 || parts[0] !== MODELS_FOLDER || !ENTRY_ID.test(parts[1]!) || !isModel(parts[2]!) || parts[2]!.startsWith('.')) throw new Error(`Not a model file: ${file}`);
+  const name = parts[parts.length - 1]!;
+  const ok = (parts.length === 3 || (parts.length === 4 && LOOK_ID.test(parts[2]!))) && parts[0] === MODELS_FOLDER && ENTRY_ID.test(parts[1]!) && isModel(name) && !name.startsWith('.');
+  if (!ok) throw new Error(`Not a model file: ${file}`);
   return join(dir, ...parts);
 }
 
-/** Rename a model; keeps its extension. Returns the new path relative to the world folder. */
+/** Rename a model; keeps its extension and its folder (its look). Returns the new path relative to the world folder. */
 export async function renameModel(dir: string, file: string, name: string): Promise<string> {
   const from = modelPath(dir, file);
-  const [, entryId, old] = file.split('/') as [string, string, string];
+  const parts = file.split('/');
+  const old = parts.pop()!;
   const ext = extname(old).toLowerCase();
   const wanted = modelFileName(name, ext);
   if (wanted === old) return file;
-  const next = freeName(join(dir, MODELS_FOLDER, entryId), wanted.slice(0, -ext.length), ext);
-  await rename(from, join(dir, MODELS_FOLDER, entryId, next));
-  return `${MODELS_FOLDER}/${entryId}/${next}`;
+  const next = freeName(join(dir, ...parts), wanted.slice(0, -ext.length), ext);
+  await rename(from, join(dir, ...parts, next));
+  return `${parts.join('/')}/${next}`;
 }
 
 /** Delete a model file. */

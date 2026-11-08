@@ -15,6 +15,9 @@ export interface Draft {
   readonly [field: string]: unknown;
 }
 
+/** Set `worlds` to an array to keep every world `world()` builds (the translation coverage test replays them). */
+export const built: { worlds?: World[] } = {};
+
 /** Build a world the same way the app and CLI do: from files. */
 export function world(drafts: Draft[], opts: { intended?: IntendedMark[]; manifest?: Partial<WorldManifest>; story?: string | string[]; ignored?: string[] } = {}): World {
   const files = drafts.map((d) => {
@@ -26,7 +29,9 @@ export function world(drafts: Draft[], opts: { intended?: IntendedMark[]; manife
   const story = typeof opts.story === 'string' ? [opts.story] : (opts.story ?? []);
   story.forEach((body, i) => files.push({ path: `story/0${i + 1}-chapter-${i + 1}.md`, content: `---\ntitle: Chapter ${i + 1}\norder: ${i + 1}\n---\n\n${body}\n` }));
   if (opts.ignored) files.push({ path: 'story-ignored.json', content: JSON.stringify({ schemaVersion: 1, ignored: opts.ignored.map((key) => ({ key })) }) });
-  return parseWorld(files);
+  const w = parseWorld(files);
+  built.worlds?.push(w);
+  return w;
 }
 
 export function warnings(drafts: Draft[], ruleId?: string, opts?: Parameters<typeof world>[1]): Warning[] {

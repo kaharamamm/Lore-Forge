@@ -1,6 +1,7 @@
 import type { Ref } from 'preact';
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import { foldSearch, type IconName } from '@lore-forge/core';
+import { t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 import { Popover } from './popover.tsx';
 
@@ -30,7 +31,7 @@ function Mark({ o }: { o: SelectOption }) {
  * the native <select>, whose list Chromium on Linux draws unstyled. Keyboard like a native select: arrows, Home, End,
  * Page Up/Down, Enter or Space to choose, Escape to close, Tab to choose and move on, and typing a few letters jumps.
  */
-export function Select({ id, value, options, onChange, class: cls, invalid, autoFocus, buttonRef, placeholder = 'Choose…', ...aria }: {
+export function Select({ id, value, options, onChange, class: cls, invalid, autoFocus, buttonRef, placeholder = t('Choose…'), ...aria }: {
   id?: string;
   value: string;
   options: SelectOption[];

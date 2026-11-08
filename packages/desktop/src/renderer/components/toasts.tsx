@@ -1,4 +1,5 @@
 import type { IconName } from '@lore-forge/core';
+import { t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 import { useCallback, useRef, useState } from 'preact/hooks';
 
@@ -27,12 +28,12 @@ export function useToasts() {
 export function ToastStack({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: number) => void }) {
   return (
     <div class="toasts" role="status" aria-live="polite">
-      {toasts.map((t) => (
-        <div key={t.id} class={`toast toast-${t.tone}`}>
-          <Icon class="toast-icon" name={ICON[t.tone]} />
-          <span class="toast-text">{t.text}</span>
-          {t.action && <button type="button" class="ghost small" onClick={() => { t.action!.run(); dismiss(t.id); }}>{t.action.label}</button>}
-          <button type="button" class="ghost small icon-btn" aria-label="Dismiss" onClick={() => dismiss(t.id)}>×</button>
+      {toasts.map((toast) => (
+        <div key={toast.id} class={`toast toast-${toast.tone}`}>
+          <Icon class="toast-icon" name={ICON[toast.tone]} />
+          <span class="toast-text">{toast.text}</span>
+          {toast.action && <button type="button" class="ghost small" onClick={() => { toast.action!.run(); dismiss(toast.id); }}>{toast.action.label}</button>}
+          <button type="button" class="ghost small icon-btn" aria-label={t('Dismiss')} onClick={() => dismiss(toast.id)}>×</button>
         </div>
       ))}
     </div>

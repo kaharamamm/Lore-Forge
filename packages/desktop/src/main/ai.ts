@@ -14,11 +14,12 @@ import {
 } from '@lore-forge/mcp/clients';
 import { IMAGE_PROVIDERS, listImageModels, pickImageModel, PROVIDER_INFO, readImageSettings, writeImageSettings, type ImageProvider } from '@lore-forge/mcp/images';
 import type { AiClient, AiPictures, AiState, PictureCheck, PictureProvider } from '../shared/api.ts';
+import { t } from '../shared/i18n.ts';
 
 /** How AI apps start the server: this app's own Electron in Node mode, running the bundled `lore mcp`. */
 function mcpLaunch(defaultWorldsDir: string): { launch: McpLaunch | null; unavailable?: string } {
   if (process.env['APPIMAGE']) {
-    return { launch: null, unavailable: 'The AppImage unpacks itself to a new place every time it starts, so an AI app could not find it again. Install the .deb, or run Lore-Forge from source, to connect an AI app.' };
+    return { launch: null, unavailable: t('The AppImage unpacks itself to a new place every time it starts, so an AI app could not find it again. Install the .deb, or run Lore-Forge from source, to connect an AI app.') };
   }
   const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1', LORE_FORGE_DATA: app.getPath('userData') };
   // From source, new books go to the repository's worlds/ folder, as in the app.
@@ -46,7 +47,7 @@ function runClaude(path: string, args: string[]): void {
   const r = script
     ? spawnSync(process.env['ComSpec'] ?? 'cmd.exe', ['/d', '/s', '/c', `"${[path, ...args].map((a) => `"${a}"`).join(' ')}"`], { encoding: 'utf8', timeout: 60_000, windowsHide: true, windowsVerbatimArguments: true })
     : spawnSync(path, args, { encoding: 'utf8', timeout: 60_000, windowsHide: true });
-  if (r.status !== 0) throw new Error(`Claude Code said: ${`${r.stdout ?? ''}${r.stderr ?? ''}`.trim() || r.error?.message || `exit ${r.status}`}`);
+  if (r.status !== 0) throw new Error(t('Claude Code said: {output}', { output: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() || r.error?.message || `exit ${r.status}` }));
 }
 
 /** The command the app's lore-forge entry starts, or null when there is none. */
@@ -108,14 +109,14 @@ export function registerAi(defaultWorldsDir: () => string): void {
 
   ipcMain.handle('aiConnect', (_e, id: string, on: boolean): AiClient => {
     const def = clientDefs().find((d) => d.id === id);
-    if (!def) throw new Error(`Unknown AI app ${id}.`);
+    if (!def) throw new Error(t('Unknown AI app {id}.', { id }));
     const { launch, unavailable } = mcpLaunch(defaultWorldsDir());
     if (on && !launch) throw new Error(unavailable);
     const claude = def.format === 'cli' ? findClaude() : null;
     if (def.format === 'json') (on ? connectJson(def.file, launch!) : disconnectJson(def.file));
     else if (def.format === 'toml') (on ? connectToml(def.file, launch!) : disconnectToml(def.file));
     else {
-      if (!claude) throw new Error('Claude Code\'s "claude" command was not found. Copy the command and run it in a terminal instead.');
+      if (!claude) throw new Error(t('Claude Code\'s "claude" command was not found. Copy the command and run it in a terminal instead.'));
       // Replace an older entry (another install, or the app moved) rather than fail on "already exists".
       if (connectedCommand(def) !== null) runClaude(claude, claudeCodeRemoveArgs());
       if (on) runClaude(claude, claudeCodeAddArgs(launch!));
@@ -125,13 +126,13 @@ export function registerAi(defaultWorldsDir: () => string): void {
 
   ipcMain.handle('aiCheckPictures', async (_e, provider: PictureProvider, key?: string): Promise<PictureCheck> => {
     const p = provider as ImageProvider;
-    if (!IMAGE_PROVIDERS.includes(p)) return { ok: false, error: 'Choose a picture service first.' };
+    if (!IMAGE_PROVIDERS.includes(p)) return { ok: false, error: t('Choose a picture service first.') };
     const useKey = key?.trim() || readImageSettings(app.getPath('userData')).keys?.[p];
-    if (!useKey) return { ok: false, error: 'Paste an API key first.' };
+    if (!useKey) return { ok: false, error: t('Paste an API key first.') };
     try {
       const models = await listImageModels(p, useKey);
       const model = pickImageModel(p, models);
-      if (!model) return { ok: false, error: `The key works, but ${PROVIDER_INFO[p].label} offers it no image model. Check the account's access to image generation.` };
+      if (!model) return { ok: false, error: t("The key works, but {service} offers it no image model. Check the account's access to image generation.", { service: PROVIDER_INFO[p].label }) };
       return { ok: true, model, models };
     } catch (e) {
       return { ok: false, error: (e as Error).message };

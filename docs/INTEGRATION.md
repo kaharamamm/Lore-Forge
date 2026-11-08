@@ -44,8 +44,9 @@ my-world/
   intended.json       warnings marked "intended" (optional)
   characters/<id>.md  one file per entry; folder = type
   places/  factions/  items/  events/  notes/
-  images/<entryId>/<view>.<ext>   reference images (any entry type)
-  models/<entryId>/<name>.<ext>   3D models: .glb, embedded .gltf, .obj, .fbx (optional, 1.1; not listed in the entry)
+  images/<entryId>/<view>.<ext>   reference images (any entry type); a look's in images/<entryId>/<lookId>/
+  models/<entryId>/<name>.<ext>   3D models: .glb, embedded .gltf, .obj, .fbx (optional, 1.0; not listed in the entry);
+                                  a look's in models/<entryId>/<lookId>/
   story/NN-slug.md    the manuscript, one file per chapter (optional, 0.4)
   story-ignored.json  story proposals the author ignored (optional, 0.4)
 ```
@@ -194,7 +195,10 @@ A warning has the shape `{id, ruleId, severity, message, offending, conflicting?
 - `offending` and `conflicting` are `{entryId, field, source}`. `source` is human-readable, for example
   `Characters/Orsan the Grey`. `field` is a front-matter path such as `actions[0]` or `died`.
 - `id` is `<ruleId>:<key>` and stays the same across runs, so you can track warnings over time.
-  `intended.json` refers to warnings by this id.
+  `intended.json` refers to warnings by this id. Keys are built from what the warning is about (the entry, the
+  relation's type and target, a stay's place and dates, an image's file), never from a position in a list, so
+  adding or removing a row elsewhere does not move a mark to another warning. Since the release after 1.0.0;
+  marks stored under the older position-based ids still apply.
 - `severity` is `error`, `warning` or `info`. `intended` is set when an author marked the warning as
   deliberate. Treat intended warnings as canon.
 
@@ -318,7 +322,9 @@ Word field that Word updates on opening.
 
 Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral `Doc`; `toMarkdown(doc)` is in
 `@lore-forge/core` and `renderPdf(doc, {worldDir})` / `writePublication(...)` in `@lore-forge/pdf`.
-`artBrief(entry, index)` returns `{prompt, turnaround?, missing}`.
+`artBrief(entry, index, look?)` returns `{prompt, turnaround?, missing}`; with a look, the brief is for that look.
+`lookAt(entry, date, index)` gives the look an entry has on a parsed date (undefined: the Default look),
+`lookSpan`, `lookWhen` and `lookVisual` say when a look applies and what it looks like (see [Looks](FORMAT.md#looks)).
 
 ## Stability
 
@@ -329,7 +335,7 @@ Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral 
   `image-view` rule) was additive, and so was 0.3 (status on places, factions and items, the
   `relation-kind` rule, snapshot `references`), 0.3.1 (dotted and day-month dates, character `race`) and
   0.4 (`story/`, `story-ignored.json`, snapshot `story`, fact `chapter`/`span`, the `story-contradiction`
-  rule, detail fields, `picture`, several races, manifest `cover` and the new `book` keys) and 1.1 (manifest
+  rule, detail fields, `picture`, several races, manifest `cover` and the new `book` keys) and 1.0 (`models/`, manifest
   `artStyle`), so worlds stay at version 1. Older files load unchanged and are never migrated.
   Consumers should ignore fields they don't know.
 - **Breaking changes** bump the version: removing or renaming fields, or changing the meaning of a field or

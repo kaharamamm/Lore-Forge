@@ -141,7 +141,8 @@ const COMMON_START = new Set([
   'Less', 'Enough', 'Good', 'Bad', 'Low', 'High', 'Very', 'Too', 'Just', 'Almost', 'Better', 'Best', 'Little', 'Same', 'Sure', 'Right',
   'Back', 'Up', 'Down', 'Off', 'Out', 'Away', 'Together', 'Ready', 'Fine', 'Okay', 'Quiet', 'Quick', 'Careful', 'Easy', 'Steady',
   'Whatever', 'Whoever', 'Somehow', 'Anyway', 'Besides', 'Otherwise', 'Already', 'Rather', 'Quite', 'Sorry', 'Near', 'Far', 'Past',
-  'Beside', 'Between', 'Beneath', 'Underneath', 'Despite', 'Except', 'Like', 'Unlike', 'Onto',
+  'Beside', 'Between', 'Beneath', 'Underneath', 'Despite', 'Except', 'Like', 'Unlike', 'Onto', 'Halfway', 'Ahead', 'Afterwards',
+  'Afterward', 'Overhead', 'Downstairs', 'Upstairs', 'Nearby', 'Elsewhere', 'Abroad', 'Alone', 'Twice', 'People', 'Men', 'Women',
 ]);
 /** "I'm", "We'll", "Don't": contractions, never names. */
 const CONTRACTION = /^(?:I|You|We|They|He|She|It|That|There|Here|Who|What|Where|How|Let)['’](?:m|ll|ve|re|d|s)$|n['’]t$/u;
@@ -175,13 +176,29 @@ const ITEM_WORDS = [
   'Medallion', 'Locket', 'Brooch', 'Jewel', 'Crystal', 'Tablet', 'Codex', 'Grimoire', 'Chest', 'Casket', 'Lyre', 'Drum', 'Bell',
   'Cauldron', 'Goblet', 'Urn', 'Censer', 'Mantle', 'Robe', 'Veil', 'Boots', 'Gloves', 'Armlet', 'Torc', 'Coin', 'Feather', 'Pearl', 'Hourglass',
 ];
-/** Weapon and thing nouns for "a sword called Dawnbreaker". */
-const ITEM_NOUNS = [...new Set(ITEM_WORDS.map((w) => w.toLowerCase()))];
+/**
+ * More thing words, only for capitalised names ("the Copper Paddle", "the Red Kite"): as plain words they are
+ * too everyday ("took the rope") to make an item of.
+ */
+const ITEM_HEADS = [
+  'Paddle', 'Oar', 'Rope', 'Kite', 'Wings', 'Bowl', 'Basket', 'Satchel', 'Saddle', 'Bridle', 'Blanket', 'Tapestry', 'Statue', 'Figurine',
+  'Doll', 'Clock', 'Spyglass', 'Telescope', 'Lens', 'Quill', 'Letter', 'Journal', 'Diary', 'Ledger', 'Chart', 'Atlas', 'Shell', 'Skull',
+  'Egg', 'Cane', 'Pipe', 'Wagon', 'Cart', 'Chariot', 'Ship', 'Boat', 'Raft', 'Barge', 'Galley', 'Token', 'Badge', 'Sigil', 'Rune',
+  'Runestone', 'Totem', 'Charm', 'Box', 'Coffer', 'Vial', 'Flask', 'Bottle', 'Jar', 'Needle', 'Loom', 'Spindle', 'Anvil', 'Chain', 'Chains',
+  'Collar', 'Hat', 'Scarf', 'Coat', 'Gown', 'Wheel', 'Engine', 'Machine', 'Automaton',
+];
+/** Weapon and thing nouns for "a sword called Dawnbreaker", "a ship named the Grumbling Gull". */
+const ITEM_NOUNS = [...new Set([...ITEM_WORDS, ...ITEM_HEADS].map((w) => w.toLowerCase()))];
 /** Group words: "the Order of the Silver Flame", "the Thieves' Guild", "House Varr". */
 const FACTION_WORDS = [
   'Order', 'Guild', 'Brotherhood', 'Sisterhood', 'Clan', 'Clans', 'Tribe', 'Tribes', 'House', 'Legion', 'Company', 'Circle', 'Council',
   'Cult', 'Church', 'League', 'Alliance', 'Covenant', 'Watch', 'Guard', 'Army', 'Fleet', 'Society', 'Syndicate', 'Brethren', 'Horde',
   'Knights', 'Riders', 'Fellowship', 'Coven', 'Conclave', 'Senate', 'Dynasty', 'Faction', 'Confederacy', 'Federation', 'Union', 'Band',
+  // groups named after what their members do: "the Well Wardens", "the Seven Founders", "the Saffron Caravan"
+  'Caravan', 'Crew', 'Wardens', 'Founders', 'Heralds', 'Keepers', 'Watchers', 'Rangers', 'Hunters', 'Seekers', 'Sentinels', 'Defenders',
+  'Guardians', 'Champions', 'Elders', 'Sisters', 'Brothers', 'Children', 'Sons', 'Daughters', 'Priesthood', 'Clergy', 'Navy', 'Militia',
+  'Regiment', 'Battalion', 'Squad', 'Assembly', 'Cabal', 'Gang', 'Family', 'Court', 'Host', 'Pack', 'Folk', 'Raiders', 'Bandits', 'Pirates',
+  'Rebels', 'Nomads', 'Wanderers', 'Pilgrims', 'Monks', 'Priests', 'Mages', 'Wizards', 'Witches', 'Druids', 'Guards', 'Soldiers', 'Warriors',
 ];
 /** Faction words that also go before a name: "House Varr", "Clan Dorr". */
 const FACTION_PREFIX = ['House', 'Clan', 'Tribe'];
@@ -225,13 +242,44 @@ const ITEM_VERBS: Record<string, string> = {
   held: 'owns', bore: 'owns', claimed: 'owns', won: 'owns', received: 'owns', wielded: 'wields', wore: 'owns',
 };
 /** Words before a name that make it a place: "in Qarim", "across Zarnak". */
-const PLACE_BEFORE = /(?:^|[^\p{L}])(?:in|at|near|into|across|through|beyond|toward|towards|reached|entered|visited|left)[ \t]+$/u;
+const PLACE_BEFORE = /(?:^|[^\p{L}])(?:in|at|near|into|across|through|beyond|toward|towards|reached|entered|visited|left|out[ \t]+of)[ \t]+$/u;
 const PLACE_WORDS = [
   'City', 'Town', 'Village', 'Kingdom', 'Realm', 'Land', 'Lands', 'Isle', 'Island', 'Isles', 'Islands', 'Fortress', 'Castle', 'Oasis', 'Port', 'Valley',
   'Desert', 'Mountain', 'Mountains', 'Peak', 'Forest', 'Woods', 'River', 'Lake', 'Sea', 'Bay', 'Coast', 'Harbour', 'Harbor', 'Citadel', 'Keep',
   'Temple', 'Shrine', 'Abbey', 'Monastery', 'Pass', 'Plains', 'Dunes', 'Marsh', 'Marshes', 'Swamp', 'Hills', 'Caves', 'Mines', 'Springs',
   'Palace', 'Ruins', 'Bazaar', 'Wastes', 'Steppe', 'Gulf', 'Strait', 'Canyon', 'Gorge', 'Cliffs', 'Reach', 'Highlands', 'Lowlands',
 ];
+/**
+ * More place words, only as the last word of a capitalised name ("Hollin Wood", "the Copper Market", "the Hall of
+ * Heroes"). Unlike the words above, "the Hall of Heroes" names the hall, not a place called Heroes.
+ */
+const PLACE_HEADS = [
+  'Wood', 'Grove', 'Glade', 'Edge', 'Farm', 'Farmstead', 'Mill', 'Pond', 'Tarn', 'Pool', 'Well', 'Wells', 'Spring', 'Fountain', 'Ridge', 'Hill',
+  'Mount', 'Crag', 'Cliff', 'Bluff', 'Summit', 'Vale', 'Dale', 'Glen', 'Hollow', 'Heath', 'Moor', 'Moors', 'Fen', 'Fens', 'Field', 'Fields',
+  'Meadow', 'Meadows', 'Orchard', 'Garden', 'Gardens', 'Market', 'Square', 'Plaza', 'Hall', 'Tower', 'Towers', 'Gate', 'Gates', 'Bridge',
+  'Road', 'Street', 'Lane', 'Quarter', 'District', 'Docks', 'Wharf', 'Pier', 'Inn', 'Tavern', 'Erg', 'Sands', 'Shore', 'Shores', 'Beach',
+  'Cove', 'Lagoon', 'Reef', 'Delta', 'Falls', 'Ford', 'Cave', 'Cavern', 'Caverns', 'Grotto', 'Chasm', 'Rift', 'Crater', 'Volcano', 'Glacier',
+  'Jungle', 'Badlands', 'Barrens', 'Basin', 'Plateau', 'Cape', 'Spire', 'Sanctum', 'Sanctuary', 'Chapel', 'Cathedral', 'Library', 'Academy',
+  'Barracks', 'Prison', 'Dungeon', 'Crypt', 'Tomb', 'Catacombs', 'Manor', 'Estate', 'Lodge', 'Cottage', 'Hold', 'Stronghold', 'Bastion',
+  'Outpost', 'Camp', 'Colony', 'Hamlet', 'Shire', 'County', 'Province', 'Empire', 'Ocean', 'Tundra', 'Wilds', 'Wilderness', 'Waste',
+  'Reaches', 'Heights', 'Downs', 'Fjord', 'Loch', 'Stream', 'Brook', 'Creek', 'Rapids', 'Ravine', 'Gap', 'Mesa', 'Point',
+];
+/** First words that make the rest a place: "Mount Zeh", "Lake Ardent", "Fort Wren". */
+const PLACE_PREFIX = new Set(['Mount', 'Mt', 'Lake', 'Loch', 'Fort', 'Port', 'Cape', 'Isle', 'Castle', 'River']);
+/** One-word names after "the" that end like a place or a group: "the Millpond", "the Tarnwater", "the Bellguard". */
+const PLACE_SUFFIX = /(?:wood|woods|water|waters|sea|pond|mere|ford|port|haven|hold|keep|gate|bridge|mouth|dale|vale|moor|marsh|fen|field|fields|hollow|crest|peak|spire|cliff|cliffs|falls|well|wells|spring|springs|burg|borough|stead|holm|shire|reach|tarn|lake|crag|fell|ridge|hill|hills|cairn|crown|top|deep|deeps)$/;
+const FACTION_SUFFIX = /(?:guard|watch|hood)$/;
+/** Words before a name with "the" that make it a place: "in the Red Erg", "behind The Snowcrown", "reached the Moon Well". */
+const SPATIAL_THE = /(?:^|[^\p{L}])(?:in|at|into|inside|near|across|through|beyond|toward|towards|onto|past|around|beneath|below|above|along|within|outside|over|under|behind|beside|throughout|upon|reached|reaching|entered|entering|visited|crossed|crossing|climbed|climbing|left|leaving)[ \t]+(?:the[ \t]+)?$/iu;
+/** "from" and "to" also go before people ("a gift to the Heron"), so they only count for longer or place-like names. */
+const FROM_TO_THE = /(?:^|[^\p{L}])(?:from|to)[ \t]+(?:the[ \t]+)?$/iu;
+/** "looked back at Yusuf", "smiled at Leyla": at a person, not a place. */
+const LOOK_AT = /(?:look|stare|glance|gaze|peer|smile|grin|laugh|frown|wave|nod|point|shout|yell|bark|snap|growl|hiss|sneer|wink|scowl|blink|squint|swear|curse|call|scream|howl|spit|aim|throw|tug|pull|wag|glare|sniff|lick|snarl|whistle|sigh|beam|rage)[a-z]*(?:[ \t]+(?:back|up|down|over|across|around|round|hard|again|only|just|straight|right|directly|sharply|coldly|sadly|kindly|still|now))?[ \t]+at[ \t]+$/i;
+/** Speech next to a name makes it a person: "said Brook", "Glen asked". */
+const SPEECH_BEFORE = /(?:^|[^\p{L}])(?:said|asked|whispered|shouted|cried|replied|answered|called|muttered|murmured|laughed|sighed|added|snapped|growled|told)[ \t]+$/u;
+const SPEECH_AFTER = /^[ \t]+(?:said|asks|asked|says|whispered|shouted|cried|replied|answered|called|muttered|murmured|laughed|sighed|added|snapped|growled|nodded|smiled|frowned|told)(?![\p{L}])/u;
+/** "-ing" words that are not happenings: "the Morning of the Feast" is a time, not an event. */
+const NOT_EVENT_ING = new Set(['Morning', 'Evening', 'King', 'Ring', 'Thing', 'Wing', 'String', 'Sling', 'Spring', 'Darling', 'Sibling', 'Ceiling', 'Offspring', 'Viking', 'Clothing', 'Something', 'Nothing', 'Everything', 'Anything', 'Lightning', 'Building', 'Painting', 'Writing', 'Ending', 'Beginning', 'Being']);
 /** Lowercase place nouns: "the city of Qarim", "Qarim, a port on the salt sea". */
 const PLACE_NOUNS = [
   'city', 'town', 'village', 'hamlet', 'port', 'harbour', 'harbor', 'fortress', 'castle', 'citadel', 'stronghold', 'keep', 'outpost', 'oasis',
@@ -241,6 +289,13 @@ const PLACE_NOUNS = [
 const EVENT_WORDS = [
   'Battle', 'War', 'Siege', 'Fall', 'Sack', 'Burning', 'Destruction', 'Massacre', 'Rebellion', 'Uprising', 'Revolt', 'Treaty', 'Coronation',
   'Founding', 'Conquest', 'Liberation', 'Invasion', 'Raid', 'Fire', 'Plague', 'Flood', 'Famine', 'Exodus', 'Duel', 'Assault', 'Storming', 'Defence', 'Defense',
+];
+/** More happenings, only when capitalised ("the Great Rockfall", "the Feast of Bells"): "the storm at dawn" is weather. */
+const EVENT_HEADS = [
+  'Rockfall', 'Avalanche', 'Landslide', 'Storm', 'Tempest', 'Earthquake', 'Quake', 'Eruption', 'Drought', 'Blight', 'Pestilence', 'Feast',
+  'Festival', 'Wedding', 'Funeral', 'Trial', 'Trials', 'Tournament', 'Games', 'Contest', 'Hunt', 'Harvest', 'Migration', 'Voyage', 'Expedition',
+  'Exile', 'Schism', 'Sundering', 'Cataclysm', 'Catastrophe', 'Collapse', 'Purge', 'Reckoning', 'Awakening', 'Ascension', 'Accord', 'Pact',
+  'Ceremony', 'Rite', 'Ritual', 'Celebration', 'Murder', 'Assassination', 'Execution', 'Betrayal', 'Rescue',
 ];
 /** Event words whose "of X" names a place. "War of the Sands" does not. */
 const EVENT_AT_PLACE = new Set(['Battle', 'Siege', 'Fall', 'Sack', 'Burning', 'Destruction', 'Massacre', 'Treaty', 'Founding', 'Conquest', 'Liberation', 'Invasion', 'Raid', 'Fire', 'Flood', 'Assault', 'Storming', 'Defence', 'Defense']);
@@ -274,6 +329,98 @@ const TITLE = either(TITLES);
 const WORD = `(?!(?:${LOWER_STOP})(?![\\p{L}]))[\\p{L}][\\p{L}\\p{M}'’-]*`;
 const END = '(?![\\p{L}\\p{N}])';
 const START = '(?<![\\p{L}\\p{N}])';
+
+// Pattern pieces built once. The sentence loop runs for every sentence of every chapter, and building these
+// word lists there again was a third of the time a story check took.
+const ROLES_ALT = either(ROLES);
+const ITEM_WORDS_EITHER = either(ITEM_WORDS);
+const EVENT_EITHER = either(EVENT_WORDS);
+const KILL_ALT = KILL_VERBS.join('|');
+const DEEDS_ALT = Object.keys(PLACE_DEEDS).join('|');
+const FACTION_VERBS_ALT = Object.keys(FACTION_VERBS).join('|');
+const ITEM_VERBS_ALT = Object.keys(ITEM_VERBS).join('|');
+const ITEM_NOUNS_ALT = ITEM_NOUNS.join('|');
+const ITEM_WORDS_ALT = ITEM_WORDS.join('|');
+const PLACE_NOUNS_ALT = PLACE_NOUNS.join('|');
+const PLACE_WORDS_ALT = PLACE_WORDS.join('|');
+const PLACE_WORDS_LOWER_ALT = PLACE_WORDS.map((w) => w.toLowerCase()).join('|');
+// The group word is the name's last capitalised word: "the Order Hall" is a hall, not "the Order".
+const FACTION = `((?:[Tt]he${S})?(?:(?:${FACTION_PREFIX.join('|')})${S}(?!of\b)${CAP}(?!${S}of${S})|(?:${CAP}${S}){0,3}(?:${FACTION_WORDS.join('|')})(?!${S}\\p{Lu})(?:${S}of${S}(?:the${S})?${NAME})?))${END}`;
+const PLACE_HEADS_ALT = PLACE_HEADS.join('|');
+const ROLE_PHRASE = `((?:${WORD}${S}){0,3}?(?:${ROLES_ALT}))${END}`;
+/** "... of Qarim", "... at the Ford": an event pattern names it; "the Hero Trials of 527" stays a name of its own. */
+const AFTER_OF_ON_AT_NAME = new RegExp(`^${S}(?:of|on|at)${S}(?:the${S})?\\p{Lu}`, 'u');
+const AFTER_OF = new RegExp(`^${S}of${S}`, 'u');
+const ITEM_HEADS_ALT = ITEM_HEADS.join('|');
+const EVENT_HEADS_ALT = EVENT_HEADS.join('|');
+const ITEM_SET = new Set([...ITEM_WORDS, ...ITEM_HEADS]);
+const PLACE_SET = new Set([...PLACE_WORDS, ...PLACE_HEADS]);
+const EVENT_SET = new Set([...EVENT_WORDS, ...EVENT_HEADS]);
+const FACTION_SET = new Set(FACTION_WORDS);
+/** Words on those lists that are also first names or surnames, so alone they can still be a person ("Glen asked"). */
+const NAME_LIKE = new Set(['Glen', 'Heath', 'Cliff', 'Brook', 'Dale', 'Lane', 'Wells', 'Ford', 'Gates', 'Hall', 'Wood', 'Hill', 'Field', 'Fields', 'Rune', 'Charm', 'Hunt', 'Storm', 'Pierce', 'Rose', 'Stone', 'Bell', 'Marsh', 'Moor', 'Shore']);
+/** Words before a name that make "X Hall" or "X Wood" a place rather than a person called Hall or Wood: "over Hollin Wood". */
+const PLACE_NEAR = /(?:^|[^\p{L}])(?:in|at|near|into|onto|across|through|throughout|beyond|toward|towards|over|under|past|around|beside|behind|beneath|below|above|along|within|outside|reached|entered|visited|left|out[ \t]+of)[ \t]+$/iu;
+/** Words a lone capitalised word is too vague to be named by: "the Desert", "the Crown", "the Siege", "Children". */
+const VAGUE = new Set([...TITLE_SET, ...ITEM_SET, ...PLACE_SET, ...EVENT_SET, ...FACTION_SET].filter((w) => !NAME_LIKE.has(w)));
+/** Thing and event words whose plural opens a sentence as a plain noun ("Engines are ready"); place plurals are surnames too ("Rivers"). */
+const THING_PLURALS = new Set([...ITEM_SET, ...EVENT_SET].filter((w) => !NAME_LIKE.has(w)));
+/** After a sentence-initial word, an object means it was a command: "Hang it on the bell", "Give me the key". */
+const OBJECT_AFTER = /^[ \t]+(?:it|them|him|her|me|us|this|that|these|those|your|my|our|his|their|everyone|everything)(?![\p{L}])/u;
+/** Writing in capitals is a sign or a shout ("WHO RINGS ME"), not a name. */
+const ALL_CAPS = /^(?:\p{Lu}+[ \t]+)*\p{Lu}{2,}(?:[ \t]+\p{Lu}+)*$/u;
+
+/**
+ * A name that cannot be a person: "House Tarn", "the Seven Founders", "the Great Rockfall". A last word that is
+ * also a surname ("Edmund Hall", "Elena Wood") does not count.
+ */
+function notAPerson(name: string): boolean {
+  const words = name.split(' ');
+  if (!kindByWords(words)) return false;
+  if (FACTION_PREFIX.includes(words[0]!) || PLACE_PREFIX.has(words[0]!)) return true;
+  return !NAME_LIKE.has(words[words.length - 1]!);
+}
+
+/** A name whose words say it is a group, a thing or an event: "at the Copper Paddle", "the Captain of The Bellguard". */
+function otherThanPlace(name: string): boolean {
+  const words = name.split(' ');
+  const kind = kindByWords(words);
+  return (kind !== undefined && kind !== 'place') || (words.length === 1 && name.length > 7 && FACTION_SUFFIX.test(name.toLowerCase()));
+}
+
+/** What a name is by its last word ("Hollin Wood", "the Seven Founders", "the Copper Paddle", "the Great Storm"), or a first word like "Mount". */
+function kindByWords(words: readonly string[]): 'event' | 'faction' | 'item' | 'place' | undefined {
+  if (words.length < 2) return undefined;
+  const head = words[words.length - 1]!;
+  if (EVENT_SET.has(head)) return 'event';
+  if (FACTION_SET.has(head) || FACTION_PREFIX.includes(words[0]!)) return 'faction';
+  if (ITEM_SET.has(head)) return 'item';
+  if (PLACE_SET.has(head) || PLACE_PREFIX.has(words[0]!)) return 'place';
+  return undefined;
+}
+
+// Quick checks for the words a pattern cannot match without: a sentence that lacks them skips the pattern.
+// Each one only has to be true whenever its pattern can match, so skipping never changes a result.
+const HAS = {
+  born: /born/,
+  death: /died|perished|passed|killed|slew|slain|murdered|executed|assassinated/,
+  married: /married|wed/,
+  childOf: /(?:son|daughter|child|heir)[ \t]+of/,
+  of: /[ \t]of[ \t]/,
+  event: new RegExp(`(?:${EVENT_EITHER}|${EVENT_HEADS_ALT})[ \\t]+(?:of|on|at)[ \\t]`, 'u'),
+  gerundOf: /\p{Lu}\p{Ll}{2,}ing[ \t]+of[ \t]/u,
+  deed: new RegExp(DEEDS_ALT),
+  motion: new RegExp(MOTION),
+  placeNoun: new RegExp(PLACE_NOUNS_ALT),
+  placeOf: /the[ \t]+(?:gates|walls|streets|ruins|markets|harbour|harbor|towers|halls|road|roads|way|throne|people|sands|dunes)[ \t]+(?:of|to)[ \t]/,
+  itemNoun: new RegExp(ITEM_NOUNS_ALT),
+  faction: new RegExp(`${FACTION_PREFIX.join('|')}|${FACTION_WORDS.join('|')}`),
+  factionVerb: new RegExp(FACTION_VERBS_ALT),
+  memberOf: /(?:member|knight|servant|soldier|brother|sister|leader|head|founder|master)[ \t]+of/,
+  itemWord: new RegExp(`${ITEM_WORDS_ALT}|${ITEM_HEADS_ALT}`),
+  role: new RegExp(ROLES_ALT, 'u'),
+  itemVerb: new RegExp(ITEM_VERBS_ALT),
+};
 
 interface Patterns {
   person: string;
@@ -314,10 +461,14 @@ function toDate(raw: string | undefined, cal: Calendar): DateText | undefined {
 
 const capitalise = (w: string) => (/^\p{Ll}/u.test(w) ? w.charAt(0).toUpperCase() + w.slice(1) : w);
 
+/** Stop words that also start names when a place or group word follows: "the Night Market", "the Well Wardens", "the Long Paddle". */
+const STOP_IN_NAMES = new Set(['Well', 'Long', 'First', 'Last', 'Night', 'Dawn', 'Dusk', 'Morning', 'Evening', 'Midnight', 'Noon']);
+const keepsStop = (words: readonly string[]) => STOP_IN_NAMES.has(words[0]!) && words.length > 1 && kindByWords(words) !== undefined;
+
 /** "King camel" -> { name: "Camel", title: "King", raw: "King camel" }; leading stop words go. */
 function cleanName(raw: string): { name: string; title?: string; raw: string } | undefined {
   const words = raw.trim().split(/[ \t]+/);
-  while (words.length && STOP.has(words[0]!)) words.shift();
+  while (words.length && STOP.has(words[0]!) && !keepsStop(words)) words.shift();
   let title: string | undefined;
   if (words.length > 1 && TITLE_SET.has(capitalise(words[0]!))) title = capitalise(words.shift()!);
   if (!words.length) return undefined;
@@ -432,6 +583,8 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       const raw = split.raw;
       const n = cleanName(raw);
       if (!n) return undefined;
+      // "Lady Mira of House Tarn was born": House Tarn is not the one born.
+      if (!ix.resolve(raw.trim()) && notAPerson(n.name)) return undefined;
       const f: ProposalFields = { ...(split.role ? roleFields(split.role) : {}), ...fields };
       if (n.title) {
         f.title = n.title;
@@ -450,20 +603,24 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
     const place = (raw: string | undefined, pattern: string, confidence = 0.6): string | undefined => {
       if (!raw) return undefined;
       const n = cleanName(raw);
-      if (!n || n.title || notPlace(n.name)) return undefined;
+      if (!n || n.title || notPlace(n.name) || otherThanPlace(n.name)) return undefined;
       add({ entryType: 'place', name: n.name, fields: {}, confidence, pattern });
       return n.name;
     };
 
+    const text = s.text;
+    const hasDeath = HAS.death.test(text);
+    const hasOf = HAS.of.test(text);
+    const hasFaction = HAS.faction.test(text);
     // born: "King Camel was born in Qarim in 1998", "Camel, son of Leyla, was born in 1998"
-    for (const m of s.text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(?:was${S})?born${LOC}(?:${S}${DP})?`)) {
+    if (HAS.born.test(text)) for (const m of text.matchAll(rx`${P}(?:${S}of${S}(?:the${S})?${NAME})?(?:,[^,]{1,60},)?${S}(?:was${S})?born${LOC}(?:${S}${DP})?`)) {
       const born = toDate(m[3], cal) ?? sentenceDate;
       const where = place(m[2], 'born');
       if (!born && !where) continue;
       person(m[1]!, born ? { born } : {}, 'born');
     }
     // died: "Camel died in 2050", "Camel was slain at Qarim"
-    for (const m of s.text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(?:died|perished|passed${S}away|was${S}(?:killed|slain|murdered|executed))(?!${S}by)${LOC}(?:${S}${DP})?`)) {
+    if (hasDeath) for (const m of text.matchAll(rx`${P}(?:${S}of${S}(?:the${S})?${NAME})?(?:,[^,]{1,60},)?${S}(?:died|perished|passed${S}away|was${S}(?:killed|slain|murdered|executed))(?!${S}by)${LOC}(?:${S}${DP})?`)) {
       const died = toDate(m[3], cal) ?? sentenceDate;
       place(m[2], 'died');
       person(m[1]!, died ? { died, status: 'dead' } : { status: 'dead' }, 'died');
@@ -480,12 +637,14 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       if (placeName) fields.place = placeName;
       add({ entryType: 'event', name: `The ${KILL_NOUN[verb] ?? 'Death'} of ${victim}`, fields, confidence: 0.8, pattern: 'killed' });
     };
-    for (const m of s.text.matchAll(rx`${P}${S}(${KILL_VERBS.join('|')})${S}${P}${LOC}(?:${S}${DP})?`)) killed(m[1]!, m[2]!, m[3]!, m[4], m[5]);
-    for (const m of s.text.matchAll(rx`${P}${S}was${S}(killed|slain|murdered|executed|assassinated)${S}by${S}${P}${LOC}(?:${S}${DP})?`)) {
-      killed(m[3]!, m[2] === 'slain' ? 'slew' : m[2]!, m[1]!, m[4], m[5]);
+    if (hasDeath) {
+      for (const m of text.matchAll(rx`${P}${S}(${KILL_ALT})${S}${P}${LOC}(?:${S}${DP})?`)) killed(m[1]!, m[2]!, m[3]!, m[4], m[5]);
+      for (const m of text.matchAll(rx`${P}${S}was${S}(killed|slain|murdered|executed|assassinated)${S}by${S}${P}${LOC}(?:${S}${DP})?`)) {
+        killed(m[3]!, m[2] === 'slain' ? 'slew' : m[2]!, m[1]!, m[4], m[5]);
+      }
     }
     // married: "Camel married Leyla in 1950"
-    for (const m of s.text.matchAll(rx`${P}${S}(?:married|wed)${S}${P}(?:${S}${DP})?`)) {
+    if (HAS.married.test(text)) for (const m of text.matchAll(rx`${P}${S}(?:married|wed)${S}${P}(?:${S}${DP})?`)) {
       const other = person(m[2]!, {}, 'married', 0.7);
       if (!other) continue;
       const rel: Relation = { type: 'spouse-of', target: other };
@@ -494,18 +653,24 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       person(m[1]!, { relations: [rel] }, 'married');
     }
     // son/daughter/child of: "Camel, son of Leyla", "Camel was the daughter of Leyla"
-    for (const m of s.text.matchAll(rx`${P}(?:,|${S}(?:was|is))${S}(?:the${S})?(?:son|daughter|child|heir)${S}of${S}${P}`)) {
+    if (HAS.childOf.test(text)) for (const m of text.matchAll(rx`${P}(?:,|${S}(?:was|is))${S}(?:the${S})?(?:son|daughter|child|heir)${S}of${S}${P}`)) {
       const parent = person(m[2]!, {}, 'child-of', 0.7);
       if (parent) person(m[1]!, { relations: [{ type: 'child-of', target: parent }] }, 'child-of');
     }
     // the X of Place: "Ilsa, the Salt Queen of Saltmere", "the Sultan of Qarim", "the City of Brass"
-    for (const m of s.text.matchAll(rx`${P},${S}the${S}((?:${CAP}${S}){0,2}${CAP})${S}of${S}(?:the${S})?${PLACE}`)) {
-      const where = place(m[3], 'title-of', 0.7);
-      person(m[1]!, { title: where ? `${m[2]} of ${where}` : m[2]! }, 'title-of', 0.8);
+    if (hasOf) {
+      for (const m of text.matchAll(rx`${P},${S}the${S}((?:${CAP}${S}){0,2}${CAP})${S}of${S}(?:the${S})?${PLACE}`)) {
+        const where = place(m[3], 'title-of', 0.7);
+        person(m[1]!, { title: where ? `${m[2]} of ${where}` : m[2]! }, 'title-of', 0.8);
+      }
+      for (const m of text.matchAll(rx`${START}(?:${TITLE}|${PLACE_WORDS_ALT})${S}of${S}(?:the${S})?${PLACE}`)) place(m[1], 'title-of', 0.7);
+      // "the Hall of Heroes", "The Square of Bells", "the Ridge of the Seven": the whole name is the place
+      for (const m of text.matchAll(rx`${START}[Tt]he${S}((?:${CAP}${S}){0,2}(?:${PLACE_HEADS_ALT})${S}of${S}(?:the${S})?${NAME})${END}`)) {
+        add({ entryType: 'place', name: `The ${m[1]!.replace(/[ \t]+/g, ' ')}`, fields: {}, confidence: 0.6, pattern: 'place-name' });
+      }
     }
-    for (const m of s.text.matchAll(rx`${START}(?:${TITLE}|${PLACE_WORDS.join('|')})${S}of${S}(?:the${S})?${PLACE}`)) place(m[1], 'title-of', 0.7);
     // battle/war/siege of X: an event, "in DATE" next to it or anywhere in the sentence
-    for (const m of s.text.matchAll(rx`${START}(?:[Tt]he${S})?(${either(EVENT_WORDS)})${S}(?:of|on|at)${S}(?:the${S})?(${NAME})(?:${S}${DP})?`)) {
+    if (HAS.event.test(text)) for (const m of text.matchAll(rx`${START}(?:[Tt]he${S})?(${EVENT_EITHER}|${EVENT_HEADS_ALT})${S}(?:of|on|at)${S}(?:the${S})?(${NAME})(?:${S}${DP})?`)) {
       if (!/^[Tt]he[ \t]/.test(m[0]) && /^\p{Ll}/u.test(m[1]!)) continue; // "a raid on Qarim" is too unsure; "the raid on Qarim" is fine
       const word = capitalise(m[1]!);
       const target = cleanName(m[2]!)?.name;
@@ -526,8 +691,16 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       const confidence = isName ? 0.8 : date || findExisting(ix, target)?.type === 'place' ? 0.65 : 0.5;
       add({ entryType: 'event', name: `The ${word} ${prep} ${/^the\s/i.test(after) ? 'the ' : ''}${target}`, fields, confidence, pattern: 'event' });
     }
+    // "the Ringing of the Bell", "The Passing of the Bell": a capitalised "-ing of" names a happening
+    if (hasOf && HAS.gerundOf.test(text)) for (const m of text.matchAll(rx`${START}[Tt]he${S}(\\p{Lu}\\p{Ll}{2,}ing)${S}of${S}(the${S})?(${NAME})`)) {
+      if (NOT_EVENT_ING.has(m[1]!)) continue;
+      const target = cleanName(m[3]!)?.name;
+      if (!target) continue;
+      const the = m[2] || /^the[ \t]/i.test(m[3]!) ? 'the ' : '';
+      add({ entryType: 'event', name: `The ${m[1]} of ${the}${target}`, fields: sentenceDate ? { date: sentenceDate } : {}, confidence: 0.6, pattern: 'event-ing' });
+    }
     // a deed at a place: "Hadi fought at Saltmere in 1920" -> The Battle of Saltmere, with its place, date and people
-    for (const m of s.text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(${Object.keys(PLACE_DEEDS).join('|')})(?:${S}(at|in|on|near|outside|before))?${S}(?:the${S}(?:${PLACE_NOUNS.join('|')})${S}of${S})?${PLACE}(?:${S}${DP})?`)) {
+    if (HAS.deed.test(text)) for (const m of text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(${DEEDS_ALT})(?:${S}(at|in|on|near|outside|before))?${S}(?:the${S}(?:${PLACE_NOUNS_ALT})${S}of${S})?${PLACE}(?:${S}${DP})?`)) {
       const deed = PLACE_DEEDS[m[2]!]!;
       const target = cleanName(m[4]!);
       if (!target || target.title || notPlace(target.name) || !!deed.at !== !!m[3]) continue;
@@ -551,118 +724,168 @@ function extractChapter(world: World, ch: StoryChapter, p: Patterns, ix: WorldIn
       add({ entryType: 'event', name: `The ${deed.noun} ${deed.of} ${where}`, fields, confidence: 0.4 + sure, pattern: 'deed-at' });
     }
     // places from motion and description: "rode to Qarim", "Qarim, a port on the salt sea", "the gates of Qarim"
-    for (const m of s.text.matchAll(rx`${START}(?:${MOTION})(?:${S}(?:back|home|north|south|east|west|on))?${S}(?:to|into|toward|towards|for|from|at|in)${S}(?:the${S}(?:${PLACE_NOUNS.join('|')})${S}of${S})?${PLACE}`)) {
+    if (HAS.motion.test(text)) for (const m of text.matchAll(rx`${START}(?:${MOTION})(?:${S}(?:back|home|north|south|east|west|on))?${S}(?:to|into|toward|towards|for|from|at|in|out${S}of)${S}(?:the${S}(?:${PLACE_NOUNS_ALT})${S}of${S})?${PLACE}`)) {
       const n = cleanName(m[1]!);
       if (!n || findExisting(ix, n.name, 'character')) continue;
       place(m[1], 'motion', 0.5);
     }
-    for (const m of s.text.matchAll(rx`${START}${PLACE},${S}(?:a|an|the)${S}(?:${WORD}${S}){0,2}?(?:${PLACE_NOUNS.join('|')})${END}`)) {
-      if (!/^[\s"'“‘(]*$/.test(s.text.slice(0, m.index!)) && !/[,;:][ \t]*$/.test(s.text.slice(0, m.index!))) continue;
+    if (HAS.placeNoun.test(text) && text.includes(',')) for (const m of text.matchAll(rx`${START}${PLACE},${S}(?:a|an|the)${S}(?:${WORD}${S}){0,2}?(?:${PLACE_NOUNS_ALT})${END}`)) {
+      if (!/^[\s"'“‘(]*$/.test(text.slice(0, m.index!)) && !/[,;:][ \t]*$/.test(text.slice(0, m.index!))) continue;
       place(m[1], 'place-is', 0.8);
     }
-    for (const m of s.text.matchAll(rx`${START}the${S}(?:gates|walls|streets|ruins|markets|harbour|harbor|towers|halls|road|roads|way|throne|people|sands|dunes)${S}(?:of|to)${S}${PLACE}`)) place(m[1], 'place-of', 0.55);
+    if (HAS.placeOf.test(text)) for (const m of text.matchAll(rx`${START}the${S}(?:gates|walls|streets|ruins|markets|harbour|harbor|towers|halls|road|roads|way|throne|people|sands|dunes)${S}(?:of|to)${S}${PLACE}`)) place(m[1], 'place-of', 0.55);
     // named things: "a sword called Dawnbreaker", "her blade, Nightfall,"
-    for (const m of s.text.matchAll(rx`${START}(?:a|an|the|his|her|their|its|my)${S}(?:${WORD}${S}){0,2}?(${ITEM_NOUNS.join('|')})(?:${S}(?:called|named|known${S}as)${S}|,${S})(?:the${S})?(${NAME})(?=[ \t]*(?:[,.;:!?]|$|${S}(?:and|which|that)${END}))`)) {
+    if (HAS.itemNoun.test(text)) for (const m of text.matchAll(rx`${START}(?:a|an|the|his|her|their|its|my)${S}(?:${WORD}${S}){0,2}?(${ITEM_NOUNS_ALT})(?:${S}(?:called|named|known${S}as)${S}|,${S})(?:the${S})?(${NAME})(?=[ \t]*(?:[,.;:!?]|$|${S}(?:and|which|that)${END}))`)) {
       const n = cleanName(m[2]!);
       if (!n || n.title || findExisting(ix, n.name, 'character')?.type === 'character') continue;
       const comma = !/called|named|known/.test(m[0]);
       if (comma && !findExisting(ix, n.name)) continue; // "his sword, Leyla," is too unsure unless the item exists
       add({ entryType: 'item', name: n.name, fields: {}, confidence: comma ? 0.6 : 0.8, pattern: 'item-named' });
     }
+    // "the Sunblade, a sword forged by the smiths": a named thing, and what kind of thing it is
+    if (HAS.itemNoun.test(text) && text.includes(',')) for (const m of text.matchAll(rx`${START}[Tt]he${S}(${NAME}),${S}(?:a|an|the)${S}(?:${WORD}${S}){0,2}?(?:${ITEM_NOUNS_ALT})${END}`)) {
+      const n = cleanName(m[1]!);
+      if (!n || n.title || findExisting(ix, n.name, 'character')?.type === 'character') continue;
+      add({ entryType: 'item', name: `The ${n.name}`, fields: {}, confidence: 0.75, pattern: 'item-is' });
+    }
     // factions: "the Order of the Silver Flame", "the Thieves' Guild", "House Varr"; "Hadi joined the Order of ..."
-    const FACTION = `((?:[Tt]he${S})?(?:(?:${FACTION_PREFIX.join('|')})${S}(?!of\b)${CAP}(?!${S}of${S})|(?:${CAP}${S}){0,3}(?:${FACTION_WORDS.join('|')})(?:${S}of${S}(?:the${S})?${NAME})?))${END}`;
     const factionName = (raw: string): string | undefined => {
       const t = raw.replace(/[ \t]+/g, ' ').replace(/^the /i, '');
       const words = t.split(' ');
-      if (words.length < 2 || STOP.has(words[0]!) || TITLE_SET.has(words[0]!)) return undefined;
+      if (words.length < 2 || (STOP.has(words[0]!) && !STOP_IN_NAMES.has(words[0]!)) || TITLE_SET.has(words[0]!)) return undefined;
       const existing = findExisting(ix, t);
       if (existing) return existing.type === 'faction' ? existing.name : undefined;
       return FACTION_PREFIX.includes(words[0]!) && !/ of /.test(t) ? t : `The ${t}`;
     };
     const factions = new Set<string>();
-    for (const m of s.text.matchAll(rx`${START}${FACTION}`)) {
+    if (hasFaction) for (const m of text.matchAll(rx`${START}${FACTION}`)) {
       if (!/^the /i.test(m[1]!) && !FACTION_PREFIX.includes(m[1]!.split(/[ \t]/)[0]!)) continue;
       const name = factionName(m[1]!);
       if (!name || factions.has(name)) continue;
       factions.add(name);
       add({ entryType: 'faction', name, fields: {}, confidence: / of /.test(name) ? 0.7 : 0.6, pattern: 'faction' });
     }
-    for (const m of s.text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(${Object.keys(FACTION_VERBS).join('|')})${S}(?:with${S}|against${S}|for${S})?${FACTION}`)) {
+    if (hasFaction && HAS.factionVerb.test(text)) for (const m of text.matchAll(rx`${P}(?:,[^,]{1,60},)?${S}(${FACTION_VERBS_ALT})${S}(?:with${S}|against${S}|for${S})?${FACTION}`)) {
       const name = factionName(m[3]!);
       if (name) person(m[1]!, { relations: [{ type: FACTION_VERBS[m[2]!]!, target: name }] }, 'faction-deed', 0.75);
     }
-    for (const m of s.text.matchAll(rx`${P},${S}(?:a|an|the)${S}(member|knight|servant|soldier|brother|sister|leader|head|founder|master)${S}of${S}${FACTION}`)) {
+    if (hasFaction && HAS.memberOf.test(text)) for (const m of text.matchAll(rx`${P},${S}(?:a|an|the)${S}(member|knight|servant|soldier|brother|sister|leader|head|founder|master)${S}of${S}${FACTION}`)) {
       const name = factionName(m[3]!);
       const type = /^(?:leader|head|master)$/.test(m[2]!) ? 'leader-of' : m[2] === 'founder' ? 'founded' : 'member-of';
       if (name) person(m[1]!, { relations: [{ type, target: name }] }, 'faction-of', 0.8);
     }
     // items: "the Glass Compass", "the Crown of Thorns"
-    for (const m of s.text.matchAll(rx`${START}[Tt]he${S}((?:${CAP}${S}){0,3}(?:${ITEM_WORDS.join('|')})(?:${S}of${S}(?:the${S})?${NAME})?)${END}`)) {
+    // The thing word is the last capitalised word: "the Mirror Tarn" is a tarn, not a mirror.
+    if (HAS.itemWord.test(text)) for (const m of text.matchAll(rx`${START}[Tt]he${S}((?:${CAP}${S}){0,3}(?:${ITEM_WORDS_ALT}|${ITEM_HEADS_ALT})(?!${S}\\p{Lu})(?:${S}of${S}(?:the${S})?${NAME})?)${END}`)) {
       if (!/[ \t]/.test(m[1]!)) continue; // "the Crown" alone is too vague
       add({ entryType: 'item', name: `The ${m[1]!.replace(/[ \t]+/g, ' ')}`, fields: {}, confidence: 0.6, pattern: 'item' });
     }
-    // in/at Place
-    for (const m of s.text.matchAll(rx`${START}(?:in|at|near|into)${S}(?:the${S}(?:${PLACE_WORDS.map((w) => w.toLowerCase()).join('|')})${S}of${S})?${PLACE}`)) place(m[1], 'in-place', 0.5);
+    // in/at Place, but not "looked back at Yusuf"
+    for (const m of text.matchAll(rx`${START}(?:in|at|near|into)${S}(?:the${S}(?:${PLACE_WORDS_LOWER_ALT})${S}of${S})?${PLACE}`)) {
+      if (/^at[ \t]/.test(m[0]) && LOOK_AT.test(`${text.slice(0, m.index!)}at `)) continue;
+      // "in The Square of Bells": the name goes on past "of" (the whole-name pattern has it), so not "Square".
+      if (AFTER_OF.test(text.slice(m.index! + m[0].length)) && VAGUE.has(cleanName(m[1]!)?.name ?? '')) continue;
+      place(m[1], 'in-place', 0.5);
+    }
     // appositives: "Keller the grand magus", "Leyla, the healer," (a capitalised "the Grand Magus" is split in person())
-    const ROLE_PHRASE = `((?:${WORD}${S}){0,3}?(?:${either(ROLES)}))${END}`;
-    for (const m of s.text.matchAll(rx`${P}${S}the${S}${ROLE_PHRASE}(?!${S}of${END})`)) {
+    const hasRole = HAS.role.test(text);
+    if (hasRole) for (const m of text.matchAll(rx`${P}${S}the${S}${ROLE_PHRASE}(?!${S}of${END})`)) {
       // Only as the subject ("Keller the magus created"), not "told Leyla the king had died".
-      if (!/(?:^[\s"'“‘(]*|[,;:][ \t]*|(?:^|[^\p{L}])and[ \t]+)$/u.test(s.text.slice(0, m.index!))) continue;
+      if (!/(?:^[\s"'“‘(]*|[,;:][ \t]*|(?:^|[^\p{L}])and[ \t]+)$/u.test(text.slice(0, m.index!))) continue;
       const role = roleFields(m[2]!);
       if (role) person(m[1]!, role, 'role', 0.8);
     }
-    for (const m of s.text.matchAll(rx`${P},${S}(?:the|a|an)${S}${ROLE_PHRASE}(?=[ \t]*(?:[,.;:!?]|$))`)) {
+    if (hasRole && text.includes(',')) for (const m of text.matchAll(rx`${P},${S}(?:the|a|an)${S}${ROLE_PHRASE}(?=[ \t]*(?:[,.;:!?]|$))`)) {
       const role = roleFields(m[2]!);
       if (role) person(m[1]!, role, 'role', 0.8);
     }
     // deeds with things: "Keller created the scepter", "Leyla found the Glass Compass"
-    for (const m of s.text.matchAll(rx`${P}(?:${S}the${S}(?:${WORD}${S}){0,3}?(?:${either(ROLES)}))?(?:,[^,]{1,60},)?${S}(${Object.keys(ITEM_VERBS).join('|')})${S}the${S}((?:${WORD}${S}){0,2}?(?:${either(ITEM_WORDS)})(?:${S}of${S}(?:the${S})?${NAME})?)${END}`)) {
+    if (HAS.itemVerb.test(text)) for (const m of text.matchAll(rx`${P}(?:${S}the${S}(?:${WORD}${S}){0,3}?(?:${ROLES_ALT}))?(?:,[^,]{1,60},)?${S}(${ITEM_VERBS_ALT})${S}the${S}((?:${WORD}${S}){0,2}?(?:${ITEM_WORDS_EITHER})(?!${S}\\p{Lu})(?:${S}of${S}(?:the${S})?${NAME})?)${END}`)) {
       const item = `The ${titleCase(m[3]!.replace(/[ \t]+/g, ' '))}`;
       const existing = findExisting(ix, item);
       if (existing && existing.type !== 'item') continue;
       add({ entryType: 'item', name: existing?.name ?? item, fields: {}, confidence: 0.7, pattern: 'item-deed' });
       person(m[1]!, { relations: [{ type: ITEM_VERBS[m[2]!]!, target: existing?.name ?? item }] }, 'item-deed', 0.8);
     }
-    // any other capitalised name: a "new entry?" proposal, typed from its words and what stands before it
-    for (const m of s.text.matchAll(rx`${START}${NAME}`)) {
-      const at = m.index!;
-      const before = s.text.slice(0, at);
+    // any other capitalised name: a "new entry?" proposal, typed by its last word, then by what stands before it
+    for (const m of text.matchAll(rx`${START}${NAME}`)) {
+      let before = text.slice(0, m.index!);
+      let found = m[0];
+      const after = text.slice(m.index! + m[0].length);
       // The first word of a sentence, of a quote inside one (said, "Are we there?") or of *emphasis*.
       const initial = /^[\s"'“‘(*_]*$/.test(before) || /(?:^|[\s,:;(—–-])["'“‘*_]+$/u.test(before);
-      const possessive = /['’]s$/.test(m[0]);
-      const split = splitRole(m[0].replace(/['’]s$/, ''));
+      // "From the Broken Tooth", "In the Red Erg", "Ring the Hero's Bell" run together into one capitalised run:
+      // the name starts after "the". ("Orsan the Grey" stays whole.)
+      const glued = /^(\p{Lu}\p{Ll}*)([ \t]+the[ \t]+)(?=\p{Lu})/u.exec(found);
+      if (glued && (STOP.has(glued[1]!) || COMMON_START.has(glued[1]!) || kindByWords(found.slice(glued[0].length).split(/[ \t]+/)) !== undefined)) {
+        before += glued[0];
+        found = found.slice(glued[0].length);
+      }
+      if (ALL_CAPS.test(found)) continue;
+      // "the Heralds' vault": a plural owner, like "Yusuf's"
+      const possessive = /['’]s?$/.test(found);
+      const split = splitRole(found.replace(/['’]s?$/, ''));
       const n = cleanName(split.raw);
       if (!n) continue;
+      if (ALL_CAPS.test(n.name)) continue;
       const words = n.name.split(' ');
       const one = words.length === 1 ? n.name : undefined;
-      if (one && (TITLE_SET.has(one) || ITEM_WORDS.includes(one) || PLACE_WORDS.includes(one) || EVENT_WORDS.includes(one))) continue;
-      if (p.months.has(n.name) || p.eras.has(n.name) || words.some((w) => STOP.has(w) || CONTRACTION.test(w)) || /^\p{Lu}{1,4}$/u.test(n.name)) continue;
-      if (/(?:^|[^\p{L}])of[ \t]+(?:the[ \t]+)?$/u.test(before)) continue; // "son of X", "Battle of X": other patterns
+      if (one && VAGUE.has(one)) continue;
+      const afterThe = /(?:^|[^\p{L}])the[ \t]+$/iu.test(before) || /^the$/i.test(found.split(/[ \t]+/)[0]!);
+      if (one && afterThe && NAME_LIKE.has(one)) continue; // "the Hall" alone, though "Hall said" is a person
+      // Speech next to it makes it a person ("said Brook"); otherwise the last word can tell ("Hollin Wood").
+      const speech = SPEECH_BEFORE.test(before) || SPEECH_AFTER.test(after);
+      let kind = n.title || split.role || speech ? undefined : kindByWords(words);
+      // "Edmund Hall", "Ayla Stone" are people unless "the" or a place word says otherwise ("the Great Hall", "over Hollin Wood")
+      // ("Hadiya's Bell" names its owner, so it is a thing either way.)
+      if (kind && NAME_LIKE.has(words[words.length - 1]!) && !afterThe && !PLACE_PREFIX.has(words[0]!) && !PLACE_NEAR.test(before) && !/['’]s$/.test(words[0]!)) kind = undefined;
+      // A stop word inside a person's name means two phrases ran together; a place or group may have one ("Moon Well").
+      if (p.months.has(n.name) || p.eras.has(n.name) || words.some((w) => (!kind && STOP.has(w)) || CONTRACTION.test(w)) || /^\p{Lu}{1,4}$/u.test(n.name)) continue;
+      // "son of X", "Battle of X": other patterns, unless the name says what it is ("the shaft of the Moon Well")
+      const suffixed = afterThe && !!one && one.length > 5 && PLACE_SUFFIX.test(one.toLowerCase());
+      if (/(?:^|[^\p{L}])of[ \t]+(?:the[ \t]+)?$/u.test(before) && !kind && !suffixed) continue;
       if (initial && !n.title && !split.role && words.length === 1) {
         // A sentence-initial word is a name only when it is not a common word and goes on into the sentence.
-        const after = s.text.slice(at + m[0].length);
-        const common = lowerWords.has(n.name.toLowerCase()) || COMMON_START.has(n.name) || plainForms(n.name).some((w) => lowerWords.has(w));
-        if (/ly$/.test(n.name) || common || !/^[ \t]+\p{Ll}/u.test(after)) continue;
+        // "Carpenters were building": the plural of a trade is not a name either
+        const common = lowerWords.has(n.name.toLowerCase()) || COMMON_START.has(n.name) || plainForms(n.name).some((w) => lowerWords.has(w) || ROLE_SET.has(w) || THING_PLURALS.has(capitalise(w)));
+        // "Flower of the market!", "Hang it on the bell": a noun with "of", or a command with its object
+        if (/ly$/.test(n.name) || common || !/^[ \t]+\p{Ll}/u.test(after) || /^[ \t]+of[ \t]/.test(after) || OBJECT_AFTER.test(after)) continue;
       }
-      const afterThe = /(?:^|[^\p{L}])the[ \t]+$/iu.test(before) || /^the$/i.test(m[0].split(/[ \t]+/)[0]!);
-      const hasWord = (list: readonly string[]) => words.some((w) => list.includes(w));
-      if (hasWord(EVENT_WORDS)) {
-        // "the Great Fire", "the Long Plague": a named event (the "Battle of X" pattern covers "of" names).
-        if (afterThe && words.length > 1 && !new RegExp(`^${S}(?:of|on|at)${S}`, 'u').test(s.text.slice(at + m[0].length))) add({ entryType: 'event', name: `The ${n.name}`, fields: {}, confidence: 0.45, pattern: 'name' });
+      if (kind === 'event') {
+        // "the Great Rockfall", "the Long Plague": a named event ("the Battle of Qarim" is the event pattern's).
+        if (afterThe && !AFTER_OF_ON_AT_NAME.test(after)) add({ entryType: 'event', name: `The ${n.name}`, fields: {}, confidence: 0.45, pattern: 'name' });
         continue;
       }
-      if (hasWord(FACTION_WORDS) || FACTION_PREFIX.includes(words[0]!)) continue; // the faction patterns above
-      if (hasWord(ITEM_WORDS)) {
-        if (new RegExp(`^${S}of${S}`, 'u').test(s.text.slice(at + m[0].length))) continue; // "the Crown of Thorns": the item pattern
-        if (findExisting(ix, `The ${n.name}`)?.type === 'item' || words.length > 1) add({ entryType: 'item', name: `The ${n.name}`, fields: {}, confidence: 0.4, pattern: 'name' });
+      if (kind === 'faction') continue; // the faction patterns above
+      if (kind === 'item') {
+        if (AFTER_OF.test(after)) continue; // "the Crown of Thorns": the item pattern
+        // "Yusuf's Compass" is named by its owner; "the Glass Compass" takes its "the".
+        add({ entryType: 'item', name: /['’]s$/.test(words[0]!) ? n.name : `The ${n.name}`, fields: {}, confidence: 0.4, pattern: 'name' });
         continue;
       }
-      if (hasWord(PLACE_WORDS) || (!possessive && !n.title && !split.role && PLACE_BEFORE.test(before))) {
-        if (!notPlace(n.name)) add({ entryType: 'place', name: n.name, fields: {}, confidence: 0.4, pattern: 'name' });
+      if (kind === 'place') {
+        if (!notPlace(n.name)) add({ entryType: 'place', name: n.name, fields: {}, confidence: 0.5, pattern: 'name' });
         continue;
       }
-      if (afterThe || words.length > 3) continue; // "the Shifting Dunes": too unclear to guess
-      person(m[0].replace(/['’]s$/, ''), {}, 'name', 0.4);
+      if (afterThe && one && FACTION_SUFFIX.test(one.toLowerCase()) && one.length > 7 && !speech) {
+        add({ entryType: 'faction', name: `The ${one}`, fields: {}, confidence: 0.5, pattern: 'name' }); // "the Bellguard"
+        continue;
+      }
+      // What stands before it: "in Qarim", "across the Red Erg", "behind The Snowcrown", "to the Moon Well".
+      // Not "looked back at Yusuf", which is at a person.
+      // "toward the Steward" is toward a person: a lone trade or title word is someone's title, never a place.
+      const role = !!one && ROLE_SET.has(one.toLowerCase());
+      if (!possessive && !n.title && !split.role && !speech && !role && !notPlace(n.name) && !LOOK_AT.test(before)) {
+        const placeLike = words.length > 1 || (!!one && PLACE_SUFFIX.test(one.toLowerCase()));
+        const where = afterThe ? SPATIAL_THE.test(before) || (placeLike && FROM_TO_THE.test(before)) : PLACE_BEFORE.test(before);
+        if (where || (afterThe && placeLike && words.length === 1)) {
+          // A one-word "the Millpond", "the Tarnwater" counts on its ending alone.
+          add({ entryType: 'place', name: n.name, fields: {}, confidence: 0.4, pattern: 'name' });
+          continue;
+        }
+      }
+      if (afterThe || words.length > 3) continue; // "the Shifting Pride": too unclear to guess
+      person(found.replace(/['’]s$/, ''), {}, 'name', 0.4);
     }
     // he/she: "he was a very good wizard" adds to the one person just named
     const pron = /^(?:[^,]{0,40},[ \t]+)?(he|she)(?![\p{L}])(?:[ \t]+(?:was|is|became)[ \t]+(?:a|an|the)[ \t]+((?:[\p{L}'’-]+[ \t]+){0,3}?[\p{L}'’-]+)(?=[ \t]*(?:[,.;:!?]|$|[ \t]+(?:of|in|at|from|who|and|with)(?![\p{L}]))))?/iu.exec(s.text);
@@ -709,14 +932,46 @@ export interface SyncExtractor extends Extractor {
   extract(input: ExtractInput): Extraction;
 }
 
+/**
+ * What a chapter's extraction reads from the world besides the chapter itself: the calendar, and each entry's
+ * id, type, name and aliases (to match names, resolve mentions and build the name patterns). Kept per entries
+ * array, so a story edit, which leaves the entries as they are, does not build it again.
+ */
+const namesOf = new WeakMap<readonly Entry[], string>();
+function worldSignature(world: World): string {
+  let names = namesOf.get(world.entries);
+  if (names === undefined) {
+    names = world.entries.map((e) => `${e.id}\u0001${e.type}\u0001${e.name}\u0001${(e.aliases ?? []).join('\u0002')}`).join('\u0000');
+    namesOf.set(world.entries, names);
+  }
+  return `${JSON.stringify(world.manifest.calendar)}\u0003${names}`;
+}
+
+/**
+ * The last extraction of every chapter, reused while the chapter's text and the world's names stay the same.
+ * Typing in one chapter then reads only that chapter again, and editing an entry's other fields reads none.
+ * The results are only ever read, never changed, so sharing them is safe.
+ */
+const chapterCache = new Map<string, { signature: string; body: string; result: Extraction }>();
+const CHAPTER_CACHE_LIMIT = 500;
+
 export const ruleExtractor: SyncExtractor = {
   id: 'rules',
   extract({ world, chapters }) {
-    const p = patterns(world);
-    const ix = new WorldIndex(world);
+    const signature = worldSignature(world);
+    let p: Patterns | undefined;
+    let ix: WorldIndex | undefined;
     const out: Extraction = { proposals: [], appearances: [] };
     for (const ch of chapters) {
-      const r = extractChapter(world, ch, p, ix);
+      const key = `${world.manifest.id}\u0000${ch.file}`;
+      const hit = chapterCache.get(key);
+      let r: Extraction;
+      if (hit && hit.signature === signature && hit.body === ch.body) r = hit.result;
+      else {
+        r = extractChapter(world, ch, (p ??= patterns(world)), (ix ??= new WorldIndex(world)));
+        if (chapterCache.size >= CHAPTER_CACHE_LIMIT) chapterCache.clear();
+        chapterCache.set(key, { signature, body: ch.body, result: r });
+      }
       out.proposals.push(...r.proposals);
       out.appearances.push(...r.appearances);
     }
@@ -926,6 +1181,19 @@ export function reconcile(world: World, raw: readonly RawProposal[]): Reconciled
         } else cur.alsoAt.push(r.sourceSpan);
       }
     }
+  }
+  // "Rhys" after "Rhys Varn": a first name alone is the one new person whose full name starts with it.
+  const newPeople = [...groups].filter(([, r]) => !r.existing && r.entryType === 'character');
+  for (const [g, r] of newPeople) {
+    const first = key(r.name);
+    if (first.includes(' ')) continue;
+    const fuller = newPeople.filter(([g2, r2]) => g2 !== g && groups.has(g2) && key(r2.name).startsWith(`${first} `));
+    if (fuller.length !== 1) continue;
+    const whole = fuller[0]![1];
+    mergeFields(whole.fields, r.fields);
+    whole.confidence = Math.max(whole.confidence, r.confidence);
+    whole.alsoAt.push(r.sourceSpan, ...r.alsoAt);
+    groups.delete(g);
   }
   // A name proposed as two types (Qarim as place and as person) keeps the surer one.
   const best = new Map<string, string>();

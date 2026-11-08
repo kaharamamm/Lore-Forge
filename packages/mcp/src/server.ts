@@ -11,7 +11,8 @@ import { check, DETAIL_FIELDS, ENTRY_TYPES } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 import {
   attachPicture, bookOverview, checkBook, createBook, deleteEntry, duplicateBook, entryJson, exportBook, findEntry, formatWarning, linkEntries,
-  loadPictureSource, markIntended, patchBook, pictureBrief, readStory, saveEntries, storyProposals, writeChapter, type BookPatch, type EntryInput,
+  loadPictureSource, looksOn, markIntended, patchBook, pictureBrief, readStory, saveEntries, storyProposals, writeChapter, type BookPatch,
+  type EntryInput,
 } from './books.ts';
 import { guide, INSTRUCTIONS, writeStoryPrompt } from './guide.ts';
 import {
@@ -20,7 +21,7 @@ import {
 } from './images.ts';
 import { bundledResources, Library, readManifestInfo, type LibraryOptions } from './library.ts';
 
-export const SERVER_VERSION = '1.1.0';
+export const SERVER_VERSION = '1.2.0';
 
 export interface ServerOptions extends LibraryOptions {
   /** fetch for the image services (tests replace it). */
@@ -60,6 +61,19 @@ for (const t of ENTRY_TYPES) {
   }
 }
 
+const lookSchema = z.object({
+  id: z.string().optional().describe('The look\'s id, to change or rename that look. Leave out for a new look: its id is made from its name and never changes, because its pictures use it.'),
+  name: z.string().optional().describe('e.g. "After the war", "Coronation robes", "Old age". Needed for a new look.'),
+  reason: opt(z.string()).describe('Why it looks different: a wound, a new title, new clothes, age.'),
+  from: opt(date).describe('The look applies from this date.'),
+  to: opt(date).describe('The look applies until this date.'),
+  era: opt(z.string()).describe('An era code: the look applies while that era lasts.'),
+  after: opt(z.string()).describe('An event (or another entry with a date), by name: the look applies once it is over.'),
+  before: opt(z.string()).describe('An event (or another entry with a date), by name: the look applies until it starts.'),
+  visual: opt(z.record(z.string(), z.string())).describe('Only the visual fields that change, e.g. {features: "An eye patch"}. The rest come from the Default look.'),
+  remove: z.boolean().optional().describe('true removes this look. Its pictures go back to the Default look.'),
+}).loose();
+
 const entrySchema = z.object({
   id: z.string().optional().describe('Id of an existing entry to update. Leave out to create (an existing entry with the same type and name is updated too).'),
   type: z.enum(ENTRY_TYPES).optional().describe('Needed for a new entry.'),
@@ -78,7 +92,8 @@ const entrySchema = z.object({
   actions: opt(z.array(z.object({ actor: z.string(), verb: z.string().describe('Past tense: killed, crowned, betrayed...'), target: z.string().optional() }))).describe('Event: who did what to whom.'),
   locations: opt(z.array(z.object({ place: z.string(), from: date.optional(), to: date.optional(), note: z.string().optional() }))).describe('Character: where they lived, when.'),
   relations: opt(z.array(z.object({ type: z.string(), target: z.string(), from: date.optional(), to: date.optional(), note: z.string().optional() }))).describe('Replaces the whole list; link_entries adds one at a time.'),
-  visual: opt(z.record(z.string(), z.string())).describe('How it looks, for pictures: character appearance, build, clothing, palette, features, props; place architecture, climate, palette, scale; faction emblem, attire, palette; item material, size, details; event scene, mood.'),
+  visual: opt(z.record(z.string(), z.string())).describe('How it looks, for pictures: character appearance, build, clothing, palette, features, props; place architecture, climate, palette, scale; faction emblem, attire, palette; item material, size, details; event scene, mood. This is the Default look.'),
+  looks: opt(z.array(lookSchema)).describe('Other looks over time. When the appearance changes for good or for a while (a war wound, a coronation, new clothes, growing old), add a look instead of rewriting visual. Each look given changes the look with its id (else its name), only in the fields given, or is added; looks you leave out stay.'),
   picture: opt(z.object({ icon: z.string().optional(), color: z.string().optional(), accent: z.string().optional(), image: z.string().optional() })).describe('Card look: a game-icons.net icon name and #rrggbb colours, or one of its images.'),
   chapter: opt(z.string()), bookOrder: opt(z.number()),
   ...detailShape,
@@ -188,7 +203,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('get_book', {
     title: 'Read a book',
-    description: 'A book at a glance: description, art style, calendar, Story Book details, cover, every entry in short (id, type, name, status, dates, summary), the chapters, and the warning counts.',
+    description: 'A book at a glance: description, art style, calendar, Story Book details, cover, every entry in short (id, type, name, status, dates, summary, looks), the chapters, and the warning counts.',
     inputSchema: { book: bookRef },
     annotations: { readOnlyHint: true },
   }, async (a) => attempt(() => bookOverview(lib, lib.resolveBook(a.book))));
@@ -211,7 +226,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('get_entry', {
     title: 'Read an entry',
-    description: 'One entry in full: every field as stored, its body text, and the open warnings that involve it.',
+    description: 'One entry in full: every field as stored (its looks too), its body text, and the open warnings that involve it.',
     inputSchema: { book: bookRef, entry: z.string().describe('The entry\'s id, name or alias.') },
     annotations: { readOnlyHint: true },
   }, async (a) => attempt(async () => {
@@ -221,9 +236,20 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     return { ...entryJson(world, e), ...(warnings.length ? { warnings } : {}) };
   }));
 
+  server.registerTool('look_at', {
+    title: 'How it looks on a date',
+    description: 'How entries look on an in-world date: the look in effect (of the looks that cover the date, the one that started last) or the Default look, with when it applies, why, and the full visual description. Ask before you write a dated chapter, and describe everyone as they look then. Without entry: every entry that does not have its Default look on that date.',
+    inputSchema: {
+      book: bookRef,
+      date: date.describe('The in-world date, for example the chapter\'s date.'),
+      entry: z.union([z.string(), z.array(z.string())]).optional().describe('An entry\'s name or id, or a list of them.'),
+    },
+    annotations: { readOnlyHint: true },
+  }, async (a) => attempt(() => looksOn(lib.resolveBook(a.book), String(a.date), a.entry === undefined ? undefined : typeof a.entry === 'string' ? [a.entry] : a.entry)));
+
   server.registerTool('save_entries', {
     title: 'Save entries',
-    description: 'Create or update characters, places, factions, items, events and notes (up to 40 per call). For an update give the id (or the same type and name) and only the fields that change; null removes a field; lists replace the whole list. Refer to other entries by name. Returns what was saved and any contradictions it caused.',
+    description: 'Create or update characters, places, factions, items, events and notes (up to 40 per call). For an update give the id (or the same type and name) and only the fields that change; null removes a field; lists replace the whole list, except looks, which are matched one by one (see looks). Refer to other entries by name. Returns what was saved and any contradictions it caused.',
     inputSchema: { book: bookRef, entries: z.array(entrySchema).min(1).max(40) },
   }, async (a) => attempt(async () => {
     const r = await saveEntries(writable(a.book), a.entries as EntryInput[]);
@@ -259,7 +285,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('write_chapter', {
     title: 'Write a chapter',
-    description: 'Write one story chapter (Markdown prose). A chapter with the same title is replaced; otherwise it is added after the last one. Use the exact names of entries in the text. Returns the names and facts the chapter mentions that the world does not have yet (proposals) and any contradictions with the entries.',
+    description: 'Write one story chapter (Markdown prose). A chapter with the same title is replaced; otherwise it is added after the last one. Use the exact names of entries in the text. Returns the names and facts the chapter mentions that the world does not have yet (proposals), any contradictions with the entries, and, for a dated chapter, the looks the entries it names have on that date (looks): check that the text describes them that way.',
     inputSchema: {
       book: bookRef,
       title: z.string(),
@@ -324,10 +350,11 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('create_image', {
     title: 'Create a picture',
-    description: 'Make a picture with the user\'s image service and attach it: to an entry (its card shows it) or, with entry "cover", to the book cover. The prompt is built from the entry\'s visual description, summary and the book\'s artStyle unless you give one. Takes 10–60 seconds.',
+    description: 'Make a picture with the user\'s image service and attach it: to an entry (its card shows it), to one of its looks, or, with entry "cover", to the book cover. The prompt is built from the entry\'s visual description (or the look\'s, with the reason for it), summary and the book\'s artStyle unless you give one. Takes 10–60 seconds.',
     inputSchema: {
       book: bookRef,
       entry: z.string().describe('Name or id of the entry, or "cover" for the book cover.'),
+      look: z.string().optional().describe('One of the entry\'s looks (its id or name): the picture shows the entry in that look and is kept with it. Leave out for the Default look.'),
       view: z.string().optional().describe('character three-quarter (default), front, a-pose, concept...; place establishing (default), interior, map...; item front; faction emblem; event scene; note illustration.'),
       prompt: z.string().optional().describe('Your own picture description (the book\'s art style is added).'),
       aspect: z.enum(['portrait', 'landscape', 'square', 'cover']).optional(),
@@ -337,7 +364,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     const dir = writable(a.book);
     const setup = imageSetup(lib.dataDir, env);
     if (!setup) return fail(NO_IMAGE_SETUP);
-    const brief = await pictureBrief(dir, a.entry, a.view);
+    const brief = await pictureBrief(dir, a.entry, a.view, a.look);
     let prompt = a.prompt?.trim() || brief.prompt;
     if (brief.artStyle && !prompt.toLowerCase().includes(brief.artStyle.toLowerCase())) prompt = `${prompt} Style: ${brief.artStyle}.`;
     const aspect = a.aspect ?? aspectFor(brief.entry?.type ?? 'cover', brief.view);
@@ -356,8 +383,8 @@ export function createServer(opts: ServerOptions = {}): McpServer {
         model = await modelFor({ ...setup, model: '' }, model);
         img = await generateImage({ provider: setup.provider, key: setup.key, model, prompt, aspect }, fetchFn);
       }
-      const saved = await attachPicture(dir, a.entry, brief.view, img.data, img.ext, { tool: `${PROVIDER_INFO[setup.provider].label} ${img.model} via Lore-Forge`, prompt });
-      return { saved: saved.file, for: saved.entry ?? 'the book cover', view: brief.view, model: img.model, prompt };
+      const saved = await attachPicture(dir, a.entry, brief.view, img.data, img.ext, { tool: `${PROVIDER_INFO[setup.provider].label} ${img.model} via Lore-Forge`, prompt }, brief.look?.id);
+      return { saved: saved.file, for: saved.entry ?? 'the book cover', ...(brief.look ? { look: brief.look.name || brief.look.id } : {}), view: brief.view, model: img.model, prompt };
     } finally {
       if (timer) clearInterval(timer);
     }
@@ -365,10 +392,11 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('add_image', {
     title: 'Add a picture',
-    description: 'Attach a picture you already have to an entry (or "cover"): a local file path, an http(s) address or a data:image/...;base64 URL. PNG and JPEG also print in the PDFs.',
+    description: 'Attach a picture you already have to an entry, one of its looks, or "cover": a local file path, an http(s) address or a data:image/...;base64 URL. PNG and JPEG also print in the PDFs.',
     inputSchema: {
       book: bookRef,
       entry: z.string().describe('Name or id of the entry, or "cover".'),
+      look: z.string().optional().describe('One of the entry\'s looks (its id or name), when the picture shows the entry in that look.'),
       source: z.string(),
       view: z.string().optional().describe('e.g. three-quarter, establishing, front, emblem, scene, illustration.'),
       prompt: z.string().optional().describe('How it was made, if you know (kept with the picture).'),
@@ -376,10 +404,10 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     },
   }, async (a) => attempt(async () => {
     const dir = writable(a.book);
-    const brief = await pictureBrief(dir, a.entry, a.view);
+    const brief = await pictureBrief(dir, a.entry, a.view, a.look);
     const pic = await loadPictureSource(a.source, fetchFn as typeof fetch);
-    const saved = await attachPicture(dir, a.entry, brief.view, pic.data, pic.ext, { ...(a.tool ? { tool: a.tool } : {}), ...(a.prompt ? { prompt: a.prompt } : {}), ...(/^https?:/i.test(a.source) ? { sources: [a.source] } : {}) });
-    return { saved: saved.file, for: saved.entry ?? 'the book cover', view: brief.view };
+    const saved = await attachPicture(dir, a.entry, brief.view, pic.data, pic.ext, { ...(a.tool ? { tool: a.tool } : {}), ...(a.prompt ? { prompt: a.prompt } : {}), ...(/^https?:/i.test(a.source) ? { sources: [a.source] } : {}) }, brief.look?.id);
+    return { saved: saved.file, for: saved.entry ?? 'the book cover', ...(brief.look ? { look: brief.look.name || brief.look.id } : {}), view: brief.view };
   }));
 
   server.registerTool('export_book', {

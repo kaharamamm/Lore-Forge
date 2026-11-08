@@ -2,14 +2,18 @@ import autoAnimate from '@formkit/auto-animate';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** Longer lists do not slide: auto-animate watches every child's position, which costs every keystroke in a big world. */
+export const ANIMATED_MAX = 100;
+
 /**
- * Ref callback: children of this element slide in, out and into place when the list changes.
- * auto-animate itself stays still when the system asks for reduced motion.
+ * Ref callback: children of this element slide in, out and into place when the list changes, unless the list is
+ * long (see ANIMATED_MAX). auto-animate itself stays still when the system asks for reduced motion.
  */
 const animatedEls = new WeakSet<Element>();
 export function animated(el: Element | null): void {
   if (!el || animatedEls.has(el)) return;
   animatedEls.add(el);
+  if (el.childElementCount > ANIMATED_MAX) return;
   autoAnimate(el as HTMLElement, { duration: 180, easing: 'ease-out' });
 }
 

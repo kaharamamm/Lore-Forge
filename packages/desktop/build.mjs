@@ -15,7 +15,8 @@ const configs = [
   { ...common, entryPoints: ['src/cli.ts'], outfile: 'dist/cli.cjs', platform: 'node', format: 'cjs', sourcemap: false, external: ['pdfkit'], logOverride: { 'empty-import-meta': 'silent' } },
   { ...common, entryPoints: ['src/main/preload.ts'], outfile: 'dist/preload.cjs', platform: 'node', format: 'cjs', external: ['electron'] },
   // React Flow runs on Preact through preact/compat.
-  { ...common, entryPoints: ['src/renderer/main.tsx'], outfile: 'dist/renderer/app.js', platform: 'browser', format: 'iife', jsx: 'automatic', jsxImportSource: 'preact',
+  // The changelogs (Patch notes in the library) come in as text.
+  { ...common, entryPoints: ['src/renderer/main.tsx'], outfile: 'dist/renderer/app.js', platform: 'browser', format: 'iife', jsx: 'automatic', jsxImportSource: 'preact', loader: { '.md': 'text' },
     alias: { react: 'preact/compat', 'react-dom': 'preact/compat', 'react/jsx-runtime': 'preact/jsx-runtime' }, define: { 'process.env.NODE_ENV': '"production"' } },
   // The 3D viewer (three.js), loaded on first use of the 3D model tab, so the app starts without it.
   { ...common, entryPoints: ['src/renderer/viewer/viewer.ts'], outfile: 'dist/renderer/viewer.js', platform: 'browser', format: 'iife', minify: true, sourcemap: false },

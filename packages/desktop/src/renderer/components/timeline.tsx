@@ -6,6 +6,7 @@ import { CountBadge } from './severity.tsx';
 import { Icon } from './icon.tsx';
 import { SEVERITY_ICON } from './severity.tsx';
 import { portraitFile, useImage, WorldDir } from './cover.tsx';
+import { t, tm, tx } from '../i18n.tsx';
 
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 400;
@@ -101,8 +102,8 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
   if (!model) {
     return (
       <section class="timeline">
-        <h2><Icon name="hourglass" /> Timeline</h2>
-        <div class="empty-state"><Icon class="empty-icon" name="sands-of-time" /><p>Nothing has a date yet. Give a character a birth year, a place a founding year or an event a date, and it shows up here.</p></div>
+        <h2><Icon name="hourglass" /> {t('Timeline')}</h2>
+        <div class="empty-state"><Icon class="empty-icon" name="sands-of-time" /><p>{t('Nothing has a date yet. Give a character a birth year, a place a founding year or an event a date, and it shows up here.')}</p></div>
       </section>
     );
   }
@@ -150,25 +151,25 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
   return (
     <section class="timeline" aria-labelledby="timeline-title">
       <header class="view-head">
-        <h2 id="timeline-title" tabIndex={-1}><Icon name="hourglass" /> Timeline</h2>
+        <h2 id="timeline-title" tabIndex={-1}><Icon name="hourglass" /> {t('Timeline')}</h2>
       </header>
       <div class="tl-toolbar">
-        <div class="tl-seg" role="group" aria-label="Zoom">
-          <button type="button" class="tl-zoom-out" onClick={() => pz.zoomBy(1 / 1.5)} aria-label="Zoom out"><Icon name="contract" /></button>
-          <button type="button" class="tl-fit" onClick={() => { setBasePpy(fit()); fitAll(); }}>Fit</button>
-          <button type="button" class="tl-zoom-in" onClick={() => pz.zoomBy(1.5)} aria-label="Zoom in"><Icon name="expand" /></button>
-          <button type="button" onClick={() => pz.panBy(trackW / 3, 0)} aria-label="Earlier"><Icon name="fast-backward-button" /></button>
-          <button type="button" onClick={() => pz.panBy(-trackW / 3, 0)} aria-label="Later"><Icon name="fast-forward-button" /></button>
+        <div class="tl-seg" role="group" aria-label={t('Zoom')}>
+          <button type="button" class="tl-zoom-out" onClick={() => pz.zoomBy(1 / 1.5)} aria-label={t('Zoom out')}><Icon name="contract" /></button>
+          <button type="button" class="tl-fit" onClick={() => { setBasePpy(fit()); fitAll(); }}>{t('Fit')}</button>
+          <button type="button" class="tl-zoom-in" onClick={() => pz.zoomBy(1.5)} aria-label={t('Zoom in')}><Icon name="expand" /></button>
+          <button type="button" onClick={() => pz.panBy(trackW / 3, 0)} aria-label={t('Earlier')}><Icon name="fast-backward-button" /></button>
+          <button type="button" onClick={() => pz.panBy(-trackW / 3, 0)} aria-label={tx('time', 'Later')}><Icon name="fast-forward-button" /></button>
         </div>
-        <div class="tl-seg" role="group" aria-label="Layout">
-          <button type="button" class="tl-layout-lanes" aria-pressed={layout === 'lanes'} onClick={() => setLayout('lanes')} title="One lane per entry"><Icon name="scroll-unfurled" /> Lanes</button>
-          <button type="button" class="tl-layout-stacked" aria-pressed={layout === 'stacked'} onClick={() => setLayout('stacked')} title="Each type's entries packed side by side"><Icon name="sands-of-time" /> Stacked</button>
+        <div class="tl-seg" role="group" aria-label={t('Layout')}>
+          <button type="button" class="tl-layout-lanes" aria-pressed={layout === 'lanes'} onClick={() => setLayout('lanes')} title={t('One lane per entry')}><Icon name="scroll-unfurled" /> {t('Lanes')}</button>
+          <button type="button" class="tl-layout-stacked" aria-pressed={layout === 'stacked'} onClick={() => setLayout('stacked')} title={t("Each type's entries packed side by side")}><Icon name="sands-of-time" /> {t('Stacked')}</button>
         </div>
         <span class="tl-sep" aria-hidden="true" />
-        <div class="type-filters" role="group" aria-label="Show types">
+        <div class="type-filters" role="group" aria-label={t('Show types')}>
           {model.groups.map((g) => (
             <button key={g.type} type="button" class={`tl-chip t-${g.type}`} aria-pressed={!hidden.has(g.type)} onClick={() => toggle(g.type)}>
-              <span class="tl-chip-icon"><Icon name={TYPE_ICON[g.type]} /></span> {TYPE_LABELS[g.type]} <span class="tl-chip-count">{g.lanes.length}</span>
+              <span class="tl-chip-icon"><Icon name={TYPE_ICON[g.type]} /></span> {tm(TYPE_LABELS[g.type])} <span class="tl-chip-count">{g.lanes.length}</span>
             </button>
           ))}
         </div>
@@ -188,7 +189,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
             <div class="tl-head">
               {model.eras.length > 0 && (
                 <div class="tl-row tl-era-row">
-                  <div class="tl-label"><Icon name="crown" /> Eras</div>
+                  <div class="tl-label"><Icon name="crown" /> {t('Eras')}</div>
                   <div class="tl-track" style={{ width: `${width}px` }} aria-hidden="true">
                     {model.eras.map((era) => {
                       const left = xOf(era.from), w = Math.max(2, (era.to - era.from) * ppd);
@@ -202,7 +203,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
                 </div>
               )}
               <div class="tl-row tl-axis">
-                <div class="tl-label" ref={labelCol}><Icon name="calendar" /> {showMonths ? 'Years · months' : 'Years'}</div>
+                <div class="tl-label" ref={labelCol}><Icon name="calendar" /> {showMonths ? t('Years · months') : t('Years')}</div>
                 <div class="tl-track" style={{ width: `${width}px` }} aria-hidden="true">
                   {majors.map((t) => <span key={t.day} class="tl-tick is-major" style={{ left: `${xOf(t.day)}px` }}>{yearLabel(t.day, cal)}</span>)}
                   {minors.map((t) => <span key={t.day} class="tl-tick" style={{ left: `${xOf(t.day)}px` }}>{t.text}</span>)}
@@ -210,15 +211,15 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
               </div>
             </div>
             {model.eras.length > 0 && (
-              <ul class="sr-only" aria-label="Eras">
-                {model.eras.map((e) => <li key={e.id}>{e.name}: {yearLabel(e.from, cal)} to {yearLabel(e.to, cal)}</li>)}
+              <ul class="sr-only" aria-label={t('Eras')}>
+                {model.eras.map((e) => <li key={e.id}>{t('{era}: {from} to {to}', { era: e.name, from: yearLabel(e.from, cal), to: yearLabel(e.to, cal) })}</li>)}
               </ul>
             )}
             {groups.map((g) => {
               return (
-                <div key={g.type} class={`tl-group t-${g.type}`} role="group" aria-label={TYPE_LABELS[g.type]}>
+                <div key={g.type} class={`tl-group t-${g.type}`} role="group" aria-label={tm(TYPE_LABELS[g.type])}>
                   <div class="tl-row tl-group-head">
-                    <div class="tl-label"><Icon name={TYPE_ICON[g.type]} /> {TYPE_LABELS[g.type]} <span class="tl-count">{g.lanes.length}</span></div>
+                    <div class="tl-label"><Icon name={TYPE_ICON[g.type]} /> {tm(TYPE_LABELS[g.type])} <span class="tl-count">{g.lanes.length}</span></div>
                     <div class="tl-track" style={{ width: `${width}px` }} aria-hidden="true" />
                   </div>
                   {(() => {
@@ -285,7 +286,8 @@ const footprint = (it: Placed) => {
 };
 const ariaLabel = (lane: TimelineLane) => {
   const e = lane.entry, lc = LIFECYCLE[e.type];
-  return `${TYPE_SINGULAR[e.type]} ${e.name}${lane.ended && lc ? `, ${lc.endedWord}` : ''}, ${lane.dates}${lane.warnings.length ? `, ${lane.warnings.length} warning${lane.warnings.length > 1 ? 's' : ''}` : ''}`;
+  const n = lane.warnings.length;
+  return `${tm(TYPE_SINGULAR[e.type])} ${e.name}${lane.ended && lc ? `, ${tm(lc.endedWord)}` : ''}, ${lane.dates}${n ? `, ${n > 1 ? t('{n} warnings', { n }) : t('{n} warning', { n })}` : ''}`;
 };
 
 /** One swimlane: the entry's name on the left, its mark on the track. Taller when the entry has a picture. */
@@ -296,7 +298,7 @@ function Lane({ it, selected, mark }: { it: Placed; selected: boolean; mark: Mar
   return (
     <div class={`tl-row tl-lane${selected ? ' is-selected' : ''}${portraitFile(e) ? ' is-tall' : ''}`}>
       <div class="tl-label">
-        <button type="button" class={`tl-name t-${e.type}${lane.ended ? ' is-ended' : ''}`} aria-label={`${ariaLabel(lane)}. Open.`}
+        <button type="button" class={`tl-name t-${e.type}${lane.ended ? ' is-ended' : ''}`} aria-label={t('{label}. Open.', { label: ariaLabel(lane) })}
           onClick={() => mark.onOpen(e.id)} onFocus={(ev) => mark.show(lane, ev)} onBlur={mark.hide}>
           <Icon name={TYPE_ICON[e.type]} /> {e.name}{lane.ended && lc ? <> <Icon name={lc.endedIcon} /></> : null}
         </button>
@@ -327,7 +329,7 @@ function Mark({ it, focusable, trackW, inset, onOpen, show, hide }: MarkProps & 
   const end = left + (lane.point ? half : w) + 8;
   const flip = end + asideW > trackW && left - half - 8 - asideW >= 0;
   const handlers = { onClick: () => onOpen(e.id), onMouseEnter: (ev: MouseEvent) => show(lane, ev), onMouseMove: (ev: MouseEvent) => show(lane, ev), onMouseLeave: hide };
-  const focus = focusable ? { tabIndex: 0, 'aria-label': `${ariaLabel(lane)}. Open.`, onFocus: (ev: FocusEvent) => show(lane, ev), onBlur: hide } : { tabIndex: -1, 'aria-hidden': true as const };
+  const focus = focusable ? { tabIndex: 0, 'aria-label': t('{label}. Open.', { label: ariaLabel(lane) }), onFocus: (ev: FocusEvent) => show(lane, ev), onBlur: hide } : { tabIndex: -1, 'aria-hidden': true as const };
   return (
     <>
       <button type="button" {...focus} class={`tl-mark ${lane.point ? 'tl-point' : 'tl-bar'} t-${e.type}${cls}${inside === 'dates' ? ' has-dates' : ''}${src ? ' has-image' : ''}`}
@@ -373,10 +375,10 @@ function Overview({ model, from, to, goTo, panBy, trackW, yearAt }: {
   const viewSpan = Math.max(0, to - from);
   return (
     <div class="tl-overview">
-      <div class="tl-label tl-overview-label"><Icon name="world" /> Overview</div>
-      <div class="tl-mini" role="slider" tabIndex={0} aria-label="Visible years"
+      <div class="tl-label tl-overview-label"><Icon name="world" /> {t('Overview')}</div>
+      <div class="tl-mini" role="slider" tabIndex={0} aria-label={t('Visible years')}
         aria-valuemin={Math.round(model.min / model.daysPerYear)} aria-valuemax={Math.round(model.max / model.daysPerYear)} aria-valuenow={Math.round(from / model.daysPerYear)}
-        aria-valuetext={`${yearAt(Math.max(from, model.min))} to ${yearAt(Math.min(to, model.max))}`}
+        aria-valuetext={t('{from} to {to}', { from: yearAt(Math.max(from, model.min)), to: yearAt(Math.min(to, model.max)) })}
         onPointerDown={(ev) => {
           if (ev.button) return;
           const d = dayAtPointer(ev);
@@ -420,11 +422,11 @@ function TimelineCard({ hover }: { hover: Hover }) {
   const top = Math.min(hover.y + 8, window.innerHeight - 200);
   return (
     <div class={`hover-card t-${e.type}`} role="tooltip" style={{ left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px` }}>
-      <p class="hover-title"><Icon name={TYPE_ICON[e.type]} /> <strong>{e.name}</strong> <span class="muted">· {TYPE_SINGULAR[e.type]}</span></p>
-      <p>{lane.dates}{lane.ended && lc ? <> · <Icon name={lc.endedIcon} /> {lc.endedWord}</> : ''}</p>
-      {lane.warnings.slice(0, 3).map((w, i) => <p key={i} class={`hover-warn sev-${w.severity}`}><Icon name={SEVERITY_ICON[w.severity]} /> {w.message}</p>)}
-      {lane.warnings.length > 3 && <p class="muted">and {lane.warnings.length - 3} more…</p>}
-      <p class="muted small">Click to open</p>
+      <p class="hover-title"><Icon name={TYPE_ICON[e.type]} /> <strong>{e.name}</strong> <span class="muted">· {tm(TYPE_SINGULAR[e.type])}</span></p>
+      <p>{lane.dates}{lane.ended && lc ? <> · <Icon name={lc.endedIcon} /> {tm(lc.endedWord)}</> : ''}</p>
+      {lane.warnings.slice(0, 3).map((w, i) => <p key={i} class={`hover-warn sev-${w.severity}`}><Icon name={SEVERITY_ICON[w.severity]} /> {tm(w.message)}</p>)}
+      {lane.warnings.length > 3 && <p class="muted">{t('and {n} more…', { n: lane.warnings.length - 3 })}</p>}
+      <p class="muted small">{t('Click to open')}</p>
     </div>
   );
 }

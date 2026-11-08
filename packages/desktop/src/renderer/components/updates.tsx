@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { canCheck, canDownload, canInstall, releasePage, showToast, updateText, type UpdateState } from '../../shared/update-state.ts';
+import { t, tj } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 
 /** The self-update state from the main process, kept live. */
@@ -15,15 +16,15 @@ export function useUpdateState(): UpdateState | null {
 }
 
 const WhatsNew = ({ state }: { state: UpdateState }) => (
-  <a class="button-link ghost small" href={releasePage(state.latest)} target="_blank" rel="noreferrer">What's new</a>
+  <a class="button-link ghost small" href={releasePage(state.latest)} target="_blank" rel="noreferrer">{t("What's new")}</a>
 );
 
 function UpdateActions({ state, onLater }: { state: UpdateState; onLater?: () => void }) {
   return (
     <>
-      {canDownload(state) && <button type="button" class="primary small update-download" onClick={() => void window.lore.downloadUpdate()}><Icon name="cloud-download" /> {state.manual ? 'Download page' : 'Download'}</button>}
-      {canInstall(state) && <button type="button" class="primary small update-install" onClick={() => void window.lore.installUpdate()}><Icon name="upgrade" /> Restart to update</button>}
-      {onLater && (canDownload(state) || canInstall(state)) && <button type="button" class="ghost small update-later" onClick={onLater}>Later</button>}
+      {canDownload(state) && <button type="button" class="primary small update-download" onClick={() => void window.lore.downloadUpdate()}><Icon name="cloud-download" /> {state.manual ? t('Download page') : t('Download')}</button>}
+      {canInstall(state) && <button type="button" class="primary small update-install" onClick={() => void window.lore.installUpdate()}><Icon name="upgrade" /> {t('Restart to update')}</button>}
+      {onLater && (canDownload(state) || canInstall(state)) && <button type="button" class="ghost small update-later" onClick={onLater}>{t('Later')}</button>}
       {state.latest && canDownload(state) && <WhatsNew state={state} />}
     </>
   );
@@ -64,19 +65,19 @@ export function UpdatesSection() {
   const line = updateText(state);
   return (
     <section class="updates" aria-labelledby="updates-title">
-      <h3 id="updates-title">Updates</h3>
-      <p class="updates-version">You have Lore-Forge <strong>{state.version}</strong>.{line && <> <span class={state.status === 'error' ? 'error-line' : 'muted'}>{line}</span></>}</p>
+      <h3 id="updates-title">{t('Updates')}</h3>
+      <p class="updates-version">{tj('You have Lore-Forge {version}.', { version: <strong>{state.version}</strong> })}{line && <> <span class={state.status === 'error' ? 'error-line' : 'muted'}>{line}</span></>}</p>
       {state.status === 'downloading' && <span class="update-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={state.percent ?? 0}><span style={{ width: `${state.percent ?? 0}%` }} /></span>}
       <div class="row-actions">
-        <button type="button" class="ghost small update-check" disabled={!canCheck(state)} onClick={() => void window.lore.checkForUpdates()}><Icon name="cycle" /> Check now</button>
+        <button type="button" class="ghost small update-check" disabled={!canCheck(state)} onClick={() => void window.lore.checkForUpdates()}><Icon name="cycle" /> {t('Check now')}</button>
         <UpdateActions state={state} />
         <label class="update-auto">
-          <input type="checkbox" checked={auto ?? true} disabled={state.status === 'off' || auto === null} onChange={(e) => void toggle(e.currentTarget.checked)} /> Check automatically (at start and every few hours)
+          <input type="checkbox" checked={auto ?? true} disabled={state.status === 'off' || auto === null} onChange={(e) => void toggle(e.currentTarget.checked)} /> {t('Check automatically (at start and every few hours)')}
         </label>
       </div>
       {state.notes && (
         <details class="update-notes" open>
-          <summary>What's new in {state.latest}</summary>
+          <summary>{t("What's new in {version}", { version: state.latest ?? '' })}</summary>
           <p>{state.notes}</p>
         </details>
       )}

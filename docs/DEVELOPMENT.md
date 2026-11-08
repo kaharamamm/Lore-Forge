@@ -226,7 +226,7 @@ PDFs embed PNG and JPEG only. WebP and GIF images are listed by file name; conve
 
 ### A world does not show on the shelf
 
-The shelf lists the worlds folder (Library settings), the worlds you opened from elsewhere, and the sample world. A folder without a valid `world.json` is not a world; **Open a world folder…** says why.
+The shelf lists the worlds folder (Settings), the worlds you opened from elsewhere, and the sample world. A folder without a valid `world.json` is not a world; **Open a world folder…** says why.
 
 ## Tech Stack
 

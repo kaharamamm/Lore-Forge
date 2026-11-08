@@ -1,6 +1,7 @@
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef } from 'preact/hooks';
 import { ENTRY_ICON_NAMES, TYPE_ICON, type Entry, type IconName, type Picture } from '@lore-forge/core';
+import { t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 import { entryEmblem, Portrait } from './cover.tsx';
 import { ColorField } from './color.tsx';
@@ -29,13 +30,17 @@ export function PictureEditor({ dir, entry, onChange, onClose }: { dir: string; 
     const { picture: _old, ...rest } = entry;
     onChange(Object.keys(next).length ? { ...rest, picture: next } : (rest as Entry));
   };
+  // The entry may change while the file dialog is open: the picture goes into the entry as it is when it closes.
+  const latest = useRef({ entry, onChange });
+  latest.current = { entry, onChange };
   const upload = async () => {
     const file = await window.lore.importImage(dir, entry.id, 'concept');
     if (!file) return;
-    const images = (entry.images ?? []).filter((i) => i.view !== 'concept');
-    const prev = entry.images?.find((i) => i.view === 'concept');
-    const { picture: _old, ...rest } = entry;
-    onChange({ ...rest, images: [...images, { file, view: 'concept', provenance: { ...prev?.provenance, date: new Date().toISOString().slice(0, 10) } }], picture: { ...pic, image: file } } as Entry);
+    const now = latest.current.entry;
+    const images = (now.images ?? []).filter((i) => i.view !== 'concept');
+    const prev = now.images?.find((i) => i.view === 'concept');
+    const { picture: old, ...rest } = now;
+    latest.current.onChange({ ...rest, images: [...images, { file, view: 'concept', provenance: { ...prev?.provenance, date: new Date().toISOString().slice(0, 10) } }], picture: { ...old, image: file } } as Entry);
   };
   const current = entryEmblem(entry);
   // In <body>, like every modal: inside a pane, the side panels next to it could paint over it.
@@ -45,24 +50,24 @@ export function PictureEditor({ dir, entry, onChange, onClose }: { dir: string; 
         <div class="picture-head dialog-head">
           <span class="picture-preview"><Portrait entry={entry} size="lg" /></span>
           <div>
-            <h2 id="picture-title">Picture for {entry.name}</h2>
-            <p class="muted">Pick an icon and colours, or upload your own picture. It shows on Home, in the sidebar and in the graphs.</p>
+            <h2 id="picture-title">{t('Picture for {name}', { name: entry.name })}</h2>
+            <p class="muted">{t('Pick an icon and colours, or upload your own picture. It shows on Home, in the sidebar and in the graphs.')}</p>
             <div class="row-actions">
-              <button ref={first} type="button" class="ghost small" onClick={() => void upload()}><Icon name="cloud-upload" /> Upload image…</button>
-              {pic.image && <button type="button" class="ghost small" onClick={() => set({ image: undefined, icon: current })}>Use the icon instead</button>}
-              <button type="button" class="ghost small" disabled={!entry.picture} onClick={() => { const { picture: _p, ...rest } = entry; onChange(rest as Entry); }}><Icon name="cycle" /> Reset to default</button>
+              <button ref={first} type="button" class="ghost small" onClick={() => void upload()}><Icon name="cloud-upload" /> {t('Upload image…')}</button>
+              {pic.image && <button type="button" class="ghost small" onClick={() => set({ image: undefined, icon: current })}>{t('Use the icon instead')}</button>}
+              <button type="button" class="ghost small" disabled={!entry.picture} onClick={() => { const { picture: _p, ...rest } = entry; onChange(rest as Entry); }}><Icon name="cycle" /> {t('Reset to default')}</button>
             </div>
           </div>
         </div>
         <div class="dialog-body">
-        <h3>Icon</h3>
-        <IconPicker label="Icon" choices={ICON_CHOICES} value={current} onPick={(name) => name && set({ icon: name })} />
+        <h3>{t('Icon')}</h3>
+        <IconPicker label={t('Icon')} choices={ICON_CHOICES} value={current} onPick={(name) => name && set({ icon: name })} />
         <div class="grid-2 picture-colours">
-          <ColorField label="Background" value={pic.color ?? '#2b2f3a'} swatches={BACKGROUNDS} onChange={(c) => set({ color: c })} />
-          <ColorField label="Icon colour" value={pic.accent ?? '#e0bd6a'} swatches={ACCENTS} onChange={(c) => set({ accent: c })} />
+          <ColorField label={t('Background')} value={pic.color ?? '#2b2f3a'} swatches={BACKGROUNDS} onChange={(c) => set({ color: c })} />
+          <ColorField label={t('Icon colour')} value={pic.accent ?? '#e0bd6a'} swatches={ACCENTS} onChange={(c) => set({ accent: c })} />
         </div>
         </div>
-        <div class="dialog-actions"><button type="button" class="primary" onClick={onClose}>Done</button></div>
+        <div class="dialog-actions"><button type="button" class="primary" onClick={onClose}>{t('Done')}</button></div>
       </section>
     </div>,
     document.body,

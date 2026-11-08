@@ -123,5 +123,6 @@ export async function coverFont(family: string | undefined, bold: boolean, dir?:
   const b = bundledFont(family);
   const file = b ? bundledFontPath(b, bold, dir) : await systemFontFile(family, bold);
   if (file) return { file };
-  return { note: `The cover font “${family.trim()}” is not installed as a TrueType or OpenType file on this computer, so the PDF cover title uses DejaVu.` };
+  // The note's English is a template ({font}): renderPdf fills it, in the app's language when it has one.
+  return { note: 'The cover font “{font}” is not installed as a TrueType or OpenType file on this computer, so the PDF cover title uses DejaVu.' };
 }

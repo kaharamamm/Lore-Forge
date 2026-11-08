@@ -13,7 +13,16 @@ The start screen is a bookcase. Every world is a book: a 3D spine with its title
 - **Duplicate** and **Delete** sit on a book's cover. Duplicate asks for a name (it suggests "<name> (copy)"), copies the whole world into the worlds folder with a new id, keeps the cover and opens the copy. It works on the read-only sample too, which is how you get your own copy of Camelamamm. Delete asks first and moves the folder to the system trash. Nothing is deleted outright.
 - **Take the tour** shows a short guided tour (eight steps) through the library and the sample world. It starts by itself the first time Lore-Forge opens; **Skip** or Esc ends it, Back and Next (or the arrow keys) move through it, and it does not change the sample. **About** has the same button.
 - **Open a world folder…** opens a world from anywhere on disk; it then stays on the shelf.
-- **Library settings** chooses the folder new books go to.
+- **Settings** (the gear; also in an open book, left of **World settings** in the top bar and on world Home):
+  - **Language**: English or Türkçe (Turkish), each with its flag. The whole app changes at once, including warnings, the patch notes and the labels in the World Codex and Story Book. Until you pick one, Lore-Forge follows the system's language.
+  - **Display**:
+    - **Window**: Windowed, Maximized or Full screen.
+    - **Resolution**: the window's size, from 1280 × 720 to 3840 × 2160. Sizes larger than the screen are greyed out, and a size dragged by hand shows as Custom.
+    - **Interface scale**: Auto, or 80% to 150%. Auto keeps the proportions Lore-Forge was designed in at 1920 × 1080: larger on 2K and 4K screens, smaller in small windows.
+  - **Where new worlds go**, and whether the sample world is on the shelf.
+
+  Language and display changes apply at once and are remembered; the folder and the sample are saved with **Save**.
+- **Patch notes** lists what changed in each version, newest first, from the changelog that comes with the app (it works offline). When the updater has found a newer version, its notes show on top.
 - **Connect AI** connects Lore-Forge to an AI app (Claude Desktop, Claude Code, Codex, Cursor, or another app through **Copy the settings**). You can then ask the assistant to write a story in Lore-Forge, and it writes the whole book here. **Pictures** sets up the image service it uses (OpenAI, Google Gemini or xAI Grok) with your own API key. See [AI assistants](MCP.md).
 - **About** lists the credits and licences, and has **Updates** (see [Updates](#updates)).
 
@@ -36,10 +45,12 @@ A structured form per entry type, in collapsible sections, then the body text.
 - **Status and dates first:** alive or dead, standing or destroyed, active or dissolved, intact or lost, with the matching dates. An ongoing status hides the end date (it stays in the file, and the rules still see it).
 - **Details:** characters have race or kind, gender, title, occupation, languages, personality, goals, skills, affiliations, home and possessions; places kind, population, ruler and features; factions kind, leader, headquarters, ideology, allies and enemies; items kind, origin, location, owners and powers; events kind, date, place, participants, actions ("A killed B"), causes, outcome and consequences. Empty means unknown and is never written to the file.
 - **Entry fields** (Part of, Target, Ruler, Home, …) show the chosen entry as a chip with its picture icon; click it to open that entry, × to clear it. Fields that hold several entries (affiliations, possessions) are rows of chips.
-- **Suggestion lists** (race, gender, kind, relation types, verbs) are themed lists with an icon for every word; the chosen value shows its icon too.
+- **Suggestion lists** (race, gender, kind, relation types, verbs) are themed lists with an icon for every word; the chosen value shows its icon too. Gender offers female (♀), male (♂) and genderless (⚲).
+- **Undo and redo:** Ctrl+Z undoes the open entry's last change, whatever it was: a status pill (alive to dead), a list choice, a picture or icon, a row added or removed, or typing (one step per pause). Ctrl+Y or Ctrl+Shift+Z redoes it. The field comes into view and flashes. A change made outside the app since (by an AI assistant or an editor) is never undone by accident.
 - **Relationships:** typed and dated relations to other entries. The type list only offers types that fit the two entry types; custom types are still allowed.
-- **Visual description, reference images and 3D models** for artists and 3D tools, under **Images | 3D model** tabs (see [Images](FORMAT.md#images) and [3D models](FORMAT.md#3d-models)).
-  - **3D model:** **Add model…** copies a `.glb`, `.gltf` (with its data embedded), `.obj` or `.fbx` file into the world. Drag to orbit, scroll to zoom, right-drag (or Shift+drag) to pan; **Reset view** frames it again and **Auto-rotate** spins it. An entry can have several models: pick one from the row above the viewer, or rename and delete it there. Files over 25 MB get a warning, since they are slow to load. The viewer needs WebGL; if the graphics driver offers none, it says so instead.
+- **Visual description, reference images and 3D models** for artists and 3D tools, under **Images | 3D model** tabs (see [Images](FORMAT.md#images) and [3D models](FORMAT.md#3d-models)). The download button on a picture saves a copy of it anywhere. Pictures can be PNG, JPEG, WebP or GIF; an animated GIF moves everywhere the picture shows (Mr Camel's portrait in the sample world is one), and the World Codex and Story Book print its first frame. Mr Camel also has a 3D model, as an example.
+  - **3D model:** **Add model…** copies a `.glb`, `.gltf` (with its data embedded), `.obj` or `.fbx` file into the world. A model turns by itself when it opens (**Auto-rotate**, off when the system asks for reduced motion). Drag to orbit, scroll to zoom, right-drag (or Shift+drag) to pan; **Reset view** frames it again. An entry can have several models: pick one from the row above the viewer, or download, rename and delete it there. **Download…** saves a copy anywhere, to use it in other programs. Files over 25 MB get a warning, since they are slow to load. The viewer needs WebGL; if the graphics driver offers none, it says so instead.
+- **Looks:** the visual description, pictures and models above are the entry's **Default** look. When it looks different for a while or from some point on (after a war, in coronation robes, in old age), **+ New look** adds a look: give it a name, why it looks different, and when it applies (**Always**, **After an event**, **Before an event**, **Between dates** or **In an era**). A look after an event starts once the event is over, and one before an event ends as it begins. A look's visual description holds only what changes (the Default text shows in its empty fields), and it has its own pictures and 3D models, kept in a folder of their own. **Delete look** moves its pictures and models to the Default look. The checks warn about a look tied to an era or event that does not exist, a look before birth or after death, and two looks at the same time; **Go to** opens the look. Mr Camel's "Caravan days" in the sample world is an example.
 - **Body:** Markdown with `[[links]]` and `@mentions`. Names and aliases typed in any text link themselves: they are highlighted in their type colour, show a hover card, and open with Ctrl/⌘+click.
 
 ### Warnings Panel
@@ -67,11 +78,11 @@ The same rules check what the story says: a sentence that breaks canon is underl
 
 ### World Settings
 
-The gear in the top bar: the default era (dates without an era abbreviation count in it), the eras (name, abbreviation, start and end, colour, and how many dates use each), and the months with their lengths. Saved in `world.json`.
+**World settings** in the top bar (the calendar button): the default era (dates without an era abbreviation count in it), the eras (name, abbreviation, start and end, colour, and how many dates use each), and the months with their lengths. Saved in `world.json`.
 
 ### Changes from Outside the App
 
-Lore-Forge watches the open book's folder and the library. When an AI assistant, a text editor or `git pull` changes the files, the book shows the change a moment later: new and changed entries, chapters and pictures, without a reload. New books appear on the shelf. If you are typing in the same book at that moment, nothing you type is lost: the outside changes load right after your edit is saved.
+Lore-Forge watches the open book's folder and the library. When an AI assistant, a text editor or `git pull` changes the files, the book shows the change a moment later: new and changed entries, chapters and pictures, without a reload. New books appear on the shelf. If you are typing in the same entry or chapter at that moment, both are kept: the outside change and what you typed (where both changed the same field, your typing wins).
 
 ### Navigation
 
@@ -91,8 +102,12 @@ The arrow at the top left always returns to the library. Alt+←/→ and mouse b
 | Ctrl+Shift+W | Focus the warnings panel |
 | Ctrl/⌘+click, Ctrl/⌘+Enter | Open the name under the pointer or cursor |
 | Ctrl+Shift+A | Story: add the selected words to the world |
-| Ctrl+Z | Undo the last relationship change on a graph |
+| Ctrl+Z | Undo: the open entry's last change in the Editor, the last link change on a graph |
+| Ctrl+Y, Ctrl+Shift+Z | Redo in the Editor |
 | Esc | Close a dialog, list or preview |
+| F11 | Full screen on and off |
+| Ctrl + / Ctrl − | Interface scale up or down (saved, as in Settings) |
+| Ctrl 0 | Interface scale back to Auto |
 
 Every control is reachable with Tab and Shift+Tab; dialogs keep focus inside them. The layout reflows down to one column, so it stays usable at 200% zoom. Text contrast is at least 4.5:1 (`npm run contrast -w @lore-forge/desktop` checks the palette).
 
@@ -102,7 +117,7 @@ Every control is reachable with Tab and Shift+Tab; dialogs keep focus inside the
 
 ### World Codex
 
-A reference book of the whole world: a cover, contents, the world overview and calendar, every entry by type with its facts, relationships, visual description, text and reference images with provenance, an **art brief** per character, place, item and event (an image prompt, plus a 3D turnaround brief for characters and items), a timeline, a relationship summary, a glossary of names and aliases, and an appendix of open warnings. The preview chooses the entry types and turns the art briefs and the warnings appendix on or off.
+A reference book of the whole world: a cover, contents, the world overview and calendar, every entry by type with its facts, relationships, visual description, text and reference images with provenance, each **look** with its own pictures, an **art brief** per character, place, item and event (an image prompt, plus a 3D turnaround brief for characters and items; a look gets its own, and an event's brief describes each participant as they look on its date), a timeline, a relationship summary, a glossary of names and aliases, and an appendix of open warnings. The preview chooses the entry types and turns the art briefs and the warnings appendix on or off.
 
 ### Story Book
 
@@ -133,14 +148,14 @@ Lore-Forge checks GitHub for a new version a few seconds after it starts and eve
 - The `.deb` asks for your password once (`pkexec`, to run `dpkg`), then restarts.
 - macOS builds are not signed, so **Download** opens the new disk image to drag into Applications.
 
-Updates never touch your worlds or settings: they live in the folders below, not in the program's folder. Version 1.0.0 has no updater, so it needs one manual download of a newer version.
+Updates never touch your worlds or settings: they live in the folders below, not in the program's folder. Copies of 1.0.0 downloaded before 7 November 2026 have no updater: download the current version once from the README, and from then on Lore-Forge updates itself.
 
 ## App Settings and Storage
 
 | Where | What |
 | --- | --- |
 | The world folder | everything about a world (see [World Format](FORMAT.md#world-format)) |
-| `<user data>/settings.json` | the folder new worlds go to, whether the tour was seen (`tourDone`), automatic update checks (`autoUpdate`) |
+| `<user data>/settings.json` | the folder new worlds go to, whether the tour was seen (`tourDone`), automatic update checks (`autoUpdate`), the window mode, size and interface scale (`display`), the language (`language`: `en` or `tr`) |
 | `<user data>/recent-worlds.json` | worlds opened from outside the worlds folder |
 | `<user data>/recent-cover-uploads.json` | pictures uploaded for covers, offered again |
 | `<user data>/ai-images.json` | the picture service for AI assistants, its API keys and models (**Connect AI → Pictures**; readable only by you on macOS and Linux) |
@@ -148,4 +163,4 @@ Updates never touch your worlds or settings: they live in the folders below, not
 
 `<user data>` is the app's user-data folder: `~/.config/Lore-Forge` on Linux, `%APPDATA%\Lore-Forge` on Windows and `~/Library/Application Support/Lore-Forge` on macOS.
 
-New worlds go to the project's `worlds/` folder when running from source and to `<user data>/worlds` in an installed app, unless Library settings chooses another folder. The installed app ships Camelamamm as a read-only world; **Duplicate** makes an editable copy.
+New worlds go to the project's `worlds/` folder when running from source and to `<user data>/worlds` in an installed app, unless Settings chooses another folder. The installed app ships Camelamamm as a read-only world; **Duplicate** makes an editable copy.

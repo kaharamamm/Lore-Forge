@@ -49,7 +49,7 @@ Build the whole thing in Lore-Forge; do not only answer in chat. Do not stop to 
 2. create_book: name, a one-line description, artStyle, a calendar whose eras fit the world (dates without an era code use the default era), cover colours and an emblem, and book details (title, author if known, dedication, epigraph).
 3. save_entries, several per call: every main character with status, born (and died if dead), race, gender, title, occupation, personality, goals, skills, home, affiliations, possessions, a visual description, a one-line summary and a short body; places (kind, founded, ruler, features, visual); factions (kind, leader, headquarters, ideology, allies, enemies); items (kind, origin, owners, powers, visual); events (date, place, participants, actions, causes, outcome); notes for lore, songs, legends. Refer to other entries by name; Lore-Forge links them (entries of the same call can refer to each other).
 4. link_entries: family (parent-of, spouse-of, sibling-of), bonds (friend-of, mentor-of, ally-of, enemy-of), power (member-of, leader-of, serves, rules), possessions (owns, wields, made), places (lives-in, located-in, part-of), story (killed, involved-in, caused). Write each link once, from the entry it is about.
-5. write_chapter for each chapter in order. Use the exact names of entries in the prose: they become links, and the story is checked against the entries. Keep ages, deaths, dates and places consistent; give a chapter a date when the story has a clear time. Stories read best in plain Markdown paragraphs; no chapter title inside the text.
+5. write_chapter for each chapter in order. Use the exact names of entries in the prose: they become links, and the story is checked against the entries. Keep ages, deaths, dates and places consistent; give a chapter a date when the story has a clear time. Stories read best in plain Markdown paragraphs; no chapter title inside the text. For a dated chapter, look_at (and the looks in the write_chapter answer) tells how the people in it look on that date: describe them that way.
 6. Each write_chapter answer lists proposals: names and facts the text mentions that the world does not have yet. Add the ones that matter (story_proposals with accept, or save_entries with more detail) and ignore the rest.
 7. check_book: fix every error and warning by changing the entry or the chapter. Only when a contradiction is on purpose (a ghost, a liar, a resurrection), mark_intended with a short note.
 8. Pictures, when the user has set them up (create_image tells you if not): the cover ("cover"), each main character (view three-quarter), the main places (establishing), key items (front) and big events (scene). Fill the visual fields first: the picture prompt is built from them and the book's artStyle. If pictures are not set up, tell the user once how to turn them on, and finish everything else.
@@ -59,7 +59,7 @@ Build the whole thing in Lore-Forge; do not only answer in chat. Do not stop to 
 To continue or change an existing book: list_books, get_book, get_entry or read_story first, then the same tools. A read-only book (the sample that comes with the app) must be copied with duplicate_book first.
 
 ## Entry fields
-Every entry: name, aliases (list), summary (one or two lines; shown on cards), body (Markdown text), relations (list of {type, target, from, to, note}; link_entries is easier), visual (map of the keys below), chapter and bookOrder (where an event or note goes in a Story Book without chapters).
+Every entry: name, aliases (list), summary (one or two lines; shown on cards), body (Markdown text), relations (list of {type, target, from, to, note}; link_entries is easier), visual (map of the keys below; this is the Default look), looks (other looks over time, see Looks), chapter and bookOrder (where an event or note goes in a Story Book without chapters).
 Dates are text: ${DATE_FORMATS_HINT}. Era codes come from the book's calendar ("476", "~1200", "12.03.512", "3 BW").
 
 ${ENTRY_TYPES.map(typeSection).join('\n\n')}
@@ -71,12 +71,17 @@ ${relations}
 ## Calendar
 A calendar has eras: {id: short code like "CR", name, start: the absolute year its year 1 falls on, end?, color?}, a defaultEra (used by dates without a code), optional months [{name, days}] (default 12 months of 30 days) and approxYears (how far "~" widens a date, default 5). One era is fine for most stories.
 
+## Looks
+When an entry's appearance changes for good or for a while (a war wound, a coronation, new clothes, old age), add a look instead of rewriting visual: visual stays the Default look. A look is {name, reason (why it looks different), from and to (dates), era (an era code), after or before (an event or another dated entry, by name), visual (only the fields that change)}. Give it one kind of time: between dates, in an era, after an event or before one. A look after an event starts once the event is over, and one before an event ends as it begins, so the event itself shows the look the entry had going in. On a date, the newest look that covers it applies, else the Default look.
+save_entries matches looks one by one, by id or else by name: give only the looks and the fields that change; looks you leave out stay. {id, remove: true} removes a look, and its pictures and 3D models go back to the Default look.
+look_at tells how entries look on a date (without entry: everyone who is not in their Default look then). create_image and add_image take look to make or attach a picture of the entry in that look; it is kept with that look.
+
 ## What check_book checks
 ${rules}
 - story-contradiction (warning): a sentence in the story disagrees with an entry (a date, place, status or title).
 
 ## Pictures
-create_image makes a picture with the user's own image service and attaches it: to an entry (its card shows it) or to the book cover. Its prompt is built from the entry's visual description and summary plus the book's artStyle; pass prompt to write it yourself. add_image attaches a picture you already have (a file path, a web address or a data: URL).`;
+create_image makes a picture with the user's own image service and attaches it: to an entry (its card shows it) or to the book cover. Its prompt is built from the entry's visual description and summary plus the book's artStyle; pass prompt to write it yourself. add_image attaches a picture you already have (a file path, a web address or a data: URL). Both take look for a picture of the entry in one of its looks.`;
 }
 
 export function writeStoryPrompt(a: { idea: string; chapters?: string; audience?: string; style?: string }): string {

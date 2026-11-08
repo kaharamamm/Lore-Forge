@@ -1,6 +1,7 @@
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { bundledFont, COVER_EMBLEM, COVER_EMBLEMS, COVER_SAFE, coverArt, coverImageFile, coverPosition, coverSeed, TITLE_STYLE_LABELS, type CoverPosition, type IconName, type World, type WorldCoverSettings } from '@lore-forge/core';
+import { lower, t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 import { useEdgeColour, useImage, WorldCover } from './cover.tsx';
 import { FontPicker, RecentPictures, useFontAvailable } from './cover-options.tsx';
@@ -26,19 +27,19 @@ function PositionField({ label, which, value, onChange }: { label: string; which
   const at = value ?? DEFAULT_POS[which === 'title' ? 'titlePos' : 'emblemPos'];
   const put = (axis: 'x' | 'y', raw: number) => { if (Number.isFinite(raw)) onChange(coverPosition({ ...at, [axis]: raw })); };
   return (
-    <div class={`cover-position position-${which}`} role="group" aria-label={`${label} position`}>
+    <div class={`cover-position position-${which}`} role="group" aria-label={t('{label} position', { label })}>
       {(['x', 'y'] as const).map((axis) => (
         <label key={axis} class="position-axis">
-          <span class="position-name">{axis === 'x' ? 'X' : 'Y'}<span class="sr-only"> {label.toLowerCase()} position</span></span>
-          <input type="range" class={`position-range position-${axis}`} min={0} max={100} step={1} value={at[axis]} aria-label={`${label} ${axis === 'x' ? 'X (left to right)' : 'Y (top to bottom)'}`} onInput={(e) => put(axis, e.currentTarget.valueAsNumber)} />
-          <input type="number" class={`position-number position-${axis}-number`} min={0} max={100} step={1} value={at[axis]} aria-label={`${label} ${axis.toUpperCase()} in percent`}
+          <span class="position-name">{axis === 'x' ? 'X' : 'Y'}<span class="sr-only"> {t('{label} position', { label: lower(label) })}</span></span>
+          <input type="range" class={`position-range position-${axis}`} min={0} max={100} step={1} value={at[axis]} aria-label={axis === 'x' ? t('{label} X (left to right)', { label }) : t('{label} Y (top to bottom)', { label })} onInput={(e) => put(axis, e.currentTarget.valueAsNumber)} />
+          <input type="number" class={`position-number position-${axis}-number`} min={0} max={100} step={1} value={at[axis]} aria-label={t('{label} {axis} in percent', { label, axis: axis.toUpperCase() })}
             // Typing moves it live while the number is in range; leaving the field clamps anything else to 0–100.
             onInput={(e) => { const v = e.currentTarget.valueAsNumber; if (v >= 0 && v <= 100) put(axis, v); }}
             onBlur={(e) => { const v = e.currentTarget.valueAsNumber; if (Number.isFinite(v)) put(axis, v); else e.currentTarget.value = String(at[axis]); }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />
         </label>
       ))}
-      <button type="button" class="ghost small position-reset" disabled={!value} onClick={() => onChange(undefined)}><Icon name="cycle" /> Reset position</button>
+      <button type="button" class="ghost small position-reset" disabled={!value} onClick={() => onChange(undefined)}><Icon name="cycle" /> {t('Reset position')}</button>
     </div>
   );
 }
@@ -136,77 +137,77 @@ export function CoverEditor({ dir, world, onSave, onClose }: { dir: string; worl
       <section ref={box} class="about cover-editor" role="dialog" aria-modal="true" aria-labelledby="cover-editor-title" onKeyDown={(e) => trapTab(box.current, e)}>
         {/* Three parts: the title and the buttons stay put, only the body between them scrolls. */}
         <header class="cover-editor-head">
-          <h2 id="cover-editor-title">Book cover</h2>
-          <p class="muted">How {world.manifest.name} looks on the shelf, on Home and on the PDF covers.</p>
+          <h2 id="cover-editor-title">{t('Book cover')}</h2>
+          <p class="muted">{t('How {name} looks on the shelf, on Home and on the PDF covers.', { name: world.manifest.name })}</p>
         </header>
         <div class="cover-editor-body">
           <div class="cover-editor-preview" onPointerDown={grab} onPointerMove={move} onPointerUp={drop} onPointerCancel={drop}>
             <span class="world-cover" aria-hidden="true"><WorldCover art={art} image={image} title={world.manifest.name} /></span>
-            <p class="muted font-note">Drag the title or the emblem to move it.</p>
+            <p class="muted font-note">{t('Drag the title or the emblem to move it.')}</p>
           </div>
           <div class="cover-editor-fields">
             <fieldset class="field cover-group">
-              <legend class="field-label">Background</legend>
-              <div class="segmented" role="group" aria-label="Background style">
-                <button ref={first} type="button" aria-pressed={!plain} onClick={() => plain && set({ color2: undefined })}>Gradient</button>
-                <button type="button" aria-pressed={plain} onClick={() => set({ color: draft.color ?? art.top, color2: draft.color ?? art.top })}>Plain colour</button>
+              <legend class="field-label">{t('Background')}</legend>
+              <div class="segmented" role="group" aria-label={t('Background style')}>
+                <button ref={first} type="button" aria-pressed={!plain} onClick={() => plain && set({ color2: undefined })}>{t('Gradient')}</button>
+                <button type="button" aria-pressed={plain} onClick={() => set({ color: draft.color ?? art.top, color2: draft.color ?? art.top })}>{t('Plain colour')}</button>
               </div>
               <div class="cover-colours">
-                <ColorField label={plain ? 'Colour' : 'Top colour'} value={draft.color ?? art.top} swatches={COVER_SWATCHES} onChange={(c) => set(plain ? { color: c, color2: c } : { color: c })} />
-                {!plain && <ColorField label="Bottom colour" value={draft.color2 ?? art.bottom} swatches={COVER_SWATCHES} onChange={(c) => set({ color2: c, color: draft.color ?? art.top })} />}
+                <ColorField label={plain ? t('Colour') : t('Top colour')} value={draft.color ?? art.top} swatches={COVER_SWATCHES} onChange={(c) => set(plain ? { color: c, color2: c } : { color: c })} />
+                {!plain && <ColorField label={t('Bottom colour')} value={draft.color2 ?? art.bottom} swatches={COVER_SWATCHES} onChange={(c) => set({ color2: c, color: draft.color ?? art.top })} />}
               </div>
             </fieldset>
             <fieldset class="field cover-group">
-              <legend class="field-label">Picture</legend>
+              <legend class="field-label">{t('Picture')}</legend>
               <div class="row-actions">
-                <button type="button" class="ghost small" onClick={() => void upload()}><Icon name="cloud-upload" /> Upload picture…</button>
-                <button type="button" class="ghost small" aria-pressed={pictureMode === 'world'} disabled={!fallback} onClick={() => { setPicked(null); set({ image: undefined }); }}>From the world</button>
-                <button type="button" class="ghost small" aria-pressed={pictureMode === 'none'} onClick={() => { setPicked(null); set({ image: 'none' }); }}>No picture</button>
+                <button type="button" class="ghost small" onClick={() => void upload()}><Icon name="cloud-upload" /> {t('Upload picture…')}</button>
+                <button type="button" class="ghost small" aria-pressed={pictureMode === 'world'} disabled={!fallback} onClick={() => { setPicked(null); set({ image: undefined }); }}>{t('From the world')}</button>
+                <button type="button" class="ghost small" aria-pressed={pictureMode === 'none'} onClick={() => { setPicked(null); set({ image: 'none' }); }}>{t('No picture')}</button>
               </div>
               <RecentPictures dir={dir} current={picked?.path ?? draft.image} refresh={uploads}
                 onPick={(p) => (p.kind === 'world' ? (setPicked(null), set({ image: p.path })) : void window.lore.readPickedImage(p.path).then((src) => setPicked({ path: p.path, src })))} />
-              <p class="muted font-note">No picture only hides it: the file stays in the world's images folder and comes back from the list above.</p>
+              <p class="muted font-note">{t("No picture only hides it: the file stays in the world's images folder and comes back from the list above.")}</p>
             </fieldset>
             <fieldset class="field cover-group">
-              <legend class="field-label">Emblem</legend>
-              <IconPicker label="Emblem" class="cover-emblems" choices={EMBLEM_CHOICES} value={art.icon} none="No emblem" onPick={(name) => set({ icon: name ?? 'none' })} />
-              <ColorField label="Emblem colour" value={art.iconColor} onChange={(c) => set({ iconColor: c })} />
-              <label class="check"><input type="checkbox" class="show-emblem" checked={art.showEmblem} onChange={(e) => set({ showEmblem: e.currentTarget.checked ? undefined : false })} /> Show emblem on cover</label>
-              <PositionField label="Emblem" which="emblem" value={draft.emblemPos} onChange={(p) => set({ emblemPos: p })} />
+              <legend class="field-label">{t('Emblem')}</legend>
+              <IconPicker label={t('Emblem')} class="cover-emblems" choices={EMBLEM_CHOICES} value={art.icon} none={t('No emblem')} onPick={(name) => set({ icon: name ?? 'none' })} />
+              <ColorField label={t('Emblem colour')} value={art.iconColor} onChange={(c) => set({ iconColor: c })} />
+              <label class="check"><input type="checkbox" class="show-emblem" checked={art.showEmblem} onChange={(e) => set({ showEmblem: e.currentTarget.checked ? undefined : false })} /> {t('Show emblem on cover')}</label>
+              <PositionField label={t('Emblem')} which="emblem" value={draft.emblemPos} onChange={(p) => set({ emblemPos: p })} />
             </fieldset>
             <fieldset class="field cover-group">
-              <legend class="field-label">Title</legend>
-              <FontPicker value={draft.font} styleLabel={TITLE_STYLE_LABELS[art.titleStyle]} onChange={(f) => set(f ? { font: f } : { font: undefined, titleStyle: undefined })} />
-              <ColorField label="Title colour" value={art.titleColor} onChange={(c) => set({ titleColor: c })} />
-              {draft.font && fontOk === false && <p class="muted font-note" role="status"><Icon name="info" /> “{draft.font}” is not installed on this computer, so covers use the {TITLE_STYLE_LABELS[art.titleStyle]} lettering. The choice is kept for computers that have it.</p>}
-              {draft.font && fontOk && !bundledFont(draft.font) && <p class="muted font-note">A system font: the PDF embeds it when it is a TrueType or OpenType file, else it uses DejaVu.</p>}
-              <label class="check"><input type="checkbox" class="show-title" checked={art.showTitle} onChange={(e) => set({ showTitle: e.currentTarget.checked ? undefined : false })} /> Show title on cover</label>
-              <PositionField label="Title" which="title" value={draft.titlePos} onChange={(p) => set({ titlePos: p })} />
-              <p class="muted font-note">The title always stays on the spine.</p>
+              <legend class="field-label">{t('Title')}</legend>
+              <FontPicker value={draft.font} styleLabel={t(TITLE_STYLE_LABELS[art.titleStyle])} onChange={(f) => set(f ? { font: f } : { font: undefined, titleStyle: undefined })} />
+              <ColorField label={t('Title colour')} value={art.titleColor} onChange={(c) => set({ titleColor: c })} />
+              {draft.font && fontOk === false && <p class="muted font-note" role="status"><Icon name="info" /> {t('“{font}” is not installed on this computer, so covers use the {style} lettering. The choice is kept for computers that have it.', { font: draft.font, style: t(TITLE_STYLE_LABELS[art.titleStyle]) })}</p>}
+              {draft.font && fontOk && !bundledFont(draft.font) && <p class="muted font-note">{t('A system font: the PDF embeds it when it is a TrueType or OpenType file, else it uses DejaVu.')}</p>}
+              <label class="check"><input type="checkbox" class="show-title" checked={art.showTitle} onChange={(e) => set({ showTitle: e.currentTarget.checked ? undefined : false })} /> {t('Show title on cover')}</label>
+              <PositionField label={t('Title')} which="title" value={draft.titlePos} onChange={(p) => set({ titlePos: p })} />
+              <p class="muted font-note">{t('The title always stays on the spine.')}</p>
             </fieldset>
             <fieldset class="field cover-group">
-              <legend class="field-label">Spine</legend>
+              <legend class="field-label">{t('Spine')}</legend>
               <div class="spine-fields">
                 <span class="spine-sample" aria-hidden="true" style={{ background: art.spine, color: art.spineInk }}><span>{world.manifest.name}</span></span>
-                <ColorField label="Spine colour" value={art.spine} alpha={false} swatches={COVER_SWATCHES} onChange={(c) => set({ spineColor: c })} />
-                <ColorField label="Spine title colour" value={art.spineInk} alpha={false} onChange={(c) => set({ spineInk: c })} />
-                {(draft.spineColor || draft.spineInk) && <button type="button" class="ghost small spine-auto" onClick={() => set({ spineColor: undefined, spineInk: undefined })}><Icon name="cycle" /> Automatic</button>}
+                <ColorField label={t('Spine colour')} value={art.spine} alpha={false} swatches={COVER_SWATCHES} onChange={(c) => set({ spineColor: c })} />
+                <ColorField label={t('Spine title colour')} value={art.spineInk} alpha={false} onChange={(c) => set({ spineInk: c })} />
+                {(draft.spineColor || draft.spineInk) && <button type="button" class="ghost small spine-auto" onClick={() => set({ spineColor: undefined, spineInk: undefined })}><Icon name="cycle" /> {t('Automatic')}</button>}
               </div>
-              <p class="muted font-note">{draft.spineColor ? 'Chosen spine colour.' : image ? 'Automatic: the colour down the left edge of the picture.' : 'Automatic: a darker shade of the cover colour.'}{draft.spineInk ? '' : ' The title colour is picked to stay readable.'}</p>
+              <p class="muted font-note">{draft.spineColor ? t('Chosen spine colour.') : image ? t('Automatic: the colour down the left edge of the picture.') : t('Automatic: a darker shade of the cover colour.')}{draft.spineInk ? '' : ` ${t('The title colour is picked to stay readable.')}`}</p>
             </fieldset>
             {problem && <p class="error-line" role="alert"><Icon name="cancel" /> {problem}</p>}
           </div>
         </div>
         <div class="dialog-actions cover-editor-actions">
-          <button type="button" class="ghost" onClick={() => { setPicked(null); setDraft(saved.seed ? { seed: saved.seed } : {}); }}><Icon name="cycle" /> Reset to default</button>
-          <span class={`cover-status${dirty ? ' is-dirty' : ''}`} role="status">{dirty ? 'Unsaved changes' : 'No changes'}</span>
-          <button type="button" class="ghost cover-cancel" onClick={onClose}>Cancel</button>
-          <button type="button" class="primary cover-save" disabled={!dirty || busy} onClick={() => void save()}><Icon name="check-mark" /> Save cover</button>
+          <button type="button" class="ghost" onClick={() => { setPicked(null); setDraft(saved.seed ? { seed: saved.seed } : {}); }}><Icon name="cycle" /> {t('Reset to default')}</button>
+          <span class={`cover-status${dirty ? ' is-dirty' : ''}`} role="status">{dirty ? t('Unsaved changes') : t('No changes')}</span>
+          <button type="button" class="ghost cover-cancel" onClick={onClose}>{t('Cancel')}</button>
+          <button type="button" class="primary cover-save" disabled={!dirty || busy} onClick={() => void save()}><Icon name="check-mark" /> {t('Save cover')}</button>
         </div>
       </section>
       {asking && (
-        <ConfirmDialog title="Discard cover changes?" confirmLabel="Discard changes" confirmIcon="cycle" cancelLabel="Keep editing" onClose={() => setAsking(false)} onConfirm={onClose}>
-          <p>The cover has changes that are not saved. Discard them, or keep editing and press Save cover.</p>
+        <ConfirmDialog title={t('Discard cover changes?')} confirmLabel={t('Discard changes')} confirmIcon="cycle" cancelLabel={t('Keep editing')} onClose={() => setAsking(false)} onConfirm={onClose}>
+          <p>{t('The cover has changes that are not saved. Discard them, or keep editing and press Save cover.')}</p>
         </ConfirmDialog>
       )}
     </div>,

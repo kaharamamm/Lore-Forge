@@ -3,6 +3,7 @@ import { Background, ConnectionMode, Controls, Handle, MiniMap, Position, ReactF
 import { LIFECYCLE, raceLabel, relationKind, TYPE_SINGULAR, WEB_LAYOUT, WorldIndex, type Entry, type RelationWeb, type WebEdge as CoreWebEdge, type World } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
 import { Portrait } from './cover.tsx';
+import { t, tm } from '../i18n.tsx';
 
 type EntryNodeData = { entry: Entry; raceName?: string; ended: boolean; focus: boolean; onOpen: (id: string) => void; onHide?: (id: string) => void; editable: boolean };
 type EntryNode = Node<EntryNodeData, 'entry'>;
@@ -19,17 +20,17 @@ function EntryNodeView({ data }: NodeProps<EntryNode>) {
     <div class={`node t-${e.type}${ended ? ' is-ended' : ''}${focus ? ' is-focus' : ''}`}>
       <Handle type="target" position={Position.Top} class="web-handle" isConnectable={false} />
       <button type="button" class="web-node" onClick={() => data.onOpen(e.id)}
-        aria-label={`${TYPE_SINGULAR[e.type]} ${e.name}${ended && lc ? `, ${lc.endedWord}` : ''}. Open.`}>
+        aria-label={t('{label}. Open.', { label: `${tm(TYPE_SINGULAR[e.type])} ${e.name}${ended && lc ? `, ${tm(lc.endedWord)}` : ''}` })}>
         <Portrait entry={e} raceName={data.raceName} size="sm" />
         <span class="web-node-text">
           <span class="web-node-name">{e.name}</span>
-          <span class="web-node-sub">{ended && lc ? <><Icon name={lc.endedIcon} /> {lc.endedWord}</> : data.raceName ?? TYPE_SINGULAR[e.type]}</span>
+          <span class="web-node-sub">{ended && lc ? <><Icon name={lc.endedIcon} /> {tm(lc.endedWord)}</> : data.raceName ?? tm(TYPE_SINGULAR[e.type])}</span>
         </span>
       </button>
       <Handle type="source" position={Position.Bottom} class="web-handle" isConnectable={false} />
-      {data.editable && <Handle type="source" id="connect" position={Position.Right} class="web-connect" title="Drag onto another card to link them" />}
+      {data.editable && <Handle type="source" id="connect" position={Position.Right} class="web-connect" title={t('Drag onto another card to link them')} />}
       {data.onHide && !focus && (
-        <button type="button" class="node-hide-btn nodrag" aria-label={`Remove ${e.name} from this view`} title="Remove from this view (the entry stays)" onClick={() => data.onHide!(e.id)}>×</button>
+        <button type="button" class="node-hide-btn nodrag" aria-label={t('Remove {name} from this view', { name: e.name })} title={t('Remove from this view (the entry stays)')} onClick={() => data.onHide!(e.id)}>×</button>
       )}
     </div>
   );
@@ -56,7 +57,7 @@ export function borderPoint(b: Box, tx: number, ty: number): { x: number; y: num
  * border head-on. The label sits on the curve's middle, on a small backing so lines never run through the text.
  */
 function WebEdgeView({ id, source, target, data }: EdgeProps<WebEdge>) {
-  const s = useInternalNode<EntryNode>(source), t = useInternalNode<EntryNode>(target);
+  const s = useInternalNode<EntryNode>(source), tn = useInternalNode<EntryNode>(target);
   const label = useRef<SVGTextElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   // The label's backing fits the text; measured after each render (it only changes with the text or the font).
@@ -64,9 +65,9 @@ function WebEdgeView({ id, source, target, data }: EdgeProps<WebEdge>) {
     const b = label.current?.getBBox();
     if (b && b.width && (Math.abs(b.width - (size?.w ?? 0)) > 0.5 || Math.abs(b.height - (size?.h ?? 0)) > 0.5)) setSize({ w: b.width, h: b.height });
   });
-  if (!s || !t) return null;
+  if (!s || !tn) return null;
   const box = (n: NonNullable<typeof s>): Box => ({ x: n.internals.positionAbsolute.x, y: n.internals.positionAbsolute.y, w: n.measured.width ?? W, h: n.measured.height ?? H });
-  const a = box(s), b = box(t);
+  const a = box(s), b = box(tn);
   const ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx = b.x + b.w / 2, by = b.y + b.h / 2;
   const dx = bx - ax, dy = by - ay;
   const len = Math.hypot(dx, dy) || 1;
@@ -81,11 +82,11 @@ function WebEdgeView({ id, source, target, data }: EdgeProps<WebEdge>) {
   return (
     <g class={`web-edge g-${data?.group ?? 'other'}`} data-source={source} data-target={target}>
       <path id={id} class="edge" d={d} marker-end={data?.arrow ? 'url(#web-arrow)' : undefined} />
-      <path class="edge-hit" d={d}><title>Click to edit or delete this link</title></path>
+      <path class="edge-hit" d={d}><title>{t('Click to edit or delete this link')}</title></path>
       {data?.label && (
         <g class="edge-label-group" transform={`translate(${lx} ${ly})`}>
           {size && <rect class="edge-label-bg" x={-size.w / 2 - 5} y={-size.h / 2 - 2} width={size.w + 10} height={size.h + 4} rx={4} />}
-          <text ref={label} class="edge-label" x={0} y={0} text-anchor="middle" dominant-baseline="central">{data.label}</text>
+          <text ref={label} class="edge-label" x={0} y={0} text-anchor="middle" dominant-baseline="central">{tm(data.label)}</text>
         </g>
       )}
     </g>
@@ -129,7 +130,7 @@ export function RelationWebFlow({ world, web, onOpen, onConnect, onHide, onEdit 
     });
   }, [web]);
   return (
-    <div class="graph relation-web flow" role="group" aria-label={`Relationship web, ${web.nodes.length - 1} related entries. Drag to pan, Ctrl+scroll to zoom.`}>
+    <div class="graph relation-web flow" role="group" aria-label={t('Relationship web, {n} related entries. Drag to pan, Ctrl+scroll to zoom.', { n: web.nodes.length - 1 })}>
       <svg class="flow-defs" aria-hidden="true" width="0" height="0">
         <defs>
           <marker id="web-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -144,9 +145,10 @@ export function RelationWebFlow({ world, web, onOpen, onConnect, onHide, onEdit 
         onEdgeClick={(_ev, edge) => edge.data && onEdit?.(edge.data.edge)}
         nodesFocusable={false} edgesFocusable={false} elementsSelectable={false}
         zoomOnScroll={false} zoomActivationKeyCode={['Control', 'Meta']} preventScrolling={false} zoomOnDoubleClick
-        proOptions={{ hideAttribution: true }}>
+        proOptions={{ hideAttribution: true }}
+        ariaLabelConfig={{ 'controls.ariaLabel': t('Control Panel'), 'controls.zoomIn.ariaLabel': t('Zoom In'), 'controls.zoomOut.ariaLabel': t('Zoom Out'), 'controls.fitView.ariaLabel': t('Fit View') }}>
         <Background gap={24} size={1} />
-        <MiniMap pannable zoomable ariaLabel="Overview of the web" style={{ width: 150, height: 100 }} nodeClassName={(n) => `mini t-${(n.data as EntryNodeData).entry.type}`} nodeBorderRadius={8} />
+        <MiniMap pannable zoomable ariaLabel={t('Overview of the web')} style={{ width: 150, height: 100 }} nodeClassName={(n) => `mini t-${(n.data as EntryNodeData).entry.type}`} nodeBorderRadius={8} />
         <Controls showInteractive={false} position="top-right" fitViewOptions={FIT} />
       </ReactFlow>
     </div>

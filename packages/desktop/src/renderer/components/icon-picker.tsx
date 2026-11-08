@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { searchIcons, type IconName } from '@lore-forge/core';
+import { lower, t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 
 const labelOf = (name: IconName) => name.replace(/-/g, ' ');
@@ -58,12 +59,12 @@ export function IconPicker({ label, choices, value, onPick, none, class: cls }: 
     <div class={`icon-picker${cls ? ` ${cls}` : ''}`}>
       <div class="icon-search">
         <Icon name="magnifying-glass" />
-        <input ref={input} type="search" value={text} placeholder="Search icons..." aria-label={`Search ${label.toLowerCase()} icons`} aria-controls={id} spellcheck={false}
+        <input ref={input} type="search" value={text} placeholder={t('Search icons...')} aria-label={t('Search {label} icons', { label: lower(label) })} aria-controls={id} spellcheck={false}
           onInput={(e) => setText(e.currentTarget.value)} onKeyDown={onInputKey} />
-        <span class="icon-count muted" aria-live="polite">{query ? `${found.length} of ${total}` : `${total} icons`}</span>
+        <span class="icon-count muted" aria-live="polite">{query ? t('{n} of {total}', { n: found.length, total }) : t('{n} icons', { n: total })}</span>
       </div>
       {items.length === 0 ? (
-        <p class="icon-empty muted">No icon matches “{query}”. Try another word, like sword, tower or kale.</p>
+        <p class="icon-empty muted">{t('No icon matches “{query}”. Try another word, like sword, tower or kale.', { query })}</p>
       ) : (
         <div ref={grid} id={id} class="icon-choices" role="group" aria-label={label} onKeyDown={onGridKey}>
           {items.map((name, i) => {

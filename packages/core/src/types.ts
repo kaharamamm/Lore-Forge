@@ -1,4 +1,5 @@
 /** Lore-Forge world format, schema version 1. Mirrors schemas/*.schema.json. */
+import { fixed, msg } from './i18n.ts';
 import type { IconName } from './icons.ts';
 
 export const SCHEMA_VERSION = 1;
@@ -16,12 +17,12 @@ export const TYPE_FOLDERS: Record<EntryType, string> = {
   note: 'notes',
 };
 export const TYPE_LABELS: Record<EntryType, string> = {
-  character: 'Characters',
-  place: 'Places',
-  faction: 'Factions',
-  item: 'Items',
-  event: 'Events',
-  note: 'Notes',
+  character: msg`Characters`,
+  place: msg`Places`,
+  faction: msg`Factions`,
+  item: msg`Items`,
+  event: msg`Events`,
+  note: msg`Notes`,
 };
 
 /** One emoji per type, used everywhere the type is shown (always next to a word, never alone). */
@@ -43,12 +44,12 @@ export const TYPE_ICON: Record<EntryType, IconName> = {
   note: 'scroll-unfurled',
 };
 export const TYPE_SINGULAR: Record<EntryType, string> = {
-  character: 'Character',
-  place: 'Place',
-  faction: 'Faction',
-  item: 'Item',
-  event: 'Event',
-  note: 'Note',
+  character: msg`Character`,
+  place: msg`Place`,
+  faction: msg`Faction`,
+  item: msg`Item`,
+  event: msg`Event`,
+  note: msg`Note`,
 };
 
 /**
@@ -87,6 +88,8 @@ export interface Calendar {
 
 export type Severity = 'error' | 'warning' | 'info';
 export type RuleSetting = Severity | 'off';
+/** Every value world.json `rules` accepts. Anything else is reported and the rule keeps its default severity. */
+export const RULE_SETTINGS: readonly RuleSetting[] = ['error', 'warning', 'info', 'off'];
 
 export interface WorldManifest {
   schemaVersion: number;
@@ -233,9 +236,12 @@ const VIEW_LABELS: Record<string, string> = {
   establishing: 'Establishing shot',
   headquarters: 'Headquarters',
 };
+const plainViewLabel = (view: string): string => VIEW_LABELS[view] ?? view.charAt(0).toUpperCase() + view.slice(1).replace(/-/g, ' ');
+/** Labels of the usual views are core's words (translatable); a custom view's label is the author's. */
+const KNOWN_VIEW_LABELS = new Map(Object.values(IMAGE_VIEWS).flat().map((v) => [v, fixed(plainViewLabel(v))]));
 /** Display label for a view id, e.g. "a-pose" -> "A-pose", "establishing" -> "Establishing shot". */
 export function viewLabel(view: string): string {
-  return VIEW_LABELS[view] ?? view.charAt(0).toUpperCase() + view.slice(1).replace(/-/g, ' ');
+  return KNOWN_VIEW_LABELS.get(view) ?? plainViewLabel(view);
 }
 
 /**
@@ -244,32 +250,32 @@ export function viewLabel(view: string): string {
  */
 export const VISUAL_FIELDS: Record<EntryType, readonly { key: string; label: string; hint: string }[]> = {
   character: [
-    { key: 'appearance', label: 'Appearance', hint: 'Species, face, hair, skin, age as seen' },
-    { key: 'build', label: 'Height & build', hint: 'e.g. 1.9 m, broad-shouldered' },
-    { key: 'clothing', label: 'Clothing', hint: 'What they usually wear' },
-    { key: 'palette', label: 'Colour palette', hint: 'Main colours' },
-    { key: 'features', label: 'Distinguishing features', hint: 'Scars, marks, posture' },
-    { key: 'props', label: 'Props', hint: 'Things they always carry' },
+    { key: 'appearance', label: msg`Appearance`, hint: 'Species, face, hair, skin, age as seen' },
+    { key: 'build', label: msg`Height & build`, hint: 'e.g. 1.9 m, broad-shouldered' },
+    { key: 'clothing', label: msg`Clothing`, hint: 'What they usually wear' },
+    { key: 'palette', label: msg`Colour palette`, hint: 'Main colours' },
+    { key: 'features', label: msg`Distinguishing features`, hint: 'Scars, marks, posture' },
+    { key: 'props', label: msg`Props`, hint: 'Things they always carry' },
   ],
   place: [
-    { key: 'architecture', label: 'Architecture', hint: 'Buildings, materials, style' },
-    { key: 'climate', label: 'Climate & weather', hint: 'Light, weather, season' },
-    { key: 'palette', label: 'Colour palette', hint: 'Main colours' },
-    { key: 'scale', label: 'Scale', hint: 'Size, population, distances' },
+    { key: 'architecture', label: msg`Architecture`, hint: 'Buildings, materials, style' },
+    { key: 'climate', label: msg`Climate & weather`, hint: 'Light, weather, season' },
+    { key: 'palette', label: msg`Colour palette`, hint: 'Main colours' },
+    { key: 'scale', label: msg`Scale`, hint: 'Size, population, distances' },
   ],
   faction: [
-    { key: 'emblem', label: 'Emblem & symbols', hint: 'Banner, sigil' },
-    { key: 'attire', label: 'Attire', hint: 'Uniforms, armour, colours worn' },
-    { key: 'palette', label: 'Colour palette', hint: 'Main colours' },
+    { key: 'emblem', label: msg`Emblem & symbols`, hint: 'Banner, sigil' },
+    { key: 'attire', label: msg`Attire`, hint: 'Uniforms, armour, colours worn' },
+    { key: 'palette', label: msg`Colour palette`, hint: 'Main colours' },
   ],
   item: [
-    { key: 'material', label: 'Material', hint: 'What it is made of' },
-    { key: 'size', label: 'Size', hint: 'Dimensions, weight' },
-    { key: 'details', label: 'Details', hint: 'Engravings, wear, moving parts' },
+    { key: 'material', label: msg`Material`, hint: 'What it is made of' },
+    { key: 'size', label: msg`Size`, hint: 'Dimensions, weight' },
+    { key: 'details', label: msg`Details`, hint: 'Engravings, wear, moving parts' },
   ],
   event: [
-    { key: 'scene', label: 'Scene description', hint: 'What a picture of it shows' },
-    { key: 'mood', label: 'Mood', hint: 'Light, atmosphere, emotion' },
+    { key: 'scene', label: msg`Scene description`, hint: 'What a picture of it shows' },
+    { key: 'mood', label: msg`Mood`, hint: 'Light, atmosphere, emotion' },
   ],
   note: [],
 };
@@ -288,7 +294,33 @@ export interface RefImage {
   /** Path relative to the world folder, e.g. images/char-orsan/front.png */
   file: string;
   view: ImageView;
+  /** The look this picture shows (a Look id of its entry); none: the Default look. */
+  look?: string;
   provenance?: Provenance;
+}
+
+/**
+ * A look of an entry: how it looks for a while (after a war, in coronation robes), with its own pictures (images with
+ * this look's id), its own 3D models (models/<entry-id>/<look-id>/) and the visual description fields that change.
+ * When it applies: dates, an era, after or before an event (or another entry with a date), or a mix of them; none of
+ * them makes a look that is not tied to a time. The Default look is the entry itself.
+ */
+export interface Look {
+  /** Stable id within the entry ("after-the-war"), made from its first name: pictures and model folders use it. */
+  id: string;
+  name: string;
+  /** Why it looks different: a wound, a new title, new clothes. */
+  reason?: string;
+  from?: DateText;
+  to?: DateText;
+  /** An era id: the look applies while that era lasts. */
+  era?: string;
+  /** An event (or another entry with a date), by id or name: the look applies from its end on. */
+  after?: string;
+  /** An event (or another entry with a date), by id or name: the look applies until it starts. */
+  before?: string;
+  /** Visual description fields that differ from the Default look (keys from VISUAL_FIELDS). */
+  visual?: Record<string, string>;
 }
 
 /** Card picture choice: a game-icon, colours, or one of the entry's images. Missing parts use the defaults. */
@@ -328,6 +360,8 @@ interface EntryBase {
   picture?: Picture;
   /** Free-text visual description; keys from VISUAL_FIELDS[type]. */
   visual?: Record<string, string>;
+  /** Other looks of the entry over time, besides the Default one (see Look). */
+  looks?: Look[];
   /** Story Book: put this page in a chapter with this title instead of the automatic era/year chapter. */
   chapter?: string;
   /** Story Book: order inside the chapter. Default 0; lower comes first; ties go by date, then name. */

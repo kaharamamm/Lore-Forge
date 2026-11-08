@@ -47,10 +47,10 @@ test('the server offers the tools, the guide and the write_story prompt', async 
   try {
     const { client, call } = await connect({ dataDir: h.dataDir, defaultWorldsDir: h.worlds, sampleDir: null });
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(tools, ['add_image', 'check_book', 'create_book', 'create_image', 'delete_entry', 'duplicate_book', 'export_book', 'get_book', 'get_entry', 'link_entries', 'list_books', 'lore_forge_guide', 'mark_intended', 'read_story', 'save_entries', 'story_proposals', 'update_book', 'write_chapter']);
+    assert.deepEqual(tools, ['add_image', 'check_book', 'create_book', 'create_image', 'delete_entry', 'duplicate_book', 'export_book', 'get_book', 'get_entry', 'link_entries', 'list_books', 'look_at', 'lore_forge_guide', 'mark_intended', 'read_story', 'save_entries', 'story_proposals', 'update_book', 'write_chapter']);
     assert.match(client.getInstructions() ?? '', /lore_forge_guide/);
     const guide = (await call('lore_forge_guide')).text;
-    for (const s of ['create_book', 'save_entries', 'write_chapter', 'check_book', 'create_image', 'three-quarter', 'parent-of', 'after-death', 'personality']) assert.ok(guide.includes(s), `the guide mentions ${s}`);
+    for (const s of ['create_book', 'save_entries', 'write_chapter', 'check_book', 'create_image', 'three-quarter', 'parent-of', 'after-death', 'personality', 'look_at', 'look-overlap']) assert.ok(guide.includes(s), `the guide mentions ${s}`);
     const prompt = await client.getPrompt({ name: 'write_story', arguments: { idea: 'a story about camels' } });
     assert.match((prompt.messages[0]!.content as { text: string }).text, /a story about camels[\s\S]*lore_forge_guide/);
     assert.deepEqual((await call('list_books')).json().books, []);
@@ -255,4 +255,120 @@ test('image models are picked sensibly and pictures are recognised', () => {
   assert.equal(pickImageModel('xai', ['grok-imagine-image-quality', 'grok-imagine-image', 'grok-2-image-1212']), 'grok-imagine-image');
   assert.deepEqual(sniffImage(Buffer.from(PNG_B64, 'base64')), { mime: 'image/png', ext: 'png' });
   assert.equal(sniffImage(new Uint8Array([1, 2, 3, 4])), null);
+});
+
+test('looks: an assistant adds, changes and removes looks, asks how entries look on a date, and makes pictures of a look', async () => {
+  const h = await home();
+  mkdirSync(h.dataDir, { recursive: true });
+  writeFileSync(join(h.dataDir, 'ai-images.json'), JSON.stringify({ provider: 'openai', keys: { openai: 'test-key' }, models: { openai: 'gpt-image-1' } }));
+  const prompts: string[] = [];
+  const fakeFetch = async (url: string, init?: RequestInit): Promise<Response> => {
+    if (url.endsWith('/v1/images/generations')) {
+      prompts.push(JSON.parse(String(init?.body)).prompt);
+      return Response.json({ data: [{ b64_json: PNG_B64 }] });
+    }
+    if (url.endsWith('/v1/models')) return Response.json({ data: [{ id: 'gpt-image-1' }] });
+    return new Response('not found', { status: 404 });
+  };
+  try {
+    const { call } = await connect({ dataDir: h.dataDir, defaultWorldsDir: h.worlds, sampleDir: null, fetch: fakeFetch as never });
+    const book = (await call('create_book', { name: 'Looks Test', calendar: { eras: [{ id: 'SR', name: 'Salt Reckoning', start: 1 }], defaultEra: 'SR' } })).json().book;
+
+    // New looks in the same call as the event they follow: the event's name becomes its id.
+    const first = await call('save_entries', {
+      book: book.id,
+      entries: [
+        {
+          type: 'character', name: 'Hadi', status: 'alive', born: '480', visual: { appearance: 'Grey muzzle', clothing: 'Caravan robes' },
+          looks: [
+            { name: 'Battle scars', reason: 'Lost an eye in the storm', after: 'The Storm Crossing', visual: { features: 'An eye patch' } },
+            { name: 'Old age', from: 560 },
+          ],
+        },
+        { type: 'event', name: 'The Storm Crossing', date: '520', participants: ['Hadi'] },
+      ],
+    });
+    assert.ok(!first.error, first.text);
+    let world = await loadWorld(book.dir);
+    let hadi = world.entries.find((e) => e.id === 'char-hadi')!;
+    assert.deepEqual(hadi.looks, [
+      { id: 'battle-scars', name: 'Battle scars', reason: 'Lost an eye in the storm', after: 'evt-the-storm-crossing', visual: { features: 'An eye patch' } },
+      { id: 'old-age', name: 'Old age', from: '560' },
+    ]);
+    for (const { body: _b, ...front } of world.entries) valid('entry.schema.json', front);
+
+    // Looks are matched one by one: only the fields given change, looks left out stay, a new name adds one.
+    const second = await call('save_entries', {
+      book: book.id,
+      entries: [{ id: 'char-hadi', looks: [{ name: 'battle scars', reason: 'Lost an eye at the Storm Crossing' }, { name: 'Coronation robes', from: '540', to: '545', visual: { clothing: 'Gold robes' }, colour: 'gold' }] }],
+    });
+    assert.ok(!second.error, second.text);
+    assert.match(second.json().notes.join(' '), /"colour" is not a look field/);
+    world = await loadWorld(book.dir);
+    hadi = world.entries.find((e) => e.id === 'char-hadi')!;
+    assert.deepEqual(hadi.looks?.map((l) => l.id), ['battle-scars', 'old-age', 'coronation-robes']);
+    assert.equal(hadi.looks?.[0]?.reason, 'Lost an eye at the Storm Crossing');
+    assert.deepEqual(hadi.looks?.[0]?.visual, { features: 'An eye patch' }, 'fields not given stay');
+    assert.deepEqual(second.json().warnings, [], 'a look that gives way to the next one is no clash');
+
+    // How Hadi looks on a date: the event day itself is still the Default look; the newest look that covers a date wins.
+    const on = async (date: string, entry?: string) => (await call('look_at', { book: book.id, date, ...(entry ? { entry } : {}) })).json();
+    assert.equal((await on('520', 'Hadi')).looks[0].look, 'Default');
+    const scarred = (await on('530', 'Hadi')).looks[0];
+    assert.equal(scarred.look, 'Battle scars');
+    assert.equal(scarred.why, 'Lost an eye at the Storm Crossing');
+    assert.equal(scarred.when, 'after The Storm Crossing');
+    assert.deepEqual(scarred.visual, { appearance: 'Grey muzzle', clothing: 'Caravan robes', features: 'An eye patch' });
+    assert.deepEqual(scarred.changes, ['features']);
+    assert.equal((await on('542', 'Hadi')).looks[0].look, 'Coronation robes');
+    assert.equal((await on('550', 'Hadi')).looks[0].look, 'Battle scars', 'after the coronation, back to the scars');
+    assert.deepEqual((await on('600')).looks.map((l: any) => `${l.entry}: ${l.look}`), ['Hadi: Old age']);
+    assert.match((await on('500')).note, /every entry has its Default look/);
+    assert.ok((await call('look_at', { book: book.id, date: 'tomorrow' })).error);
+
+    // A dated chapter lists the looks of the entries it names; an undated one does not.
+    const dated = (await call('write_chapter', { book: book.id, title: 'The Crowning', date: '542', text: 'Hadi wore the crown at last.' })).json();
+    assert.deepEqual(dated.looks, [{ entry: 'Hadi', look: 'Coronation robes', changes: { clothing: 'Gold robes' } }]);
+    assert.equal((await call('write_chapter', { book: book.id, title: 'Before', text: 'Hadi slept.' })).json().looks, undefined);
+
+    // A picture of a look: its own folder, the look's description and reason in the prompt, not the card picture.
+    const pic = await call('create_image', { book: book.id, entry: 'Hadi', look: 'battle-scars' });
+    assert.ok(!pic.error, pic.text);
+    assert.equal(pic.json().saved, 'images/char-hadi/battle-scars/three-quarter.png');
+    assert.equal(pic.json().look, 'Battle scars');
+    assert.match(prompts.at(-1)!, /As they look in "Battle scars": Lost an eye at the Storm Crossing\.[\s\S]*An eye patch/);
+    const added = await call('add_image', { book: book.id, entry: 'Hadi', look: 'Old age', source: `data:image/png;base64,${PNG_B64}` });
+    assert.equal(added.json().saved, 'images/char-hadi/old-age/three-quarter.png');
+    world = await loadWorld(book.dir);
+    hadi = world.entries.find((e) => e.id === 'char-hadi')!;
+    assert.deepEqual(hadi.images?.map((i) => i.look), ['battle-scars', 'old-age']);
+    assert.equal(hadi.picture?.image, undefined, 'the card shows the Default look only');
+    const wrong = await call('create_image', { book: book.id, entry: 'Hadi', look: 'Wedding' });
+    assert.ok(wrong.error);
+    assert.match(wrong.text, /no look "Wedding"[\s\S]*"Battle scars" \(battle-scars\)/);
+    assert.match((await call('add_image', { book: book.id, entry: 'cover', look: 'Old age', source: `data:image/png;base64,${PNG_B64}` })).text, /cover has no looks/);
+
+    // Removing a look: its pictures and 3D models go back to the Default look.
+    mkdirSync(join(book.dir, 'models', 'char-hadi', 'battle-scars'), { recursive: true });
+    writeFileSync(join(book.dir, 'models', 'char-hadi', 'battle-scars', 'scarred.glb'), 'glTF');
+    const removed = await call('save_entries', { book: book.id, entries: [{ id: 'char-hadi', looks: [{ id: 'battle-scars', remove: true }, { name: 'Wedding', remove: true }] }] });
+    assert.ok(!removed.error, removed.text);
+    const notes = removed.json().notes.join(' ');
+    assert.match(notes, /removed the look "Battle scars"\. Its 1 picture and 1 3D model now belong to the Default look\./);
+    assert.match(notes, /there is no look "Wedding" to remove/);
+    world = await loadWorld(book.dir);
+    hadi = world.entries.find((e) => e.id === 'char-hadi')!;
+    assert.deepEqual(hadi.looks?.map((l) => l.id), ['old-age', 'coronation-robes']);
+    assert.deepEqual(hadi.images?.map((i) => i.look), [undefined, 'old-age']);
+    assert.ok(existsSync(join(book.dir, 'models', 'char-hadi', 'scarred.glb')));
+    assert.ok(!existsSync(join(book.dir, 'models', 'char-hadi', 'battle-scars')));
+
+    // A new look never takes the id of a removed one in the same call, and check_book sees looks.
+    const lost = (await call('save_entries', { book: book.id, entries: [{ id: 'char-hadi', looks: [{ name: 'Lost at sea', after: 'The Sinking' }] }] })).json();
+    assert.ok(lost.warnings.some((w: any) => w.rule === 'look-time' && /The Sinking/.test(w.message)));
+    const overview = (await call('get_book', { book: book.id })).json();
+    assert.deepEqual(overview.entries.find((e: any) => e.id === 'char-hadi').looks, ['Old age', 'Coronation robes', 'Lost at sea']);
+  } finally {
+    await rm(h.root, { recursive: true, force: true });
+  }
 });

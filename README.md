@@ -59,7 +59,7 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 - **Canon you can trust.** Consistency rules run while you type: a character acting after their death, a parent born after their child, a city visited before it was founded. Each warning points at the exact field and the fact it breaks; **Go to** jumps there, **Mark intended** keeps a contradiction on purpose.
 - **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. Nothing leaves your machine unless you connect an AI app or picture service yourself.
 - **Works with your AI.** Ask Claude, Codex, Cursor or another MCP app for a story and it writes the whole book in Lore-Forge: entries, relationships, chapters and pictures, checked for contradictions.
-- **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, art briefs and reference images for artists and 3D tools.
+- **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, art briefs and reference images for artists and 3D tools. An entry can change its look over time (after a war, in old age), each look with its own pictures and 3D models.
 - **From notes to a book.** Write the story chapter by chapter; Lore-Forge proposes entries from your prose and exports a typeset Story Book (PDF, Word or Markdown), with A4 among the trim sizes and Word matching the PDF including the cover.
 
 ## Features
@@ -84,6 +84,8 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 </table>
 
 The warning in these screenshots was added on purpose to a copy of the sample world; the sample world itself has none.
+
+The app speaks English and Turkish (**Settings → Language**, with the flags), and every change to an entry can be undone with Ctrl+Z.
 
 More in the [user guide](docs/USER-GUIDE.md).
 
@@ -134,7 +136,7 @@ relations:
 Mr Camel keeps the smallest tea house on the Street of Kettles…
 ```
 
-New worlds are saved in the app's own data folder (`~/.config/Lore-Forge/worlds` on Linux, `%APPDATA%\Lore-Forge\worlds` on Windows, `~/Library/Application Support/Lore-Forge/worlds` on macOS) unless you pick another folder in **Library settings**. Installing, updating or removing the app leaves them alone.
+New worlds are saved in the app's own data folder (`~/.config/Lore-Forge/worlds` on Linux, `%APPDATA%\Lore-Forge\worlds` on Windows, `~/Library/Application Support/Lore-Forge/worlds` on macOS) unless you pick another folder in **Settings**. Installing, updating or removing the app leaves them alone.
 
 Edit the files with any text editor, keep them in git, or read them from your own tools. Fields Lore-Forge doesn't know are kept. Details: [World format, dates and rules](docs/FORMAT.md) and [Integration guide](docs/INTEGRATION.md).
 

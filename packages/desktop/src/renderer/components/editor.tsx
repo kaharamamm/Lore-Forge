@@ -1,12 +1,13 @@
 import {
-  ageAtDeathText, DETAIL_FIELDS, detailList, detailOf, raceIcon, raceLabel, racesOf, suggestionIcon, upperFirst, type DetailField, type DetailSection, type IconName,
+  ageAtDeathText, DETAIL_FIELDS, detailList, detailOf, raceIcon, raceLabel, racesOf, suggestionIcon, type DetailField, type DetailSection, type IconName,
   DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_ICON, TYPE_SINGULAR, VISUAL_FIELDS,
   type Action, type Character, type Entry, type EntryType, type LocationSpan, type LoreEvent, type Participant, type Relation, type RelationGroup, type Warning, type World,
 } from '@lore-forge/core';
 import { worldIndex } from '../hooks.ts';
-import { useRef, useState } from 'preact/hooks';
+import { capital, lower, t, tm } from '../i18n.tsx';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { ChipInput, DateField, entrySuggestion, Field, ListEditor, ListText, OpenEntry, RefField, TextField } from './fields.tsx';
-import { EntryMedia } from './images.tsx';
+import { LooksPanel } from './looks.tsx';
 import { ProseField } from './prose.tsx';
 import { TypeBadge } from './type.tsx';
 import { WarningItem, type WarningActions } from './warnings.tsx';
@@ -37,18 +38,18 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
       <header class="editor-head">
         <div>
           <p class="eyebrow"><TypeBadge type={entry.type} /></p>
-          <h2 id="entry-title" tabIndex={-1}>{portraitFile(entry) ? <Portrait entry={entry} size="md" /> : <Icon class="title-icon" name={TYPE_ICON[entry.type]} />} {entry.name || '(no name)'}</h2>
+          <h2 id="entry-title" tabIndex={-1}>{portraitFile(entry) ? <Portrait entry={entry} size="md" /> : <Icon class="title-icon" name={TYPE_ICON[entry.type]} />} {entry.name || t('(no name)')}</h2>
           <p class="editor-meta">
-            <span class="meta-chip" title="The entry's id, used in links and files"><Icon name="key" /><span class="meta-chip-label">id</span><code>{entry.id}</code></span>
-            {world.files[entry.id] && <span class="meta-chip" title="Its file in the world folder"><Icon name="open-folder" /><span class="meta-chip-path">{world.files[entry.id]}</span></span>}
+            <span class="meta-chip" title={t("The entry's id, used in links and files")}><Icon name="key" /><span class="meta-chip-label">{t('id')}</span><code>{entry.id}</code></span>
+            {world.files[entry.id] && <span class="meta-chip" title={t('Its file in the world folder')}><Icon name="open-folder" /><span class="meta-chip-path">{world.files[entry.id]}</span></span>}
           </p>
         </div>
-        <button type="button" class="ghost danger" onClick={onDelete}><Icon name="trash-can" /> Delete entry</button>
+        <button type="button" class="ghost danger" onClick={onDelete}><Icon name="trash-can" /> {t('Delete entry')}</button>
       </header>
 
-      <section class="live-warnings" aria-live="polite" aria-label="Live warnings for this entry">
+      <section class="live-warnings" aria-live="polite" aria-label={t('Live warnings for this entry')}>
         {warnings.length === 0 ? (
-          <p class="ok-line"><Icon name="sparkles" /> No warnings for this entry. Canon holds.</p>
+          <p class="ok-line"><Icon name="sparkles" /> {t('No warnings for this entry. Canon holds.')}</p>
         ) : (
           <ul class="warning-list">
             {warnings.map((w) => <WarningItem key={w.id} w={w} actions={actions} compact={w.offending.entryId === entry.id} />)}
@@ -56,81 +57,68 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
         )}
       </section>
 
-      <Section id="basics" title="Basics" icon="scroll-unfurled">
+      <Section id="basics" title={t('Basics')} icon="scroll-unfurled">
         <div class="grid-2">
-          <TextField label="Name" field="name" value={entry.name} onChange={(name) => base({ name: name ?? '' })} />
-          <ListText label="Aliases (comma-separated)" field="aliases" value={entry.aliases} onChange={(aliases) => base({ aliases })} resetKey={entry.id} />
+          <TextField label={t('Name')} field="name" value={entry.name} onChange={(name) => base({ name: name ?? '' })} />
+          <ListText label={t('Aliases (comma-separated)')} field="aliases" value={entry.aliases} onChange={(aliases) => base({ aliases })} resetKey={entry.id} />
         </div>
-        <TextField label="Summary" field="summary" value={entry.summary} onChange={(summary) => base({ summary })} multiline hint="One or two lines: shown on cards, in hover cards and in the Codex." />
+        <TextField label={t('Summary')} field="summary" value={entry.summary} onChange={(summary) => base({ summary })} multiline hint={t('One or two lines: shown on cards, in hover cards and in the Codex.')} />
         {entry.type === 'character' && <RaceField world={world} e={entry} set={set(entry)} onOpen={onOpen} />}
         {LIFECYCLE[entry.type] && <LifecycleFields world={world} entry={entry} onChange={onChange} />}
-        {ageAtDeathText(entry, cal) && <p class="hint age-at-death" data-field="age"><Icon name="hourglass" /> Age at death: {ageAtDeathText(entry, cal)}</p>}
+        {ageAtDeathText(entry, cal) && <p class="hint age-at-death" data-field="age"><Icon name="hourglass" /> {t('Age at death: {age}', { age: tm(ageAtDeathText(entry, cal)!) })}</p>}
         {entry.type === 'place' && (
           <div class="grid-3">
-            <RefField label="Part of (region)" field="partOf" value={entry.partOf} world={world} types={['place']} onChange={(partOf) => set(entry)({ partOf })} />
+            <RefField label={t('Part of (region)')} field="partOf" value={entry.partOf} world={world} types={['place']} onChange={(partOf) => set(entry)({ partOf })} />
           </div>
         )}
         {entry.type === 'event' && <EventWhen world={world} e={entry} set={set(entry)} />}
         {entry.type === 'note' && (
           <div class="grid-3">
-            <DateField label="Date (optional)" field="date" value={entry.date} calendar={cal} onChange={(date) => set(entry)({ date })} />
+            <DateField label={t('Date (optional)')} field="date" value={entry.date} calendar={cal} onChange={(date) => set(entry)({ date })} />
           </div>
         )}
         <DetailFields world={world} entry={entry} section="basics" onChange={onChange} onOpen={onOpen} />
       </Section>
 
       {(
-        <Section id="appearance" title="Appearance" icon="photo-camera">
-          {VISUAL_FIELDS[entry.type].length > 0 && (
-            <div data-field="visual">
-              <p class="muted">Free text for artists and image or 3D tools. Used for the art briefs in the World Codex.</p>
-              <div class="grid-2">
-                {VISUAL_FIELDS[entry.type].map((f) => (
-                  <TextField key={f.key} label={f.label} field={`visual.${f.key}`} value={entry.visual?.[f.key]} placeholder={f.hint} multiline
-                    onChange={(v) => {
-                      const visual = Object.fromEntries(Object.entries({ ...entry.visual, [f.key]: v }).filter(([, x]) => x !== undefined)) as Record<string, string>;
-                      base({ visual: Object.keys(visual).length ? visual : undefined });
-                    }} />
-                ))}
-              </div>
-            </div>
-          )}
-          <EntryMedia dir={dir} entry={entry} onChange={(images) => base({ images })} />
+        <Section id="appearance" title={t('Appearance')} icon="photo-camera">
+          {/* The Default look and the entry's other looks over time, each with its description, pictures and 3D models. */}
+          <LooksPanel dir={dir} world={world} entry={entry} onChange={onChange} />
         </Section>
       )}
 
       {(DETAIL_FIELDS[entry.type].some((f) => f.section === 'story') || entry.type === 'event' || entry.type === 'note') && (
-        <Section id="story" title="Story" icon="feather">
+        <Section id="story" title={t('Story')} icon="feather">
           <DetailFields world={world} entry={entry} section="story" onChange={onChange} onOpen={onOpen} />
           {(entry.type === 'event' || entry.type === 'note') && (
             <fieldset class="list-editor">
-              <legend>Story Book</legend>
+              <legend>{t('Story Book')}</legend>
               <div class="grid-2">
-                <TextField label="Chapter (optional)" field="chapter" value={entry.chapter} onChange={(chapter) => base({ chapter })} hint="Leave empty to place it by date in its era or year range." />
-                <TextField label="Order in chapter" field="bookOrder" value={entry.bookOrder?.toString()} onChange={(v) => base({ bookOrder: v !== undefined && Number.isFinite(Number(v)) ? Number(v) : undefined })} hint="Default 0. Lower comes first; ties go by date." />
+                <TextField label={t('Chapter (optional)')} field="chapter" value={entry.chapter} onChange={(chapter) => base({ chapter })} hint={t('Leave empty to place it by date in its era or year range.')} />
+                <NumberText label={t('Order in chapter')} field="bookOrder" value={entry.bookOrder} onChange={(bookOrder) => base({ bookOrder })} hint={t('Default 0. Lower comes first; ties go by date.')} />
               </div>
             </fieldset>
           )}
         </Section>
       )}
 
-      <Section id="connections" title="Connections" icon="spider-web">
+      <Section id="connections" title={t('Connections')} icon="spider-web">
         <DetailFields world={world} entry={entry} section="connections" onChange={onChange} onOpen={onOpen} />
         {entry.type === 'character' && <CharacterFields world={world} e={entry} set={set(entry)} />}
         {entry.type === 'event' && <EventFields world={world} e={entry} set={set(entry)} />}
         <ListEditor<Relation>
-          title="Relationships"
+          title={t('Relationships')}
           field="relations"
           items={entry.relations}
-          addLabel="Add relationship"
+          addLabel={t('Add relationship')}
           empty={() => ({ type: relationKindsFor(entry.type)[0]?.type ?? 'related-to', target: '' })}
           onChange={(relations) => base({ relations })}
           render={(r, put, f) => (
             <>
               <RelationTypeField world={world} entry={entry} r={r} field={`${f}.type`} onChange={(type) => put({ ...r, type })} />
-              <RefField label="Target" field={`${f}.target`} value={r.target} world={world} types={relationTargets(r.type, entry.type)} exclude={entry.id} onChange={(target) => put({ ...r, target: target ?? '' })} />
-              <DateField label="From" field={`${f}.from`} value={r.from} calendar={cal} onChange={(from) => put(clean({ ...r, from }))} />
-              <DateField label="To" field={`${f}.to`} value={r.to} calendar={cal} onChange={(to) => put(clean({ ...r, to }))} />
+              <RefField label={t('Target')} field={`${f}.target`} value={r.target} world={world} types={relationTargets(r.type, entry.type)} exclude={entry.id} onChange={(target) => put({ ...r, target: target ?? '' })} />
+              <DateField label={t('From')} field={`${f}.from`} value={r.from} calendar={cal} onChange={(from) => put(clean({ ...r, from }))} />
+              <DateField label={t('To')} field={`${f}.to`} value={r.to} calendar={cal} onChange={(to) => put(clean({ ...r, to }))} />
             </>
           )}
         />
@@ -147,15 +135,16 @@ function clean<T extends object>(o: T): T {
 }
 
 /**
- * Free text with suggestions (gender, kind, verbs). Suggested words are offered and saved with a capital first
+ * Free text with suggestions (gender, kind, verbs). Suggested words are offered (in the app's language) and saved with a capital first
  * letter, and a value that is one of them (in any case) shows that way; `lower` keeps them as written (verbs, which
- * sit inside sentences). The value's icon shows at the start of the box, as in the list.
+ * sit inside sentences, and stay English for the rules). The value's icon shows at the start of the box, as in the list.
  */
 function Pick(props: { label: string; field: string; value: string; options: string[]; onChange: (v: string | undefined) => void; icon?: (v: string) => IconName | undefined; lower?: boolean }) {
   const id = `opts-${props.field.replace(/\W/g, '-')}`;
   const box = useRef<HTMLDivElement>(null);
-  const options = props.lower ? props.options : props.options.map(upperFirst);
-  const canonical = (t: string) => options.find((o) => o.toLowerCase() === t.trim().toLowerCase()) ?? t;
+  const options = props.lower ? props.options : props.options.map((o) => capital(tm(o)));
+  // The list's spelling for a typed word ("port" -> "Port"), only once it is the whole word: "port " can go on to "Port town".
+  const canonical = (t: string) => options.find((o) => o.toLowerCase() === t.toLowerCase()) ?? t;
   const shown = canonical(props.value);
   const lead = shown.trim() ? props.icon?.(shown) : undefined;
   return (
@@ -164,7 +153,8 @@ function Pick(props: { label: string; field: string; value: string; options: str
       <div class="suggest" ref={box}>
         <SuggestInput id={`${id}-input`} anchor={box} value={shown} {...(lead ? { icon: lead } : {})}
           suggestions={options.map((o) => { const icon = props.icon?.(o); return icon ? { value: o, icon } : { value: o }; })}
-          onInput={(t) => props.onChange(canonical(t))} onPick={(o) => props.onChange(o.value)} />
+          onInput={(t) => props.onChange(canonical(t))} onPick={(o) => props.onChange(o.value)}
+          onBlur={() => { const tidy = canonical(props.value.trim()); if (tidy !== props.value) props.onChange(tidy); }} />
       </div>
     </div>
   );
@@ -198,29 +188,29 @@ function LifecycleFields({ world, entry, onChange }: { world: World; entry: Entr
   const ongoing = status && lc.ongoing.includes(status) ? lc.statuses.find((x) => x.value === status) : undefined;
   return (
     <fieldset class="lifecycle">
-      <legend><Icon name="hourglass" /> Status and dates</legend>
+      <legend><Icon name="hourglass" /> {t('Status and dates')}</legend>
       <div class="grid-3">
-        <Field label="Status" field="status">
+        <Field label={t('Status')} field="status">
           {(id) => (
-            <div class="status-pills" role="radiogroup" id={id} aria-label="Status" onKeyDown={(ev) => statusKeys(ev, lc.statuses.map((x) => x.value), status, (v) => put({ status: v }))}>
+            <div class="status-pills" role="radiogroup" id={id} aria-label={t('Status')} onKeyDown={(ev) => statusKeys(ev, lc.statuses.map((x) => x.value), status, (v) => put({ status: v }))}>
               {lc.statuses.map((o) => (
                 <button key={o.value} type="button" role="radio" aria-checked={status === o.value} tabIndex={status === o.value ? 0 : -1} class={`pill status-${o.value}`}
                   onClick={() => status !== o.value && put({ status: o.value })}>
-                  <Icon name={o.icon} /> {o.label}
+                  <Icon name={o.icon} /> {tm(o.label)}
                 </button>
               ))}
             </div>
           )}
         </Field>
-        <DateField label={startLabel} field={startField} value={rec[startField]} calendar={cal} onChange={(v) => put({ [startField]: v })} />
-        {showEnd && <DateField label={lc.endLabel} field={lc.endField} value={rec[lc.endField]} calendar={cal} onChange={(v) => put({ [lc.endField]: v })} />}
+        <DateField label={t(startLabel)} field={startField} value={rec[startField]} calendar={cal} onChange={(v) => put({ [startField]: v })} />
+        {showEnd && <DateField label={tm(lc.endLabel)} field={lc.endField} value={rec[lc.endField]} calendar={cal} onChange={(v) => put({ [lc.endField]: v })} />}
       </div>
       {hidden && hidden.trim() !== '' && (
         <p class="hint hidden-note" data-field={lc.endField}>
-          <Icon name="save" /> {lc.endLabel} “{hidden}” is still in the file but hidden while the status is {ongoing?.label ?? status}. Pick {lc.statuses.find((x) => lc.ended.includes(x.value))!.label} to edit it, or clear it there.
+          <Icon name="save" /> {t('{field} “{value}” is still in the file but hidden while the status is {status}. Pick {ended} to edit it, or clear it there.', { field: tm(lc.endLabel), value: hidden, status: tm(ongoing?.label ?? status), ended: tm(lc.statuses.find((x) => lc.ended.includes(x.value))!.label) })}
         </p>
       )}
-      {!showEnd && !hidden && !ongoing && <p class="hint">Pick {lc.statuses.find((x) => lc.ended.includes(x.value))!.label} to add a {lc.endLabel.toLowerCase()} date.</p>}
+      {!showEnd && !hidden && !ongoing && <p class="hint">{t('Pick {status} to add a {field} date.', { status: tm(lc.statuses.find((x) => lc.ended.includes(x.value))!.label), field: lower(tm(lc.endLabel)) })}</p>}
     </fieldset>
   );
 }
@@ -236,22 +226,22 @@ function RelationTypeField({ world, entry, r, field, onChange }: { world: World;
   const [custom, setCustom] = useState(!current && r.type !== '');
   const misfit = current && target && !relationFits(current, entry.type, target.type);
   const hint = misfit
-    ? `“${r.type}” doesn't fit ${TYPE_SINGULAR[entry.type].toLowerCase()} → ${TYPE_SINGULAR[target.type].toLowerCase()}. Pick another.`
-    : target ? `Types that fit ${TYPE_SINGULAR[entry.type].toLowerCase()} → ${TYPE_SINGULAR[target.type].toLowerCase()}` : `Types that fit a ${TYPE_SINGULAR[entry.type].toLowerCase()}`;
+    ? t("“{type}” doesn't fit {from} → {to}. Pick another.", { type: r.type, from: lower(tm(TYPE_SINGULAR[entry.type])), to: lower(tm(TYPE_SINGULAR[target.type])) })
+    : target ? t('Types that fit {from} → {to}', { from: lower(tm(TYPE_SINGULAR[entry.type])), to: lower(tm(TYPE_SINGULAR[target.type])) }) : t('Types that fit a {type}', { type: lower(tm(TYPE_SINGULAR[entry.type])) });
   return (
-    <Field label="Relation" field={field} hint={hint} invalid={!!misfit}>
+    <Field label={t('Relation')} field={field} hint={hint} invalid={!!misfit}>
       {(id, hintId) => custom ? (
         <div class="row nowrap">
-          <input id={id} type="text" value={r.type} aria-describedby={hintId} placeholder="custom-type" onInput={(e) => onChange(e.currentTarget.value.trim().toLowerCase().replace(/\s+/g, '-'))} />
-          <button type="button" class="ghost small" onClick={() => { setCustom(false); onChange(kinds[0]?.type ?? 'related-to'); }}>List</button>
+          <CustomType id={id} hintId={hintId} value={r.type} onChange={onChange} />
+          <button type="button" class="ghost small" onClick={() => { setCustom(false); onChange(kinds[0]?.type ?? 'related-to'); }}>{t('List')}</button>
         </div>
       ) : (
         <Select id={id} value={r.type} aria-describedby={hintId} invalid={!!misfit}
           onChange={(v) => { if (v === '__custom') setCustom(true); else onChange(v); }}
           options={[
-            ...(!known && r.type ? [{ value: r.type, label: `${misfit ? '! ' : ''}${r.type.replace(/-/g, ' ')}${misfit ? ' (does not fit)' : ''}` }] : []),
-            ...GROUP_ORDER.flatMap((g) => kinds.filter((k) => k.group === g).map((k) => ({ value: k.type, label: upperFirst(k.label), group: RELATION_GROUPS[g].label, icon: RELATION_GROUPS[g].icon }))),
-            { value: '__custom', label: 'Custom type…' },
+            ...(!known && r.type ? [{ value: r.type, label: misfit ? t('! {type} (does not fit)', { type: r.type.replace(/-/g, ' ') }) : r.type.replace(/-/g, ' ') }] : []),
+            ...GROUP_ORDER.flatMap((g) => kinds.filter((k) => k.group === g).map((k) => ({ value: k.type, label: capital(tm(k.label)), group: tm(RELATION_GROUPS[g].label), icon: RELATION_GROUPS[g].icon }))),
+            { value: '__custom', label: t('Custom type…') },
           ]} />
       )}
     </Field>
@@ -264,11 +254,11 @@ function RaceField({ world, e, set, onOpen }: { world: World; e: Character; set:
   const races = racesOf(e);
   const linked = (r: string) => ix.resolve(r);
   return (
-    <ChipInput label="Race or kind" field="race" values={races} placeholder="e.g. human, camel-folk, ghoul"
-      options={raceSuggestions(world.entries).map((r) => ({ value: r, label: r, icon: raceIcon(r) }))} normalize={upperFirst}
+    <ChipInput label={t('Race or kind')} field="race" values={races} placeholder={t('e.g. human, camel-folk, ghoul')}
+      options={() => raceSuggestions(world.entries).map((r) => ({ value: r, label: r, icon: raceIcon(r) }))} normalize={capital}
       icon={(r) => raceIcon(linked(r)?.name ?? r)} display={(r) => raceLabel(r, (x) => linked(x)?.name)}
       {...(races.some((r) => linked(r)) ? { onOpen: (r: string) => { const t = linked(r); if (t) onOpen(t.id); } } : {})}
-      hint="Type and press Enter, or pick a suggestion. × removes one."
+      hint={t('Type and press Enter, or pick a suggestion. × removes one.')}
       onChange={(list) => set({ race: list.length ? list.join(', ') : undefined })} />
   );
 }
@@ -312,26 +302,27 @@ function DetailFields({ world, entry, section, onChange, onOpen }: { world: Worl
     const field = f.key;
     switch (f.kind) {
       case 'ref':
-        return <RefField key={field} label={f.label} field={field} value={detailOf(entry, field) as string | undefined} world={world} types={f.to ?? []} exclude={entry.id} onChange={(v) => put(f, v)} />;
+        return <RefField key={field} label={tm(f.label)} field={field} value={detailOf(entry, field) as string | undefined} world={world} types={f.to ?? []} exclude={entry.id} onChange={(v) => put(f, v)} />;
       case 'refs': {
-        const options = world.entries.filter((x) => x.id !== entry.id && (!f.to || f.to.includes(x.type))).sort((a, b) => a.name.localeCompare(b.name));
+        // Every entry of the world: only made when the list opens or a typed name is looked up.
+        const options = () => world.entries.filter((x) => x.id !== entry.id && (!f.to || f.to.includes(x.type))).sort((a, b) => a.name.localeCompare(b.name)).map((x) => ({ ...entrySuggestion(x), label: x.name }));
         return (
-          <ChipInput key={field} label={f.label} field={field} values={detailList(entry, field)} placeholder={`Add ${(f.to ?? []).map((t) => TYPE_SINGULAR[t].toLowerCase()).join(' or ')}…`}
-            options={options.map((x) => ({ ...entrySuggestion(x), label: x.name }))} icon={(v) => TYPE_ICON[ix.resolve(v)?.type ?? (f.to?.[0] ?? 'note')]}
+          <ChipInput key={field} label={tm(f.label)} field={field} values={detailList(entry, field)} placeholder={t('Add {types}…', { types: (f.to ?? []).map((type) => lower(tm(TYPE_SINGULAR[type]))).join(` ${t('or')} `) })}
+            options={options} icon={(v) => TYPE_ICON[ix.resolve(v)?.type ?? (f.to?.[0] ?? 'note')]}
             display={(v) => ix.resolve(v)?.name ?? v} invalid={(v) => !ix.resolve(v)} onOpen={(v) => { const t = ix.resolve(v); if (t) onOpen(t.id); }}
-            hint={f.relation ? `Also shown as “${f.relation.replace(/-/g, ' ')}” in the relationship web.` : undefined}
+            hint={f.relation ? t('Also shown as “{relation}” in the relationship web.', { relation: tm(f.relation.replace(/-/g, ' ')) }) : undefined}
             onChange={(v) => put(f, v)} />
         );
       }
       case 'list':
-        return <ListText key={field} label={f.label} field={field} value={detailList(entry, field)} resetKey={entry.id} hint={f.hint} onChange={(v) => put(f, v)} />;
+        return <ListText key={field} label={tm(f.label)} field={field} value={detailList(entry, field)} resetKey={entry.id} hint={f.hint && tm(f.hint)} onChange={(v) => put(f, v)} />;
       case 'long':
-        return <TextField key={field} label={f.label} field={field} value={detailOf(entry, field) as string | undefined} multiline onChange={(v) => put(f, v)} />;
+        return <TextField key={field} label={tm(f.label)} field={field} value={detailOf(entry, field) as string | undefined} multiline onChange={(v) => put(f, v)} />;
       default:
         return f.suggest ? (
-          <Pick key={field} label={f.label} field={field} value={(detailOf(entry, field) as string | undefined) ?? ''} options={[...f.suggest]} icon={(v) => suggestionIcon(entry.type, f.key, v)} onChange={(v) => put(f, v)} />
+          <Pick key={field} label={tm(f.label)} field={field} value={(detailOf(entry, field) as string | undefined) ?? ''} options={[...f.suggest]} icon={(v) => suggestionIcon(entry.type, f.key, v)} onChange={(v) => put(f, v)} />
         ) : (
-          <TextField key={field} label={f.label} field={field} value={detailOf(entry, field) as string | undefined} placeholder={f.hint} onChange={(v) => put(f, v)} />
+          <TextField key={field} label={tm(f.label)} field={field} value={detailOf(entry, field) as string | undefined} placeholder={f.hint && tm(f.hint)} onChange={(v) => put(f, v)} />
         );
     }
   };
@@ -339,7 +330,7 @@ function DetailFields({ world, entry, section, onChange, onOpen }: { world: Worl
     <div class="detail-fields" data-details={section}>
       {short.length > 0 && <div class="grid-2">{short.map(one)}</div>}
       {long.map(one)}
-      {section === 'basics' && <p class="hint">Every field is optional. Leave it empty when it is unknown; empty fields are not saved and do not show in exports.</p>}
+      {section === 'basics' && <p class="hint">{t('Every field is optional. Leave it empty when it is unknown; empty fields are not saved and do not show in exports.')}</p>}
     </div>
   );
 }
@@ -349,17 +340,17 @@ function CharacterFields({ world, e, set }: { world: World; e: Character; set: (
   return (
     <>
       <ListEditor<LocationSpan>
-        title="Locations over time"
+        title={t('Locations over time')}
         field="locations"
         items={e.locations}
-        addLabel="Add location"
+        addLabel={t('Add location')}
         empty={() => ({ place: '' })}
         onChange={(locations) => set({ locations })}
         render={(l, put, f) => (
           <>
-            <RefField label="Place" field={`${f}.place`} value={l.place} world={world} types={['place']} onChange={(place) => put({ ...l, place: place ?? '' })} />
-            <DateField label="From" field={`${f}.from`} value={l.from} calendar={cal} onChange={(from) => put(clean({ ...l, from }))} />
-            <DateField label="To" field={`${f}.to`} value={l.to} calendar={cal} onChange={(to) => put(clean({ ...l, to }))} />
+            <RefField label={t('Place')} field={`${f}.place`} value={l.place} world={world} types={['place']} onChange={(place) => put({ ...l, place: place ?? '' })} />
+            <DateField label={t('From')} field={`${f}.from`} value={l.from} calendar={cal} onChange={(from) => put(clean({ ...l, from }))} />
+            <DateField label={t('To')} field={`${f}.to`} value={l.to} calendar={cal} onChange={(to) => put(clean({ ...l, to }))} />
           </>
         )}
       />
@@ -371,9 +362,9 @@ function EventWhen({ world, e, set }: { world: World; e: LoreEvent; set: (p: Par
   const cal = world.manifest.calendar;
   return (
     <div class="grid-3">
-      <DateField label="Date" field="date" value={e.date} calendar={cal} onChange={(date) => set({ date })} />
-      <DateField label="End (optional)" field="end" value={e.end} calendar={cal} onChange={(end) => set({ end })} />
-      <RefField label="Place" field="place" value={e.place} world={world} types={['place']} onChange={(place) => set({ place })} />
+      <DateField label={t('Date')} field="date" value={e.date} calendar={cal} onChange={(date) => set({ date })} />
+      <DateField label={t('End (optional)')} field="end" value={e.end} calendar={cal} onChange={(end) => set({ end })} />
+      <RefField label={t('Place')} field="place" value={e.place} world={world} types={['place']} onChange={(place) => set({ place })} />
     </div>
   );
 }
@@ -382,34 +373,70 @@ function EventFields({ world, e, set }: { world: World; e: LoreEvent; set: (p: P
   return (
     <>
       <ListEditor<Participant>
-        title="Participants"
+        title={t('Participants')}
         field="participants"
         items={e.participants}
-        addLabel="Add participant"
+        addLabel={t('Add participant')}
         empty={() => ({ id: '' })}
         onChange={(participants) => set({ participants })}
         render={(p, put, f) => (
           <>
-            <RefField label="Who" field={`${f}.id`} value={p.id} world={world} onChange={(id) => put({ ...p, id: id ?? '' })} />
-            <TextField label="Role" field={`${f}.role`} value={p.role} onChange={(role) => put(clean({ ...p, role }))} />
+            <RefField label={t('Who')} field={`${f}.id`} value={p.id} world={world} onChange={(id) => put({ ...p, id: id ?? '' })} />
+            <TextField label={t('Role')} field={`${f}.role`} value={p.role} onChange={(role) => put(clean({ ...p, role }))} />
           </>
         )}
       />
       <ListEditor<Action>
-        title="What happened (actor, verb, target)"
+        title={t('What happened (actor, verb, target)')}
         field="actions"
         items={e.actions}
-        addLabel="Add action"
+        addLabel={t('Add action')}
         empty={() => ({ actor: '', verb: 'killed' })}
         onChange={(actions) => set({ actions })}
         render={(a, put, f) => (
           <>
-            <RefField label="Actor" field={`${f}.actor`} value={a.actor} world={world} onChange={(actor) => put({ ...a, actor: actor ?? '' })} />
-            <Pick label="Verb (past tense)" field={`${f}.verb`} lower value={a.verb} options={['killed', 'betrayed', 'crowned', 'married', 'met', 'founded', 'destroyed', 'rescued', 'exiled', 'stole']} icon={(v) => suggestionIcon('event', 'verb', v)} onChange={(verb) => put({ ...a, verb: verb ?? '' })} />
-            <RefField label="Target" field={`${f}.target`} value={a.target} world={world} onChange={(target) => put(clean({ ...a, target }))} />
+            <RefField label={t('Actor')} field={`${f}.actor`} value={a.actor} world={world} onChange={(actor) => put({ ...a, actor: actor ?? '' })} />
+            <Pick label={t('Verb (past tense)')} field={`${f}.verb`} lower value={a.verb} options={['killed', 'betrayed', 'crowned', 'married', 'met', 'founded', 'destroyed', 'rescued', 'exiled', 'stole']} icon={(v) => suggestionIcon('event', 'verb', v)} onChange={(verb) => put({ ...a, verb: verb ?? '' })} />
+            <RefField label={t('Target')} field={`${f}.target`} value={a.target} world={world} onChange={(target) => put(clean({ ...a, target }))} />
           </>
         )}
       />
     </>
+  );
+}
+
+/** "sworn brother" -> "sworn-brother": a relation type as stored. */
+const typeSlug = (t: string) => t.toLowerCase().replace(/\s+/g, '-');
+
+/** A custom relation type. The raw text stays while typing (spaces become hyphens in the stored type), tidied on leaving. */
+function CustomType({ id, hintId, value, onChange }: { id: string; hintId: string; value: string; onChange: (type: string) => void }) {
+  const [text, setText] = useState(value);
+  const box = useRef<HTMLInputElement>(null);
+  // While typing the raw text stays, unless the type changed some other way (an undo, an outside change).
+  useEffect(() => { if (document.activeElement !== box.current || typeSlug(text.trimStart()) !== value) setText(value); }, [value]);
+  return (
+    <input ref={box} id={id} type="text" value={text} aria-describedby={hintId} placeholder={t('custom-type')}
+      onInput={(e) => { const t = e.currentTarget.value; setText(t); onChange(typeSlug(t.trimStart())); }}
+      onBlur={() => { const tidy = typeSlug(text.trim()).replace(/^-+|-+$/g, ''); setText(tidy); if (tidy !== value) onChange(tidy); }} />
+  );
+}
+
+/** A number field that keeps what is typed ("-", "1.") until it is a number; empty means unset. */
+function NumberText(props: { label: string; field: string; value: number | undefined; hint?: string; onChange: (v: number | undefined) => void }) {
+  const [text, setText] = useState(props.value?.toString() ?? '');
+  const box = useRef<HTMLDivElement>(null);
+  // While typing, "-" and "1." stay as typed; a value changed some other way (an undo) shows.
+  const typed = (t: string): number | undefined => (t.trim() && Number.isFinite(Number(t)) ? Number(t) : undefined);
+  useEffect(() => { if (!box.current?.contains(document.activeElement) || (typed(text) !== props.value && text.trim() !== '-')) setText(props.value?.toString() ?? ''); }, [props.value]);
+  return (
+    <div ref={box} onFocusOut={() => setText(props.value?.toString() ?? '')}>
+      <TextField label={props.label} field={props.field} value={text} hint={props.hint} onChange={(v) => {
+        const t = v ?? '';
+        setText(t);
+        const n = Number(t);
+        if (!t.trim()) props.onChange(undefined);
+        else if (t.trim() !== '-' && Number.isFinite(n)) props.onChange(n);
+      }} />
+    </div>
   );
 }

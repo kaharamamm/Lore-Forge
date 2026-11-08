@@ -15,7 +15,7 @@ export interface ShelfSources {
   sample: string | null;
   /** The running app's own resources folder when packaged, so its sample is not taken for another install's. */
   ownResources: string | null;
-  /** Library settings "Show sample world" is off. */
+  /** Settings "Show sample world" is off. */
   hideSample: boolean;
   /** The folder has a world.json. */
   exists: (dir: string) => boolean;

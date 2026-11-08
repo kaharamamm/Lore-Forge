@@ -55,6 +55,26 @@
       "additionalProperties": { "type": "string" }
     },
     "picture": {"type": "object", "description": "Card picture set on the Home page: a game-icons.net icon name, background and accent colours, or an image file (relative to the world folder, also listed in images). Missing parts use the defaults.", "properties": {"icon": {"type": "string"}, "color": {"type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"}, "accent": {"type": "string", "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"}, "image": {"type": "string"}}, "additionalProperties": false},
+    "looks": {
+      "type": "array",
+      "description": "Other looks of the entry over time, besides the Default one (the entry itself): why it looks different, when (dates, an era, after or before an event; any mix narrows it), and the visual description fields that change. Pictures name their look in images[].look; 3D models of a look live in models/<entryId>/<lookId>/.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Stable id, kept when the look is renamed; made from the name when missing." },
+          "name": { "type": "string" },
+          "reason": { "type": "string", "description": "Why it looks different: a wound, a new title, new clothes." },
+          "from": { "type": "string", "description": "Date in the world calendar (DD.MM.YYYY, MM.YYYY or YYYY, optional ~ and era code)." },
+          "to": { "type": "string", "description": "Date in the world calendar." },
+          "era": { "type": "string", "description": "Era id: the look applies while that era lasts." },
+          "after": { "type": "string", "description": "Event (or another entry with a date), by id or name: the look applies from its end on." },
+          "before": { "type": "string", "description": "Event (or another entry with a date), by id or name: the look applies until it starts." },
+          "visual": { "type": "object", "description": "Visual description fields that differ from the Default look.", "additionalProperties": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
     "chapter": { "type": "string", "description": "Story Book chapter title override (events and notes)." },
     "bookOrder": { "type": "number", "description": "Story Book order inside the chapter; default 0, lower first, ties by date then name." },
     "images": {
@@ -65,6 +85,7 @@
         "required": ["file", "view"],
         "properties": {
           "file": { "type": "string", "description": "Path relative to the world folder, normally images/<entryId>/<file>." },
+          "look": { "type": "string", "description": "Id of the entry's look (in looks) this picture shows; without it, the Default look." },
           "view": {
             "type": "string",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",

@@ -8,13 +8,16 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import YAML from 'yaml';
 import {
-  analyzeStory, applyFields, artBrief, calendarProblems, chapterDate, chapterPath, check, cleanCoverSettings, DEFAULT_STATUS, DETAIL_FIELDS,
-  ENTRY_TYPES, entryPath, isStoryFact, LIFECYCLE, newEntryId, normalizeName, parseEntry, proposalEntry, relationFits, relationKind,
-  serializeEntry, sortChapters, splitFrontMatter, storyBook, TRIMS, TYPE_LABELS, TYPE_SINGULAR, wordCount, WorldIndex, worldCodex,
-  type Calendar, type Entry, type EntryType, type FactRef, type Proposal, type Relation, type StoryChapter, type TrimSize, type Warning,
-  type World, type WorldCoverSettings,
+  analyzeStory, applyFields, artBrief, bodyLinks, calendarProblems, chapterDate, chapterPath, check, cleanCoverSettings, DATE_FORMATS_HINT,
+  DEFAULT_STATUS, DETAIL_FIELDS, ENTRY_TYPES, entryPath, isStoryFact, LIFECYCLE, lookAt, lookImages, lookVisual, lookWhen, newEntryId, newLookId,
+  normalizeName, parseEntry, proposalEntry, relationFits, relationKind, serializeEntry, slugify, sortChapters, splitFrontMatter, storyBook, TRIMS,
+  TYPE_LABELS, TYPE_SINGULAR, wordCount, WorldIndex, worldCodex,
+  type Calendar, type Entry, type EntryType, type FactRef, type Look, type ParsedDate, type Proposal, type Relation, type StoryChapter,
+  type TrimSize, type Warning, type World, type WorldCoverSettings,
 } from '@lore-forge/core';
-import { createWorld, duplicateWorld, loadWorld, saveChapter, saveEntry, saveIntended, saveStoryIgnored, uniqueWorldDir } from '@lore-forge/core/node';
+import {
+  createWorld, duplicateWorld, listModels, loadWorld, moveModels, saveChapter, saveEntry, saveIntended, saveStoryIgnored, uniqueWorldDir,
+} from '@lore-forge/core/node';
 import { writeDocx, writePublication } from '@lore-forge/pdf';
 import type { Library } from './library.ts';
 
@@ -148,6 +151,7 @@ function entrySummary(e: Entry): Obj {
     ...((r['status'] as string | undefined) ? { status: r['status'] } : {}),
     ...(dates ? { dates } : {}),
     ...(e.summary ? { summary: e.summary } : {}),
+    ...(e.looks?.length ? { looks: e.looks.map((l) => l.name || l.id) } : {}),
     ...(e.images?.length ? { images: e.images.length } : {}),
   };
 }
@@ -175,7 +179,7 @@ export function entryJson(world: World, e: Entry): Obj {
   return { ...data, body: e.body, file: world.files[e.id] };
 }
 
-const COMMON_KEYS = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'relations', 'images', 'picture', 'visual', 'chapter', 'bookOrder', 'body'];
+const COMMON_KEYS = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'relations', 'images', 'picture', 'visual', 'looks', 'chapter', 'bookOrder', 'body'];
 const TYPE_KEYS: Record<EntryType, readonly string[]> = {
   character: ['race', 'born', 'died', 'status', 'locations'],
   place: ['status', 'founded', 'destroyed', 'partOf'],
@@ -192,12 +196,13 @@ const kebab = (s: string): string => s.trim().toLowerCase().replace(/[\s_]+/g, '
 
 /**
  * The assistant's fields, tidied into the file format: numbers in dates become text, comma lists become lists,
- * names of other entries become their ids when those exist (or are being created in the same call).
+ * names of other entries become their ids when those exist (or are being created in the same call). Looks are
+ * merged one by one instead (mergeLooks).
  */
 function normalizeFields(input: Obj, type: EntryType, ref: (s: unknown) => unknown): Obj {
   const out: Obj = {};
   for (const [k, v] of Object.entries(input)) {
-    if (['id', 'type', 'body'].includes(k)) continue;
+    if (['id', 'type', 'body', 'looks'].includes(k)) continue;
     if (v === null) { out[k] = null; continue; }
     if ((DATE_KEYS as readonly string[]).includes(k)) out[k] = asText(v);
     else if (k === 'aliases' || k === 'tags') out[k] = asList(v).map(asText);
@@ -224,6 +229,81 @@ function normalizeFields(input: Obj, type: EntryType, ref: (s: unknown) => unkno
   return JSON.parse(JSON.stringify(out)) as Obj;
 }
 
+/** The fields of a look in the file. */
+const LOOK_FIELDS = ['id', 'name', 'reason', 'from', 'to', 'era', 'after', 'before', 'visual'];
+const LOOK_TEXT = ['reason', 'from', 'to', 'era', 'after', 'before'] as const;
+
+/** A free id for a new look, made from its name (or the id asked for) the way the app makes them. */
+const freeLookId = (looks: readonly Look[], name: string): string => newLookId({ looks } as Entry, name);
+
+interface MergedLooks {
+  looks: Look[];
+  removed: Look[];
+  /** Keys given in a look that a look does not have. */
+  unknown: string[];
+  /** Looks asked to be removed that the entry does not have. */
+  missing: string[];
+}
+
+/**
+ * An entry's looks after save_entries. Each look given changes the look with its id (else its name), only in the
+ * fields it gives (null removes one), or is added with an id made from its name. A name renames a look only when
+ * the id found it. Looks not given stay; remove: true
+ * takes one out. An id never changes, because pictures and 3D model folders use it: a rename keeps it. Events and
+ * entries in after/before become ids like other references; an era's name becomes its code.
+ */
+function mergeLooks(have: readonly Look[], input: unknown, ref: (s: unknown) => unknown, calendar: Calendar): MergedLooks {
+  if (input === null) return { looks: [], removed: [...have], unknown: [], missing: [] };
+  if (!Array.isArray(input)) throw new Error('"looks" must be a list of looks');
+  const looks: Look[] = have.map((l) => ({ ...l }));
+  const removed: Look[] = [];
+  const unknown = new Set<string>();
+  const missing: string[] = [];
+  const eraId = (t: string): string => (calendar.eras.find((e) => e.id.toLowerCase() === t.toLowerCase()) ?? calendar.eras.find((e) => normalizeName(e.name) === normalizeName(t)))?.id ?? t;
+  input.forEach((raw: unknown, i) => {
+    if (!isObj(raw)) throw new Error(`looks[${i}] must be an object such as {name, reason, after, visual}`);
+    for (const k of Object.keys(raw)) if (!LOOK_FIELDS.includes(k) && k !== 'remove') unknown.add(k);
+    const id = typeof raw['id'] === 'string' ? raw['id'].trim() : '';
+    const name = typeof raw['name'] === 'string' ? raw['name'].trim() : '';
+    let at = id ? looks.findIndex((l) => l.id === id) : -1;
+    // Found by its id, a name renames it; found by its name, the name only finds it.
+    const byId = at >= 0;
+    if (at < 0 && name) at = looks.findIndex((l) => normalizeName(l.name) === normalizeName(name));
+    if (raw['remove'] === true) {
+      if (at >= 0) removed.push(...looks.splice(at, 1));
+      else missing.push(id || name || `#${i + 1}`);
+      return;
+    }
+    if (at < 0 && !name) throw new Error(`looks[${i}]${id ? ` ("${id}")` : ''} is not a look of this entry; a new look needs a name`);
+    // Ids of removed looks stay taken, so a new look never picks up their pictures or models.
+    const look: Look = at >= 0 ? looks[at]! : { id: freeLookId([...looks, ...removed], id || name), name };
+    if ('name' in raw && raw['name'] !== undefined) {
+      if (!name) throw new Error(`the look "${look.name || look.id}" needs a name`);
+      if (byId || at < 0) look.name = name;
+    }
+    for (const k of LOOK_TEXT) {
+      const v = raw[k];
+      if (v === undefined) continue;
+      if (v === null || (typeof v === 'string' && !v.trim())) {
+        delete look[k];
+        continue;
+      }
+      if (typeof v !== 'string' && typeof v !== 'number') throw new Error(`looks[${i}].${k} must be text`);
+      const text = String(v).trim();
+      look[k] = k === 'after' || k === 'before' ? String(ref(text)) : k === 'era' ? eraId(text) : text;
+    }
+    const visual = raw['visual'];
+    if (visual !== undefined) {
+      if (visual !== null && !isObj(visual)) throw new Error(`looks[${i}].visual must be a map such as {features: "An eye patch"}`);
+      const map = Object.fromEntries(Object.entries(visual ?? {}).filter(([, x]) => x !== null && x !== undefined && String(x).trim() !== '').map(([k, x]) => [k, String(x)]));
+      if (Object.keys(map).length) look.visual = map;
+      else delete look.visual;
+    }
+    if (at < 0) looks.push(look);
+  });
+  return { looks, removed, unknown: [...unknown], missing };
+}
+
 export interface EntryInput extends Obj {
   id?: string;
   type?: string;
@@ -237,7 +317,10 @@ export interface SaveOutcome {
   saved: SavedEntry[];
   /** Entries that could not be saved, with the reason. */
   problems: string[];
-  /** Field names that are not part of the format (kept in the file, but Lore-Forge does not use them). */
+  /**
+   * Field names that are not part of the format (kept in the file, but Lore-Forge does not use them), look fields
+   * that were left out, and looks that were removed.
+   */
   notes: string[];
   /** Open errors and warnings that involve the saved entries. */
   warnings: FormattedWarning[];
@@ -245,8 +328,9 @@ export interface SaveOutcome {
 
 /**
  * Creates or updates entries. An item with the id or the exact name of an existing entry (of that type) updates it:
- * only the fields given change, null removes a field, lists replace the whole list. Others are created; ids come
- * from the type and name ("char-mr-camel"). Names of entries in the same call can be used as references.
+ * only the fields given change, null removes a field, lists replace the whole list (but looks are matched one by
+ * one: see mergeLooks). Others are created; ids come from the type and name ("char-mr-camel"). Names of entries in
+ * the same call can be used as references. A removed look's pictures and 3D models go back to the Default look.
  */
 export async function saveEntries(dir: string, items: EntryInput[]): Promise<SaveOutcome> {
   let world = await loadWorld(dir);
@@ -298,12 +382,46 @@ export async function saveEntries(dir: string, items: EntryInput[]): Promise<Sav
       fm['type'] = p.type;
       fm['name'] = p.name;
       const unknown = Object.keys(p.item).filter((k) => !knownKeys(p.type).includes(k));
-      if (unknown.length) notes.push(`${p.name}: ${unknown.map((k) => `"${k}"`).join(', ')} ${unknown.length === 1 ? 'is' : 'are'} not a ${p.type} field; kept in the file but not shown in Lore-Forge. Use lore_forge_guide for the field names.`);
+      const said: string[] = [];
+      if (unknown.length) said.push(`${p.name}: ${unknown.map((k) => `"${k}"`).join(', ')} ${unknown.length === 1 ? 'is' : 'are'} not a ${p.type} field; kept in the file but not shown in Lore-Forge. Use lore_forge_guide for the field names.`);
+      let gone: Look[] = [];
+      let gonePictures = 0;
+      if (p.item['looks'] !== undefined) {
+        const m = mergeLooks(p.existing?.looks ?? [], p.item['looks'], ref, world.manifest.calendar);
+        if (m.looks.length) fm['looks'] = m.looks;
+        else delete fm['looks'];
+        gone = m.removed;
+        if (m.unknown.length) said.push(`${p.name}: ${m.unknown.map((k) => `"${k}"`).join(', ')} ${m.unknown.length === 1 ? 'is' : 'are'} not a look field and ${m.unknown.length === 1 ? 'was' : 'were'} left out. A look has id, name, reason, from, to, era, after, before and visual.`);
+        if (m.missing.length) said.push(`${p.name}: there is no look ${m.missing.map((x) => `"${x}"`).join(', ')} to remove.`);
+        // The pictures of a removed look go back to the Default look, as in the app.
+        const goneIds = new Set(gone.map((l) => l.id));
+        if (goneIds.size && Array.isArray(fm['images'])) {
+          fm['images'] = fm['images'].map((img: unknown) => {
+            if (!isObj(img) || typeof img['look'] !== 'string' || !goneIds.has(img['look'])) return img;
+            gonePictures++;
+            const { look: _look, ...rest } = img;
+            return rest;
+          });
+        }
+      }
       const body = typeof p.item.body === 'string' ? p.item.body : (p.existing?.body ?? '');
       const parsed = parseEntry(`---\n${YAML.stringify(fm, { lineWidth: 0 })}---\n\n${body.replace(/^\n+/, '')}`);
       if (!parsed.entry || parsed.problems.length) throw new Error(parsed.problems.join(' '));
       const file = (p.existing && world.files[p.existing.id]) || entryPath(parsed.entry);
       await saveEntry(dir, parsed.entry, file);
+      if (gone.length) {
+        // And its 3D models (models/<entry-id>/<look-id>/) move to the Default look's folder.
+        let goneModels = 0;
+        for (const l of gone) {
+          try {
+            goneModels += (await listModels(dir, p.id, l.id)).length;
+            await moveModels(dir, p.id, l.id);
+          } catch { /* an id that cannot name a folder has no models */ }
+        }
+        const kept = [gonePictures ? `${gonePictures} picture${gonePictures === 1 ? '' : 's'}` : '', goneModels ? `${goneModels} 3D model${goneModels === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+        said.push(`${p.name}: removed the look${gone.length === 1 ? '' : 's'} ${gone.map((l) => `"${l.name || l.id}"`).join(', ')}.${kept ? ` ${gone.length === 1 ? 'Its' : 'Their'} ${kept} now ${gonePictures + goneModels === 1 ? 'belongs' : 'belong'} to the Default look.` : ''}`);
+      }
+      notes.push(...said);
       saved.push({ id: p.id, type: p.type, name: p.name, file, created: !p.existing });
     } catch (e) {
       problems.push(`"${p.name}": ${(e as Error).message}`);
@@ -424,11 +542,40 @@ export async function writeChapter(dir: string, input: ChapterInput): Promise<Ob
   const analysis = analyzeStory(world);
   const here = (p: Proposal) => p.sourceSpan.chapter === chapter.file || p.alsoAt?.some((s) => s.chapter === chapter.file);
   const number = sortChapters(world.story ?? []).findIndex((c) => c.file === chapter.file) + 1;
+  const looks = chapterLooks(world, world.story?.find((c) => c.file === chapter.file) ?? chapter);
   return {
     chapter: { number, title, file: chapter.file, words: wordCount(chapter.body), replaced: !!old },
     proposals: analysis.proposals.filter(here).map(proposalJson),
     storyWarnings: analysis.warnings.filter((w) => !w.intended && w.offending.chapter === chapter.file).map((w) => formatWarning(world, w)),
+    ...(looks.length ? { looks } : {}),
   };
+}
+
+/**
+ * For a dated chapter: the people and things it names that do not have their Default look on that date, with the
+ * look they have and what it changes. The text should describe them that way.
+ */
+function chapterLooks(world: World, chapter: StoryChapter): Obj[] {
+  const ix = new WorldIndex(world);
+  const when = ix.date(chapterDate(chapter));
+  if (!when) return [];
+  const named = new Set<string>();
+  for (const m of ix.mentions.find(chapter.body)) if (m.ids.length === 1) named.add(m.ids[0]!);
+  for (const l of bodyLinks(chapter.body)) {
+    const e = ix.resolve(l.ref);
+    if (e) named.add(e.id);
+  }
+  return [...named].flatMap((id) => {
+    const e = ix.byIdOf(id);
+    const look = e && lookAt(e, when, ix);
+    if (!e || !look) return [];
+    return [{
+      entry: e.name,
+      look: look.name || look.id,
+      ...(look.reason?.trim() ? { why: look.reason.trim() } : {}),
+      ...(look.visual && Object.keys(look.visual).length ? { changes: look.visual } : {}),
+    }];
+  });
 }
 
 export async function readStory(dir: string, ref?: string | number): Promise<Obj> {
@@ -547,25 +694,89 @@ export async function markIntended(dir: string, warningId: string, note: string)
   return w.message;
 }
 
+// -------------------------------------------------------------------------------------------------- looks
+
+/**
+ * One of an entry's looks, by its id or name. Undefined for the Default look: no look given, or "Default" when no
+ * look has that name. The error lists the looks the entry has, so the assistant can retry.
+ */
+export function findLook(entry: Entry, ref: string | undefined): Look | undefined {
+  const text = ref?.trim() ?? '';
+  if (!text) return undefined;
+  const looks = entry.looks ?? [];
+  const hit = looks.find((l) => l.id === text) ?? looks.find((l) => normalizeName(l.name) === normalizeName(text)) ?? looks.find((l) => l.id === slugify(text, ''));
+  if (hit || normalizeName(text) === 'default') return hit;
+  throw new Error(`${entry.name} has no look "${text}". ${looks.length ? `Its looks: ${looks.map((l) => `"${l.name || l.id}" (${l.id})`).join(', ')}.` : 'It has no looks yet; add one with save_entries (looks).'}`);
+}
+
+/** A date the book's calendar can place, for look_at. */
+function placedDate(ix: WorldIndex, text: string): ParsedDate {
+  const r = ix.parse(text.trim());
+  if (r.kind === 'date') return r.date;
+  if (r.kind === 'invalid') throw new Error(r.reason);
+  throw new Error(`"${text}" has no year, so it cannot be placed in time. Use ${DATE_FORMATS_HINT}.`);
+}
+
+/** How an entry looks in one look (undefined: the Default look): when, why, the full description and its pictures. */
+function lookJson(e: Entry, look: Look | undefined, ix: WorldIndex): Obj {
+  const visual = lookVisual(e, look);
+  const when = look ? lookWhen(look, ix) : '';
+  const pictures = lookImages(e, look).map((i) => i.file);
+  return {
+    entry: e.name,
+    look: look ? look.name || look.id : 'Default',
+    ...(look ? { id: look.id } : {}),
+    ...(when ? { when } : {}),
+    ...(look?.reason?.trim() ? { why: look.reason.trim() } : {}),
+    ...(Object.keys(visual).length ? { visual } : {}),
+    ...(look?.visual && Object.keys(look.visual).length ? { changes: Object.keys(look.visual) } : {}),
+    ...(pictures.length ? { pictures } : {}),
+  };
+}
+
+/**
+ * How entries look on a date: the look in effect (of the looks that cover the date, the one that started last) or
+ * the Default look. Without entries: every entry that has a look other than its Default one on that date.
+ */
+export async function looksOn(dir: string, date: string, refs?: string[]): Promise<Obj> {
+  const world = await loadWorld(dir);
+  const ix = new WorldIndex(world);
+  const when = placedDate(ix, date);
+  const entries = refs?.length ? refs.map((r) => findEntry(world, r)) : world.entries.filter((e) => lookAt(e, when, ix));
+  return {
+    date: ix.fmt(when),
+    looks: entries.map((e) => lookJson(e, lookAt(e, when, ix), ix)),
+    ...(!refs?.length && !entries.length ? { note: `On ${ix.fmt(when)} every entry has its Default look.` } : {}),
+  };
+}
+
 // ----------------------------------------------------------------------------------------------- pictures
 
-/** The entry a picture is for, its default view, and a ready prompt built from its visual description. */
-export async function pictureBrief(dir: string, ref: string, view?: string): Promise<{ world: World; entry?: Entry; view: string; prompt: string; artStyle?: string }> {
+/**
+ * The entry a picture is for, its default view, and a ready prompt built from its visual description. With a look:
+ * the look's description (the Default one with what the look changes) and why it looks that way.
+ */
+export async function pictureBrief(dir: string, ref: string, view?: string, lookRef?: string): Promise<{ world: World; entry?: Entry; look?: Look; view: string; prompt: string; artStyle?: string }> {
   const world = await loadWorld(dir);
   const raw = await readManifestRaw(dir);
   const artStyle = typeof raw['artStyle'] === 'string' && raw['artStyle'].trim() ? raw['artStyle'].trim() : undefined;
   if (normalizeName(ref) === 'cover') {
+    if (lookRef?.trim() && normalizeName(lookRef) !== 'default') throw new Error('The book cover has no looks; leave out look.');
     const m = world.manifest;
     const title = m.book?.title ?? m.name;
     const prompt = `Book cover illustration for "${title}"${m.description ? `: ${m.description}` : ''}. A single striking scene, rich detail, leave calm space at the top and bottom for the title. No text, no letters, no logos, no border.`;
     return { world, view: 'cover', prompt, ...(artStyle ? { artStyle } : {}) };
   }
   const entry = findEntry(world, ref);
+  const look = findLook(entry, lookRef);
   const v = view?.trim() ? kebab(view) : ({ character: 'three-quarter', place: 'establishing', faction: 'emblem', item: 'front', event: 'scene', note: 'illustration' } as const)[entry.type];
-  const brief = artBrief(entry, new WorldIndex(world));
-  const base = brief?.prompt ?? `${entry.type === 'faction' ? `Emblem and banner design for ${entry.name}` : `Illustration of ${entry.name}`}.${entry.summary ? ` ${entry.summary}` : ''}${Object.values(entry.visual ?? {}).length ? ` ${Object.values(entry.visual ?? {}).join(' ')}` : ''} Setting: the world of ${world.manifest.name}.`;
+  const brief = artBrief(entry, new WorldIndex(world), look);
+  // Factions and notes have no art brief: the same parts, said plainly.
+  const visual = Object.values(lookVisual(entry, look));
+  const lookLine = look ? ` As they look in "${look.name || look.id}"${look.reason?.trim() ? `: ${look.reason.trim().replace(/\.$/, '')}` : ''}.` : '';
+  const base = brief?.prompt ?? `${entry.type === 'faction' ? `Emblem and banner design for ${entry.name}` : `Illustration of ${entry.name}`}.${entry.summary ? ` ${entry.summary}` : ''}${lookLine}${visual.length ? ` ${visual.join(' ')}` : ''} Setting: the world of ${world.manifest.name}.`;
   const viewHint = v === 'a-pose' ? ' Full body, neutral A-pose, plain background.' : v === 'front' && entry.type === 'character' ? ' Full body, front view.' : '';
-  return { world, entry, view: v, prompt: `${base}${viewHint} No text, no captions, no watermark.`, ...(artStyle ? { artStyle } : {}) };
+  return { world, entry, ...(look ? { look } : {}), view: v, prompt: `${base}${viewHint} No text, no captions, no watermark.`, ...(artStyle ? { artStyle } : {}) };
 }
 
 function freePath(dir: string, rel: string): string {
@@ -576,8 +787,12 @@ function freePath(dir: string, rel: string): string {
   return out;
 }
 
-/** Saves picture bytes into the book and attaches them: to an entry's images (its card picture too, when it had none), or as the cover. */
-export async function attachPicture(dir: string, ref: string, view: string, data: Uint8Array, ext: string, provenance: { tool?: string; prompt?: string; sources?: string[] }): Promise<{ file: string; entry?: string }> {
+/**
+ * Saves picture bytes into the book and attaches them: to an entry's images (its card picture too, when it had none),
+ * or as the cover. With a look id the picture is that look's: it goes to images/<entry-id>/<look-id>/ and names the
+ * look. The card shows the entry itself, so only a picture of the Default look becomes its card picture.
+ */
+export async function attachPicture(dir: string, ref: string, view: string, data: Uint8Array, ext: string, provenance: { tool?: string; prompt?: string; sources?: string[] }, look?: string): Promise<{ file: string; entry?: string }> {
   const world = await loadWorld(dir);
   const prov = { ...(provenance.tool ? { tool: provenance.tool } : {}), ...(provenance.prompt ? { prompt: provenance.prompt } : {}), date: today(), ...(provenance.sources?.length ? { sources: provenance.sources } : {}) };
   if (normalizeName(ref) === 'cover') {
@@ -590,11 +805,12 @@ export async function attachPicture(dir: string, ref: string, view: string, data
   }
   const entry = structuredClone(findEntry(world, ref));
   const safeId = entry.id.replace(/[^\w-]+/g, '-');
-  const file = freePath(dir, `images/${safeId}/${kebab(view).replace(/[^\w-]+/g, '-') || 'concept'}.${ext}`);
+  const folder = look ? `images/${safeId}/${look.replace(/[^\w-]+/g, '-')}` : `images/${safeId}`;
+  const file = freePath(dir, `${folder}/${kebab(view).replace(/[^\w-]+/g, '-') || 'concept'}.${ext}`);
   await mkdir(join(dir, dirname(file)), { recursive: true });
   await writeFile(join(dir, file), data);
-  entry.images = [...(entry.images ?? []), { file, view: kebab(view), provenance: prov }];
-  if (!entry.picture?.image) entry.picture = { ...entry.picture, image: file };
+  entry.images = [...(entry.images ?? []), { file, view: kebab(view), ...(look ? { look } : {}), provenance: prov }];
+  if (!look && !entry.picture?.image) entry.picture = { ...entry.picture, image: file };
   await saveEntry(dir, entry, world.files[entry.id] ?? entryPath(entry));
   return { file, entry: entry.name };
 }

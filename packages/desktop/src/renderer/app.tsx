@@ -1,6 +1,7 @@
+import { Fragment } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
-  analyzeStory, applyFields, builtinRules, chapterPath, check, checkWorld, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, isStoryFact, newEntryId, normalizeName, parseWorld,
+  analyzeStory, applyFields, builtinRules, imageLook, chapterPath, check, checkWorld, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, isStoryFact, newEntryId, normalizeName, parseWorld,
   proposalEntry, relationWeb, searchEntries, eraUsage, worldCoverArt, serializeChapter, serializeEntry, serializeIntended, serializeStoryIgnored, sortChapters, sortWarnings, STORY_IGNORED_FILE, storyFact, timelineModel, TYPE_SINGULAR, WorldIndex,
   type BookSettings, type Calendar, type Entry, type EntryType, type FactRef, type IconName, type Proposal, type ProposalFields, type StoryAnalysis, type StoryChapter, type StoryIgnore, type Warning, type World, type WorldCoverSettings,
 } from '@lore-forge/core';
@@ -19,8 +20,14 @@ import { involves, WarningsPanel, type WarningActions } from './components/warni
 import { Icon } from './components/icon.tsx';
 import { Aura } from './components/aura.tsx';
 import { ErasLink, WorldSettings } from './components/world-settings.tsx';
+import { AppSettings } from './components/settings.tsx';
+import { lower, t, tm, useLanguage } from './i18n.tsx';
 import { transition } from './motion.ts';
 import { sameWarnings, useEvent, useSame, useSettledWorld } from './hooks.ts';
+import { mergeLive, type LiveMerge } from './merge.ts';
+import { caretAfter, EMPTY_HISTORY, getPath, record, redo, undo, type EntryHistory } from './undo.ts';
+import { SHOW_IMAGES } from './components/images.tsx';
+import { SHOW_LOOK } from './components/looks.tsx';
 import { WorldHome } from './components/home.tsx';
 import { forgetImageFiles, forgetImages, Portrait, portraitFile, WorldBookCover, WorldDir } from './components/cover.tsx';
 import { ConfirmDialog } from './components/confirm.tsx';
@@ -30,10 +37,14 @@ import { ChapterList, StoryView, type StoryActions } from './components/story.ts
 type View = 'home' | 'editor' | 'timeline' | 'relations' | 'story';
 
 const SAVE_DELAY_MS = 400;
+/** A save that failed (a locked or read-only file) is tried again after this. */
+const SAVE_RETRY_MS = 3000;
 /** Story analysis waits this long after the last keystroke in a chapter. */
 const STORY_DELAY_MS = 300;
 /** Pause in typing in an entry after which the story analysis runs again. */
 const CHECK_DELAY_MS = 250;
+/** A rule check that takes longer than this (a very big world) waits for a pause in typing instead of following every key. */
+const RULES_INSTANT_MS = 8;
 
 const SMOKE = new URLSearchParams(location.search).has('smoke');
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
@@ -157,10 +168,24 @@ function useHistory(here: Place, restore: (p: Place) => void): { go: (step: -1 |
 
 export function App() {
   const [dir, setDir] = useState<string | null>(null);
-  const [world, setWorld] = useState<World | null>(null);
+  const [world, setWorldState] = useState<World | null>(null);
+  /**
+   * The latest world, also between renders. Every change goes through setWorld below and starts from it, so an
+   * edit that finishes later (a picture picked in a file dialog, a save that waited) never brings back an older world.
+   */
+  const worldRef = useRef<World | null>(null);
+  const setWorld = (next: World | null | ((w: World | null) => World | null)): void => {
+    const value = typeof next === 'function' ? next(worldRef.current) : next;
+    worldRef.current = value;
+    setWorldState(value);
+  };
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>('home');
+  // A new language draws every view again (the world, the selection and unsaved edits stay: they live here).
+  const lang = useLanguage();
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const dirRef = useRef<string | null>(null);
   const [query, setQuery] = useState('');
   const [save, setSave] = useState<SaveState>({ kind: 'saved' });
@@ -168,6 +193,8 @@ export function App() {
   const [preview, setPreview] = useState<PdfKind | null>(null);
   const [relMode, setRelMode] = useState<RelationMode | null>(null);
   const [settings, setSettings] = useState(false);
+  /** Settings (language, display, library) opened from inside the world. */
+  const [appSettings, setAppSettings] = useState(false);
   const [creating, setCreating] = useState<EntryType | null>(null);
   const [chapterFile, setChapterFile] = useState<string | null>(null);
   const [reveal, setReveal] = useState<{ start: number; end: number; n: number } | undefined>(undefined);
@@ -181,35 +208,66 @@ export function App() {
       setRelMode(loc.relMode);
     });
     if (loc.dir === dirRef.current) return apply();
-    if (!loc.dir) return void closeWorld().then(apply);
+    if (!loc.dir) return void closeWorld().then((ok) => (ok ? apply() : history.cancel()));
     void open(loc.dir).then((w) => (w ? apply() : history.cancel()));
   });
   const toasts = useToasts();
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const pending = useRef(new Map<string, () => Promise<void>>());
-  /** Files changed outside the app while the user's own edits were waiting to be saved: read once those are written. */
+  /** The file each pending write goes to (key -> path), for merging changes made outside the app. */
+  const pendingPath = useRef(new Map<string, string>());
+  /** Writes in progress, per key: the next write of the same file waits for the one before it. */
+  const inFlight = useRef(new Map<string, Promise<void>>());
+  /** Each file's content as the app last read or wrote it: the common ground for merging outside changes. */
+  const known = useRef(new Map<string, string>());
+  /** Bumped by every edit and every finished write: a world read while it changed may be older than the edits. */
+  const writes = useRef(0);
+  /** Files changed outside the app that are waiting to be read again (a read was already under way). */
   const liveWanted = useRef<Set<string> | null>(null);
 
   /**
    * Opens (or reads again) a world. `changed` makes it a live update after files changed outside the app (an AI
-   * assistant writing through `lore mcp`): the view and selection stay, only the changed pictures are read again,
-   * and typing that is not saved yet is never overwritten (the update waits for that save).
+   * assistant writing through `lore mcp`, an editor, git): the view and selection stay, only the changed pictures
+   * are read again, and edits not saved yet are merged with the outside changes rather than lost (see merge.ts).
    */
   const open = useCallback(async (d: string, changed?: readonly string[]) => {
     try {
-      const w = parseWorld(await window.lore.readWorld(d));
+      const stamp = writes.current;
+      const read = await window.lore.readWorld(d);
+      let w = parseWorld(read);
       if (changed) {
-        if (dirRef.current !== d) return null;
-        if (pending.current.size) {
+        if (dirRef.current !== d || !worldRef.current) return null;
+        // An edit or a save happened while the files were being read: what was read may be older. Read again.
+        if (writes.current !== stamp) {
           liveWanted.current = new Set([...(liveWanted.current ?? []), ...changed]);
+          setTimeout(() => { const files = liveWanted.current; liveWanted.current = null; if (files && dirRef.current === d) void open(d, [...files]); }, 150);
           return null;
         }
+        // Waiting to be written, or being written right now: either way the user's version is not settled on disk.
+        const unsaved = new Set([...pendingPath.current.values(), ...writingPath.current.values()]);
+        const merged = mergeLive(worldRef.current, w, new Set(changed), unsaved, (p) => known.current.get(p));
+        w = merged.world;
+        for (const f of read) if (changed.includes(f.path)) known.current.set(f.path, f.content);
+        for (const p of changed) if (!read.some((f) => f.path === p)) known.current.delete(p);
+        rewriteMerged(d, merged);
+        // An edit the merge left nothing of (the file already says it) is not written again.
+        const again = new Set([...merged.rewrite.entries.map((e) => w.files[e.id] ?? entryPath(e)), ...merged.rewrite.chapters.map((c) => c.file), ...(merged.rewrite.intended ? [INTENDED_FILE] : []), ...(merged.rewrite.ignored ? [STORY_IGNORED_FILE] : [])]);
+        for (const [k, p] of [...pendingPath.current]) {
+          if (!changed.includes(p) || again.has(p)) continue;
+          clearTimeout(timers.current.get(k));
+          pending.current.delete(k);
+          pendingPath.current.delete(k);
+        }
+        if (!pending.current.size) setSave({ kind: 'saved' });
+      } else {
+        known.current = new Map(read.map((f) => [f.path, f.content]));
       }
       if (dirRef.current !== d) {
         // Another world starts on its home page (history keeps the way back to the library).
         setView('home');
         setPreview(null);
         dirRef.current = d;
+        edits.current.clear();
       }
       if (changed) forgetImageFiles(d, changed);
       else forgetImages();
@@ -221,7 +279,7 @@ export function App() {
       document.title = `${w.manifest.name} · Lore-Forge`;
       return w;
     } catch (e) {
-      setLoadError(`Could not open ${d}: ${(e as Error).message}`);
+      setLoadError(t('Could not open {dir}: {error}', { dir: d, error: (e as Error).message }));
       return null;
     }
   }, []);
@@ -572,8 +630,12 @@ export function App() {
           expect(!!probe && probe.meshes === 1 && probe.triangles === 12 && probe.drawn > 500, `the cube is drawn (${JSON.stringify(probe)})`);
           expect(count('script[src="./viewer.js"]') === 1 && !!$('.model-viewer canvas'), 'three.js is loaded on demand, once, into a canvas');
           const spin = [...document.querySelectorAll<HTMLButtonElement>('.model-tools button')].find((b) => b.textContent?.includes('Auto-rotate'))!;
+          expect(spin.getAttribute('aria-pressed') === 'true', 'a model turns by itself when it opens');
           spin.click();
-          expect(await until(() => spin.getAttribute('aria-pressed') === 'true'), 'auto-rotate turns on');
+          expect(await until(() => spin.getAttribute('aria-pressed') === 'false'), 'auto-rotate turns off');
+          spin.click();
+          expect(await until(() => spin.getAttribute('aria-pressed') === 'true'), 'auto-rotate turns on again');
+          expect(!!$('.models-bar .model-download') && (await window.lore.saveCopy(d, model!)) === '', 'a model has Download…, which copies its file');
           [...document.querySelectorAll<HTMLButtonElement>('.model-tools button')].find((b) => b.textContent?.includes('Reset view'))!.click();
           [...document.querySelectorAll<HTMLButtonElement>('.models-bar button')].find((b) => b.textContent?.includes('Rename'))!.click();
           const input = await until(() => !!$('.model-rename input')) && $<HTMLInputElement>('.model-rename input')!;
@@ -2027,7 +2089,7 @@ export function App() {
         }
         {
           // The sample can leave the library: Remove from library only hides it (nothing is deleted), and Show sample
-          // world in Library settings brings it back. There is only ever one Camelamamm on the shelf.
+          // world in Settings brings it back. There is only ever one Camelamamm on the shelf.
           const sampleDir = await window.lore.sampleWorld();
           const sampleBook = () => [...document.querySelectorAll<HTMLElement>('.shelf .shelf-book')].find((c) => c.dataset['key'] === sampleDir);
           const camels = () => [...document.querySelectorAll<HTMLElement>('.shelf .shelf-book')].filter((c) => c.dataset['name'] === 'Camelamamm').length;
@@ -2040,8 +2102,8 @@ export function App() {
           $<HTMLButtonElement>('.confirm-dialog .confirm-go')!.click();
           expect(await until(() => !sampleBook() && !$('.confirm-dialog'), 5000), 'Remove from library takes the sample off the shelf');
           expect((await window.lore.settings()).hideSample === true && (await window.lore.peekWorld(sampleDir!)) !== null && !(await window.lore.listWorlds()).includes(sampleDir!), 'the sample is only hidden: its folder stays');
-          $<HTMLButtonElement>('.start-actions button[aria-label="Library settings"]')!.click();
-          expect(await until(() => !!$('.library-settings .show-sample') && !$<HTMLInputElement>('.library-settings .show-sample')!.checked), 'Library settings shows the sample as hidden');
+          $<HTMLButtonElement>('.start-actions button[aria-label="Settings"]')!.click();
+          expect(await until(() => !!$('.library-settings .show-sample') && !$<HTMLInputElement>('.library-settings .show-sample')!.checked), 'Settings shows the sample as hidden');
           $<HTMLInputElement>('.library-settings .show-sample')!.click();
           await tick();
           $<HTMLButtonElement>('.library-settings .settings-save')!.click();
@@ -2050,15 +2112,18 @@ export function App() {
         }
         {
           // The library's own dialogs fit too.
-          $<HTMLButtonElement>('.start-actions button[aria-label="Library settings"]')!.click();
-          expect(await until(() => !!$('.library-dialog')), 'Library settings opens');
-          await popupFit('Library settings', '.library-dialog', '.library-dialog .dialog-actions .primary', { centred: true });
+          $<HTMLButtonElement>('.start-actions button[aria-label="Settings"]')!.click();
+          expect(await until(() => !!$('.library-dialog')), 'Settings opens');
+          await popupFit('Settings', '.library-dialog', '.library-dialog .dialog-actions .primary', { centred: true });
           {
             // Grouped sections with their labels in one column; the folder is a field with Browse…; Cancel and Save
             // sit at the bottom right, outside the scrolling body.
             const dlg = $('.library-settings')!;
             const heads = [...dlg.querySelectorAll('.settings-heading')].map((h) => h.textContent);
-            expect(heads.join('|') === 'Where new worlds go|Sample world', `Library settings has two sections (${heads.join(', ')})`);
+            expect(heads.join('|') === 'Language|Where new worlds go|Sample world', `Settings has the language, then the library's two sections (${heads.join(', ')})`);
+            const langs = [...dlg.querySelectorAll<HTMLElement>('.language-choice [role="radio"]')];
+            expect(langs.map((b) => b.textContent).join('|') === 'English|Türkçe' && langs.every((b) => !!b.querySelector('img.flag')) && langs[0]!.getAttribute('aria-checked') === 'true',
+              `the language is English or Türkçe, each with its flag, English chosen (${langs.map((b) => b.textContent).join(', ')})`);
             const labels = [...dlg.querySelectorAll<HTMLElement>('.settings-row > .settings-label')].map((l) => Math.round(l.getBoundingClientRect().left));
             expect(new Set(labels).size === 1, `the settings labels line up (${labels.join(', ')})`);
             const input = $<HTMLInputElement>('.library-settings #worlds-dir')!, browse = $('.library-settings .folder-browse')!;
@@ -2069,7 +2134,7 @@ export function App() {
             // Show sample world off, then Cancel: nothing changes.
             $<HTMLInputElement>('.library-settings .show-sample')!.click();
             await tick();
-            expect(/Unsaved/.test($('.library-settings .settings-status')!.textContent ?? ''), 'a change in Library settings is a draft until Save');
+            expect(/Unsaved/.test($('.library-settings .settings-status')!.textContent ?? ''), 'a change in Settings is a draft until Save');
             cancel.click();
             await until(() => !$('.library-dialog'));
             expect(!(await window.lore.settings()).hideSample, 'Cancel leaves the settings as they were');
@@ -2080,7 +2145,7 @@ export function App() {
           {
             // The credits are folded away but still there (the licences require them); the head stays put while the body scrolls.
             const box = $<HTMLDetailsElement>('.about .credits-box')!;
-            expect(!!box && !box.open && /Credits and licences/.test(box.querySelector('summary')?.textContent ?? '') && count('.about .credits-box .credit') === 10, 'About folds the ten credits into a closed "Credits and licences" section');
+            expect(!!box && !box.open && /Credits and licences/.test(box.querySelector('summary')?.textContent ?? '') && count('.about .credits-box .credit') === 11, 'About folds the eleven credits into a closed "Credits and licences" section');
             const firstInBody = $('.about .dialog-body')!.firstElementChild;
             expect(!!firstInBody?.classList.contains('updates') && !!$('.about .about-tour') && ($('.about .about-tour')!.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, 'Updates and the tour come first in About, the credits after');
             box.open = true;
@@ -2524,58 +2589,219 @@ export function App() {
     return () => document.removeEventListener('focusout', settleNow);
   }, []);
   const analysis = useStoryAnalysis(checked);
-  const ruleWarnings = useMemo(() => (world ? checkWorld(world, builtinRules) : []), [world]);
+  // The rules read the entries, the calendar, the marks and the chapters' dates, not the story's text: typing in a
+  // chapter does not run them again (the story analysis checks the text, after a pause). While they are quick they
+  // follow every keystroke; in a world big enough that they take longer than RULES_INSTANT_MS, typing in an entry
+  // waits for a pause (CHECK_DELAY_MS) before they run, like the story check, so a keystroke never waits for them.
+  const slowRules = useRef(false);
+  const ruleWorld = slowRules.current ? checked : world;
+  const storyDates = ruleWorld?.story?.map((c) => `${c.file}\u0001${c.date ?? ''}`).join('\u0000');
+  const ruleWarnings = useMemo(() => {
+    if (!ruleWorld) return [];
+    const t0 = performance.now();
+    const found = checkWorld(ruleWorld, builtinRules);
+    slowRules.current = performance.now() - t0 > RULES_INSTANT_MS;
+    return found;
+  }, [ruleWorld?.entries, ruleWorld?.manifest, ruleWorld?.intended, ruleWorld?.issues, ruleWorld?.files, storyDates]);
   const warnings = useSame(
     useMemo(() => (analysis?.warnings.length ? sortWarnings([...ruleWarnings, ...analysis.warnings]) : ruleWarnings), [ruleWarnings, analysis]),
     sameWarnings,
   );
 
-  /** Debounced write; the latest content for a path wins. */
-  const schedule = useCallback((key: string, write: () => Promise<void>) => {
+  /**
+   * A write of `content` to `path`, which then remembers it as the file's known content. It carries what the edit
+   * started from (the known content now, or nothing for a new file): if the file changed outside the app since, the
+   * write is refused and the change is merged first (flush), so a save never writes over someone else's edit.
+   */
+  const writer = (d: string, path: string, content: string) => {
+    const expect = known.current.has(path) ? known.current.get(path)! : null;
+    return async (): Promise<void> => {
+      await window.lore.writeFile(d, path, content, expect);
+      if (dirRef.current === d) known.current.set(path, content);
+    };
+  };
+
+  /** Debounced write of the file at `path`; the latest content for a key wins. */
+  const schedule = useCallback((key: string, write: () => Promise<void>, path: string) => {
+    writes.current++;
     setSave({ kind: 'saving' });
     pending.current.set(key, write);
+    pendingPath.current.set(key, path);
     clearTimeout(timers.current.get(key));
     timers.current.set(key, setTimeout(() => void flush(key), SAVE_DELAY_MS));
   }, []);
 
-  const flush = async (key?: string): Promise<void> => {
+  /** Files being written right now (key -> path): their content is still the user's, not settled on disk. */
+  const writingPath = useRef(new Map<string, string>());
+  /** One write, after any earlier write of the same file: two saves of one file never overlap. */
+  const run = (key: string, path: string | undefined, write: () => Promise<void>): Promise<void> => {
+    if (path) writingPath.current.set(key, path);
+    const p = (inFlight.current.get(key) ?? Promise.resolve()).then(write).finally(() => {
+      writes.current++;
+      if (inFlight.current.get(key) === settled) {
+        inFlight.current.delete(key);
+        writingPath.current.delete(key);
+      }
+    });
+    const settled = p.catch(() => {});
+    inFlight.current.set(key, settled);
+    return p;
+  };
+
+  /**
+   * Writes what is waiting (one key, or all). A write that fails is kept and tried again a few seconds later, and
+   * the result says so: false while anything could not be saved.
+   */
+  const flush = async (key?: string): Promise<boolean> => {
     const keys = key ? [key] : [...pending.current.keys()];
-    try {
-      for (const k of keys) {
-        clearTimeout(timers.current.get(k));
-        const w = pending.current.get(k);
-        pending.current.delete(k);
-        if (w) await w();
+    let failure: Error | null = null;
+    for (const k of keys) {
+      clearTimeout(timers.current.get(k));
+      const w = pending.current.get(k);
+      if (!w) continue;
+      const path = pendingPath.current.get(k);
+      pending.current.delete(k);
+      pendingPath.current.delete(k);
+      try {
+        await run(k, path, w);
+      } catch (e) {
+        // The file changed outside the app after this edit started: keep the edit, read the file and merge (open),
+        // which writes the merged result.
+        if (/CHANGED_OUTSIDE/.test((e as Error).message) && path && dirRef.current) {
+          if (!pending.current.has(k)) {
+            pending.current.set(k, w);
+            pendingPath.current.set(k, path);
+          }
+          void open(dirRef.current, [path]);
+          continue;
+        }
+        failure = e as Error;
+        // Kept for another try, unless a newer edit of the same file is already waiting.
+        if (!pending.current.has(k)) {
+          pending.current.set(k, w);
+          if (path) pendingPath.current.set(k, path);
+          timers.current.set(k, setTimeout(() => void flush(k), SAVE_RETRY_MS));
+        }
       }
-      if (pending.current.size === 0) setSave({ kind: 'saved' });
-      // Changes from outside that waited for this save can be shown now.
-      if (pending.current.size === 0 && liveWanted.current && dirRef.current) {
-        const files = [...liveWanted.current];
-        liveWanted.current = null;
-        void open(dirRef.current, files);
-      }
-    } catch (e) {
-      setSave({ kind: 'failed', message: (e as Error).message });
     }
+    // Saves a timer started just before finish too, before this counts as done.
+    if (!key) await Promise.all([...inFlight.current.values()]);
+    if (failure) {
+      setSave({ kind: 'failed', message: failure.message });
+      return false;
+    }
+    if (pending.current.size === 0) setSave({ kind: 'saved' });
+    return true;
+  };
+
+  /** Files whose merge mixes the user's and the outside edits are written again, as a normal save. */
+  const rewriteMerged = (d: string, m: LiveMerge): void => {
+    const w = m.world;
+    for (const e of m.rewrite.entries) {
+      const path = w.files[e.id] ?? entryPath(e);
+      schedule(e.id, writer(d, path, serializeEntry(e)), path);
+    }
+    for (const c of m.rewrite.chapters) schedule(`story:${c.file}`, writer(d, c.file, serializeChapter(c)), c.file);
+    if (m.rewrite.intended) schedule(INTENDED_FILE, writer(d, INTENDED_FILE, serializeIntended(w.intended)), INTENDED_FILE);
+    if (m.rewrite.ignored) schedule(STORY_IGNORED_FILE, writer(d, STORY_IGNORED_FILE, serializeStoryIgnored(w.storyIgnored ?? [])), STORY_IGNORED_FILE);
   };
 
   // Live view: files of the open world changed outside the app (an AI assistant writing through `lore mcp`, an
-  // editor, git) are read again at once, unless the user's own edits are still waiting to be saved.
+  // editor, git) are read again at once; edits still waiting to be saved are merged with them (open, merge.ts).
   useEffect(() => window.lore.onWorldChanged(({ dir: d, files }) => {
-    if (d !== dirRef.current) return;
-    if (pending.current.size) liveWanted.current = new Set([...(liveWanted.current ?? []), ...files]);
-    else void open(d, files);
+    if (d === dirRef.current) void open(d, files);
   }), [open]);
 
   const updateEntry = (entry: Entry): void => {
-    if (!world || !dir) return;
+    const world = worldRef.current;
+    const dir = dirRef.current;
+    // An edit that arrives after its entry was deleted (a field left on unmount, a picture picked late) is dropped:
+    // it must not write the deleted file back.
+    if (!world || !dir || !world.entries.some((e) => e.id === entry.id)) return;
     const path = world.files[entry.id] ?? entryPath(entry);
     setWorld({ ...world, entries: world.entries.map((e) => (e.id === entry.id ? entry : e)), files: { ...world.files, [entry.id]: path } });
-    schedule(entry.id, () => window.lore.writeFile(dir, path, serializeEntry(entry)));
+    schedule(entry.id, writer(dir, path, serializeEntry(entry)), path);
   };
+
+  /** Undo history per entry (undo.ts), for the changes made in the editor and on world home. Cleared with the world. */
+  const edits = useRef(new Map<string, EntryHistory>());
+  /** An edit by the person at the keyboard: one more step to undo, then saved like any other change. */
+  const editEntry = (entry: Entry): void => {
+    const before = worldRef.current?.entries.find((e) => e.id === entry.id);
+    if (before) edits.current.set(entry.id, record(edits.current.get(entry.id) ?? EMPTY_HISTORY, before, entry, performance.now()));
+    updateEntry(entry);
+  };
+  /** What the last undo or redo did, for screen readers. */
+  const [undone, setUndone] = useState('');
+  /**
+   * Ctrl+Z (or Ctrl+Y / Ctrl+Shift+Z): the open entry's last change goes back (or comes back), whatever made it. The
+   * field it touched comes into view, flashes and takes the focus, with the caret where the text changed.
+   */
+  const undoEdit = (back: boolean): void => {
+    const current = worldRef.current?.entries.find((e) => e.id === selectedId);
+    if (!current) return;
+    const m = (back ? undo : redo)(edits.current.get(current.id) ?? EMPTY_HISTORY, current);
+    // Emptied first, so saying the same thing twice is still heard.
+    setUndone('');
+    if (!m) {
+      requestAnimationFrame(() => setUndone(back ? t('Nothing to undo') : t('Nothing to redo')));
+      return;
+    }
+    edits.current.set(current.id, m.history);
+    updateEntry(m.entry);
+    const path = m.paths[0]!;
+    const field = path.startsWith('details.') ? path.slice('details.'.length) : path;
+    const from = getPath(current, path);
+    const to = getPath(m.entry, path);
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`.editor [data-field="${CSS.escape(field)}"]`) ?? (field === 'body' ? document.getElementById('entry-body')?.closest<HTMLElement>('.field, .prose, section') ?? null : null);
+      const label = el?.querySelector('label, legend')?.textContent?.trim() || field;
+      setUndone(back ? t('Undone: {field}', { field: label }) : t('Redone: {field}', { field: label }));
+      if (!el) return;
+      const closed = el.closest('details:not([open])') as HTMLDetailsElement | null;
+      if (closed) closed.open = true;
+      el.scrollIntoView({ block: 'nearest' });
+      el.classList.remove('flash');
+      void el.offsetWidth;
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1600);
+      const box = field === 'body' ? document.getElementById('entry-body') : el.querySelector<HTMLElement>('[aria-checked="true"], textarea, input, select, button');
+      if (!box) return;
+      if (document.activeElement !== box) box.focus({ preventScroll: true });
+      if ((box instanceof HTMLTextAreaElement || box instanceof HTMLInputElement) && typeof to === 'string') {
+        const at = caretAfter(typeof from === 'string' ? from : '', box.value === to ? to : box.value);
+        box.setSelectionRange(at, at);
+      }
+    });
+  };
+  const undoRef = useRef(undoEdit);
+  undoRef.current = undoEdit;
+  useEffect(() => {
+    // Before the fields' own handlers and the browser's undo of a text box. Text boxes outside the editor (the
+    // search, dialogs) keep the browser's undo, and so does a name or chip still being typed in an entry box.
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k !== 'z' && k !== 'y') return;
+      if (viewRef.current !== 'editor' || document.querySelector('.confirm-backdrop')) return;
+      const t = e.target instanceof HTMLElement ? e.target : null;
+      const box = t?.closest<HTMLElement>('input, textarea, [contenteditable="true"]');
+      // Text boxes outside the entry's own fields (the sidebar search, the picture dialog's icon search) keep theirs.
+      if (box && !box.closest('.editor')) return;
+      if (box instanceof HTMLInputElement && box.closest('.chip-input') && box.value.trim()) return;
+      if (!t?.closest('.editor, .picture-editor') && t?.closest('.modal-backdrop, [role="dialog"]')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      undoRef.current(k === 'z' && !e.shiftKey);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
 
   /** Several entries changed together (a link edited on a graph): update them at once and write their files now. */
   const writeEntries = (changed: Entry[]): void => {
+    const world = worldRef.current;
+    const dir = dirRef.current;
     if (!world || !dir || !changed.length) return;
     const by = new Map(changed.map((e) => [e.id, e]));
     const files = { ...world.files };
@@ -2583,64 +2809,104 @@ export function App() {
     setWorld({ ...world, entries: world.entries.map((e) => by.get(e.id) ?? e), files });
     for (const e of changed) {
       const path = files[e.id]!;
-      schedule(e.id, () => window.lore.writeFile(dir, path, serializeEntry(e)));
+      schedule(e.id, writer(dir, path, serializeEntry(e)), path);
       void flush(e.id);
     }
   };
 
+  /**
+   * Ids a new entry must not take: the entries', and the names of every entry file on disk, including files that
+   * could not be read and hand-named ones ("characters/char-leyla.md" holding `id: leyla`), so a new entry never
+   * writes over a file that is already there.
+   */
+  const takenIds = (world: World): Set<string> => {
+    const base = (p: string) => p.replace(/^.*\//, '').replace(/\.md$/i, '');
+    return new Set([...world.entries.map((e) => e.id), ...Object.values(world.files).map(base), ...world.issues.map((i) => base(i.file)), ...[...known.current.keys()].map(base)]);
+  };
+
   /** Add a new entry and write its file; `show` opens it in the editor. */
   const addEntry = (entry: Entry, show: boolean): void => {
+    const world = worldRef.current;
+    const dir = dirRef.current;
     if (!world || !dir) return;
     const path = entryPath(entry);
-    setWorld({ ...world, entries: [...world.entries, entry], files: { ...world.files, [entry.id]: path } });
+    const files = { ...world.files, [entry.id]: path };
+    // In the order the files load in, so the world reads the same before and after a reload.
+    const entries = [...world.entries, entry].sort((a, b) => (files[a.id] ?? '').localeCompare(files[b.id] ?? ''));
+    setWorld({ ...world, entries, files });
     if (show) {
       setSelectedId(entry.id);
       setView('editor');
     }
-    schedule(entry.id, () => window.lore.writeFile(dir, path, serializeEntry(entry)));
+    schedule(entry.id, writer(dir, path, serializeEntry(entry)), path);
   };
 
   const createEntry = (type: EntryType, name: string): void => {
+    const world = worldRef.current;
     if (!world) return;
-    addEntry(blankEntry(type, newEntryId(type, name, new Set(world.entries.map((e) => e.id))), name), true);
+    addEntry(blankEntry(type, newEntryId(type, name, takenIds(world)), name), true);
   };
 
   /** Deletes ask first (ConfirmDialog); this is what the dialog's button does. */
   const [doomed, setDoomed] = useState<{ kind: 'entry'; entry: Entry } | { kind: 'chapter'; file: string } | null>(null);
   const deleteEntry = async (entry: Entry): Promise<void> => {
+    const world = worldRef.current;
+    const dir = dirRef.current;
     if (!world || !dir) return;
     clearTimeout(timers.current.get(entry.id));
     pending.current.delete(entry.id);
+    pendingPath.current.delete(entry.id);
     const path = world.files[entry.id];
     const files = { ...world.files };
     delete files[entry.id];
     setWorld({ ...world, entries: world.entries.filter((e) => e.id !== entry.id), files });
     setSelectedId(null);
-    if (path) await window.lore.deleteFile(dir, path);
+    // Its intended marks go with it: an entry made later with the same id starts without them.
+    const marks = world.intended.filter((m) => !m.warningId.split(':').includes(entry.id));
+    if (marks.length !== world.intended.length) setIntended(marks);
+    if (path) {
+      try {
+        await window.lore.deleteFile(dir, path);
+        known.current.delete(path);
+      } catch (e) {
+        // Still on disk: show it again rather than hide it until the next reload.
+        const now = worldRef.current;
+        if (now && dirRef.current === dir && !now.entries.some((x) => x.id === entry.id)) {
+          const back = { ...now.files, [entry.id]: path };
+          setWorld({ ...now, entries: [...now.entries, entry].sort((a, b) => (back[a.id] ?? '').localeCompare(back[b.id] ?? '')), files: back });
+        }
+        toasts.push({ tone: 'error', text: t('{name} could not be deleted: {error}', { name: entry.name, error: (e as Error).message }) });
+      }
+    }
   };
 
   const setIntended = (intended: World['intended']): void => {
+    const world = worldRef.current;
+    const dir = dirRef.current;
     if (!world || !dir) return;
     setWorld({ ...world, intended });
-    schedule(INTENDED_FILE, () => window.lore.writeFile(dir, INTENDED_FILE, serializeIntended(intended)));
+    schedule(INTENDED_FILE, writer(dir, INTENDED_FILE, serializeIntended(intended)), INTENDED_FILE);
   };
 
   // ---------------------------------------------------------------------------------------- the story
   const story = sortChapters(world?.story ?? []);
 
   /** Replace chapters (same file names) and write each changed one. */
-  const saveChapters = (changed: StoryChapter[], all = story): void => {
+  const saveChapters = (changed: StoryChapter[], all = sortChapters(worldRef.current?.story ?? [])): void => {
+    const world = worldRef.current;
+    const dir = dirRef.current;
     if (!world || !dir) return;
     const by = new Map(changed.map((c) => [c.file, c]));
     const next = all.map((c) => by.get(c.file) ?? c);
     for (const c of changed) if (!all.some((x) => x.file === c.file)) next.push(c);
     setWorld({ ...world, story: sortChapters(next) });
-    for (const c of changed) schedule(`story:${c.file}`, () => window.lore.writeFile(dir, c.file, serializeChapter(c)));
+    for (const c of changed) schedule(`story:${c.file}`, writer(dir, c.file, serializeChapter(c)), c.file);
   };
 
   const createChapter = (): void => {
     const order = Math.max(0, ...story.map((c) => c.order)) + 1;
-    const title = `Chapter ${story.length + 1}`;
+    // In the app's language: it is the start of the user's own text ("Bölüm 3" in Turkish), and of its file name.
+    const title = t('Chapter {n}', { n: story.length + 1 });
     const ch: StoryChapter = { file: chapterPath(order, title, story.map((c) => c.file)), title, order, body: '' };
     saveChapters([ch]);
     transition(() => { setChapterFile(ch.file); setReveal(undefined); setView('story'); });
@@ -2659,59 +2925,82 @@ export function App() {
   };
 
   const deleteChapter = async (file: string): Promise<void> => {
-    const ch = story.find((c) => c.file === file);
+    const world = worldRef.current;
+    const dir = dirRef.current;
+    const chapters = sortChapters(world?.story ?? []);
+    const ch = chapters.find((c) => c.file === file);
     if (!world || !dir || !ch) return;
     clearTimeout(timers.current.get(`story:${file}`));
     pending.current.delete(`story:${file}`);
-    const rest = story.filter((c) => c.file !== file);
+    pendingPath.current.delete(`story:${file}`);
+    const rest = chapters.filter((c) => c.file !== file);
     setWorld({ ...world, story: rest });
-    setChapterFile(rest[Math.max(0, story.indexOf(ch) - 1)]?.file ?? null);
+    setChapterFile(rest[Math.max(0, chapters.indexOf(ch) - 1)]?.file ?? null);
     await window.lore.deleteFile(dir, file);
+    known.current.delete(file);
   };
 
   const setIgnored = (ignored: StoryIgnore[]): void => {
+    const world = worldRef.current;
+    const dir = dirRef.current;
     if (!world || !dir) return;
     setWorld({ ...world, storyIgnored: ignored });
-    schedule(STORY_IGNORED_FILE, () => window.lore.writeFile(dir, STORY_IGNORED_FILE, serializeStoryIgnored(ignored)));
+    schedule(STORY_IGNORED_FILE, writer(dir, STORY_IGNORED_FILE, serializeStoryIgnored(ignored)), STORY_IGNORED_FILE);
+  };
+
+  /**
+   * Proposals already acted on, until the story analysis catches up: a double click on Add makes one entry, and
+   * Apply adds a relation once. The analysis runs again at once after an action, so the card goes away quickly.
+   */
+  const usedProposals = useRef(new Set<string>());
+  useEffect(() => usedProposals.current.clear(), [analysis]);
+  const useProposal = (key: string): boolean => {
+    if (usedProposals.current.has(key)) return false;
+    usedProposals.current.add(key);
+    setTimeout(settleNow, 0);
+    return true;
   };
 
   const storyActions: StoryActions = {
     onChange: (ch) => saveChapters([ch]),
     onOpen: (id) => transition(() => { setSelectedId(id); setView('editor'); }),
     onAdd: (p: Proposal) => {
-      if (!world) return;
+      const world = worldRef.current;
+      if (!world || !useProposal(p.key)) return;
       const target = p.matchedExistingId ? world.entries.find((e) => e.id === p.matchedExistingId) : undefined;
       if (p.kind === 'update' && target) {
         updateEntry(applyFields(target, p.fields, world));
-        toasts.push({ tone: 'ok', text: `Updated ${target.name}`, action: { label: 'Open', run: () => storyActions.onOpen(target.id) } });
+        toasts.push({ tone: 'ok', text: t('Updated {name}', { name: target.name }), action: { label: t('Open'), run: () => storyActions.onOpen(target.id) } });
         return;
       }
-      const entry = proposalEntry(p, world, new Set(world.entries.map((e) => e.id)));
+      const entry = proposalEntry(p, world, takenIds(world));
       addEntry(entry, false);
-      toasts.push({ tone: 'ok', text: `Added ${entry.name} (${TYPE_SINGULAR[entry.type].toLowerCase()})`, action: { label: 'Open', run: () => storyActions.onOpen(entry.id) } });
+      toasts.push({ tone: 'ok', text: t('Added {name} ({type})', { name: entry.name, type: lower(tm(TYPE_SINGULAR[entry.type])) }), action: { label: t('Open'), run: () => storyActions.onOpen(entry.id) } });
     },
     onMerge: (p, id) => {
+      const world = worldRef.current;
       const target = world?.entries.find((e) => e.id === id);
-      if (!world || !target) return;
+      if (!world || !target || !useProposal(p.key)) return;
       // Merging only fills gaps: what the entry already says stays; the proposal's name becomes an alias.
-      const t = target as Entry & Record<string, unknown>;
+      const rec = target as Entry & Record<string, unknown>;
       const f: ProposalFields = { ...p.fields };
-      for (const k of ['born', 'died', 'date', 'place', 'status'] as const) if (t[k] !== undefined && t[k] !== '') delete f[k];
+      for (const k of ['born', 'died', 'date', 'place', 'status'] as const) if (rec[k] !== undefined && rec[k] !== '') delete f[k];
       if (target.details?.['title'] ?? target.extra?.['title']) delete f.title;
       for (const k of ['occupation', 'gender'] as const) if (target.details?.[k]) delete f[k];
       const known = new Set([target.name, ...(target.aliases ?? [])].map(normalizeName));
       if (!known.has(normalizeName(p.name))) f.aliases = [...(f.aliases ?? []), p.name];
       updateEntry(applyFields(target, f, world));
-      toasts.push({ tone: 'ok', text: `Merged “${p.name}” into ${target.name}` });
+      toasts.push({ tone: 'ok', text: t('Merged “{proposal}” into {name}', { proposal: p.name, name: target.name }) });
     },
     onIgnore: (ps) => {
+      const world = worldRef.current;
       if (!world) return;
       const have = new Set((world.storyIgnored ?? []).map((i) => i.key));
       const today = new Date().toISOString().slice(0, 10);
       setIgnored([...(world.storyIgnored ?? []), ...ps.filter((p) => !have.has(p.key)).map((p) => ({ key: p.key, name: p.name, ignoredAt: today }))]);
-      toasts.push({ tone: 'ok', text: ps.length === 1 ? `Ignored ${ps[0]!.name}` : `Ignored ${ps.length} proposals` });
+      toasts.push({ tone: 'ok', text: ps.length === 1 ? t('Ignored {name}', { name: ps[0]!.name }) : t('Ignored {n} proposals', { n: ps.length }) });
     },
-    onRestore: (key) => world && setIgnored((world.storyIgnored ?? []).filter((i) => i.key !== key)),
+    onRestore: (key) => { const world = worldRef.current; if (world) setIgnored((world.storyIgnored ?? []).filter((i) => i.key !== key)); },
     onJump: (span) => world && jump(storyFact(world, span)),
     onSearch: (text) => transition(() => { setQuery(text); setView('editor'); }),
   };
@@ -2723,10 +3012,27 @@ export function App() {
       transition(() => { setChapterFile(chapter); setView('story'); setReveal({ start, end, n: performance.now() }); });
       return;
     }
-    if (!world?.entries.some((e) => e.id === fact.entryId)) return;
+    if (!world?.entries.some((e) => e.id === fact.entryId)) {
+      // A file that could not be read has no entry to open: show it in its folder instead.
+      const d = dirRef.current;
+      if (d && /\.(?:md|json)$/i.test(fact.entryId)) {
+        const sep = d.includes('\\') ? '\\' : '/';
+        void window.lore.showInFolder(`${d}${sep}${fact.entryId.split('/').join(sep)}`);
+      }
+      return;
+    }
     setSelectedId(fact.entryId);
     setView('editor');
+    if (fact.field.startsWith('images')) window.dispatchEvent(new Event(SHOW_IMAGES));
+    // A look's field, or a picture of a look: that look is shown first (once the editor is there), then the field.
+    const target = world.entries.find((e) => e.id === fact.entryId);
+    const lookAt = /^looks\[(\d+)\]/.exec(fact.field);
+    const imageAt = /^images\[(\d+)\]/.exec(fact.field);
+    const image = imageAt ? target?.images?.[Number(imageAt[1])] : undefined;
+    const lookId = lookAt ? target?.looks?.[Number(lookAt[1])]?.id : target && image ? imageLook(target, image)?.id : undefined;
+    const showLook = lookAt || imageAt ? () => window.dispatchEvent(new CustomEvent(SHOW_LOOK, { detail: lookId ?? null })) : undefined;
     // After render, scroll to the field and focus its first input.
+    setTimeout(() => showLook?.(), 10);
     setTimeout(() => {
       const el = document.querySelector<HTMLElement>(`[data-field="${CSS.escape(fact.field)}"]`) ?? document.querySelector<HTMLElement>(`[data-field="${CSS.escape(fact.field.replace(/\[\d+\]$/, ''))}"]`);
       if (!el) return document.getElementById('entry-title')?.focus();
@@ -2735,21 +3041,42 @@ export function App() {
       el.scrollIntoView({ block: 'center' });
       el.classList.add('flash');
       setTimeout(() => el.classList.remove('flash'), 1600);
-      el.querySelector<HTMLElement>('input, textarea, select')?.focus({ preventScroll: true });
+      el.querySelector<HTMLElement>('input, textarea, select, button')?.focus({ preventScroll: true });
     }, 30);
   };
 
   // Stable, so the warnings panel can skip drawing again while only an entry is being typed in.
   const onJump = useEvent(jump);
-  const onMark = useEvent((w: Warning, note: string) => world && setIntended([...world.intended.filter((m) => m.warningId !== w.id), { warningId: w.id, ...(note ? { note } : {}), markedAt: new Date().toISOString().slice(0, 10) }]));
-  const onUnmark = useEvent((w: Warning) => world && setIntended(world.intended.filter((m) => m.warningId !== w.id)));
+  // Marked again (a new note): stored under the warning's id, and a copy under its older id goes.
+  const onMark = useEvent((w: Warning, note: string) => { const world = worldRef.current; if (world) setIntended([...world.intended.filter((m) => m.warningId !== w.id && m.warningId !== w.intended?.warningId), { warningId: w.id, ...(note ? { note } : {}), markedAt: new Date().toISOString().slice(0, 10) }]); });
+  // The mark that is attached, also when it was stored under the warning's older id.
+  const onUnmark = useEvent((w: Warning) => { const world = worldRef.current; if (world) setIntended(world.intended.filter((m) => m.warningId !== w.id && m.warningId !== w.intended?.warningId)); });
   const actions: WarningActions = useMemo(() => ({ onJump, onMark, onUnmark }), []);
 
   /** Back to the library: write what is pending, then close the world (Back returns to it). */
   // A copy just made from inside a world: the library it goes back to shows it, next to its original.
   const [fresh, setFresh] = useState<string | null>(null);
   useEffect(() => { if (world) setFresh(null); }, [world]);
-  const closeWorld = () => flush().then(() => { setWorld(null); setDir(null); dirRef.current = null; setSettings(false); setDoomed(null); document.title = 'Lore-Forge'; });
+  const close = (): void => {
+    for (const t of timers.current.values()) clearTimeout(t);
+    pending.current.clear();
+    pendingPath.current.clear();
+    known.current.clear();
+    edits.current.clear();
+    setWorld(null);
+    setDir(null);
+    dirRef.current = null;
+    setSettings(false);
+    setAppSettings(false);
+    setDoomed(null);
+    document.title = 'Lore-Forge';
+  };
+  /** Closes the world once everything is saved. If a save fails, the world stays open (true when it closed). */
+  const closeWorld = (): Promise<boolean> => flush().then((ok) => {
+    if (ok) close();
+    else toasts.push({ tone: 'error', text: t('Some changes could not be saved, so the world stays open. Lore-Forge keeps trying; close the file in other programs, or check that the folder is not read-only.'), action: { label: t('Close anyway'), run: close } });
+    return ok;
+  });
 
   /** One step back or forward. Windows can report a mouse button both as a DOM event and an app command; count it once. */
   const lastNav = useRef({ at: 0, d: '' });
@@ -2771,7 +3098,7 @@ export function App() {
         document.getElementById('search')?.focus();
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        void flush().then(() => toasts.push({ tone: 'ok', text: 'All changes saved' }));
+        void flush().then((ok) => toasts.push(ok ? { tone: 'ok', text: t('All changes saved') } : { tone: 'error', text: t('Some changes could not be saved. Lore-Forge tries again in a few seconds.') }));
       } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'h') {
         e.preventDefault();
         transition(() => setView('home'));
@@ -2816,6 +3143,9 @@ export function App() {
   });
   useEffect(() => window.lore.onNavigate((d) => navigateRef.current(d)), []);
 
+  // The window is closing: write everything first (the main process waits for the answer).
+  useEffect(() => window.lore.onFlushBeforeClose(() => void flush().then((ok) => window.lore.flushed(ok))), []);
+
   // Write anything pending before the window closes.
   useEffect(() => {
     const onUnload = () => void flush();
@@ -2827,14 +3157,12 @@ export function App() {
   // opened from the command line, and never in the smoke run); "Take the tour" starts it again.
   const [touring, setTouring] = useState(false);
   const [tourStep, setTourStep] = useState(0);
-  // Whether the sample is off the shelf (Library settings), so the tour points at the shelf instead of its book.
+  // Whether the sample is off the shelf (Settings), so the tour points at the shelf instead of its book.
   const [sampleHidden, setSampleHidden] = useState(false);
   const startTour = () => { setTourStep(0); setTouring(true); void window.lore.settings().then((x) => setSampleHidden(!!x.hideSample)); };
   const [sample, setSample] = useState<string | null>(null);
   const [bundled, setBundled] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
-  const worldRef = useRef(world);
-  worldRef.current = world;
   useEffect(() => {
     void Promise.all([window.lore.sampleWorld(), window.lore.bundledWorld(), window.lore.settings(), window.lore.initialWorld()]).then(([s, b, set, first]) => {
       setSample(s);
@@ -2849,20 +3177,20 @@ export function App() {
   const show = (v: View, mode?: RelationMode) => transition(() => { if (mode) setRelMode(mode); setReveal(undefined); setPreview(null); setView(v); });
   const inSample = async (): Promise<World | null> => (sample && dirRef.current === sample ? worldRef.current : sample ? open(sample) : null);
   const tourSteps: TourStep[] = sample ? [
-    { title: 'Your library', text: 'Every world is a book on this shelf. Point at one to take it out; click to open it. Search by title, author or description with Ctrl+F.', anchor: '#library-shelf', go: () => (dirRef.current ? closeWorld() : undefined) },
+    { title: t('Your library'), text: t('Every world is a book on this shelf. Point at one to take it out; click to open it. Search by title, author or description with Ctrl+F.'), anchor: '#library-shelf', go: () => (dirRef.current ? closeWorld() : undefined) },
     sampleHidden
-      ? { title: 'The sample world', text: 'Camelamamm is a small desert world that comes with Lore-Forge, with characters, places, events, a story and pictures. It is off your shelf now (Show sample world in Library settings puts it back), but the tour can still open it: Next opens it.', anchor: '#library-shelf', go: () => (dirRef.current ? closeWorld() : undefined) }
-      : { title: 'The sample world', text: 'Camelamamm is a small desert world that comes with Lore-Forge, with characters, places, events, a story and pictures. Next opens it.', anchor: `.shelf-book[data-key="${CSS.escape(sample)}"]`, go: () => (dirRef.current ? closeWorld() : undefined) },
-    { title: 'World home', text: 'Each world opens on its home page: the cover (click it to change it), what is in the world, and a card for every entry.', anchor: '.home-hero', go: async () => { await inSample(); show('home'); } },
-    { title: 'An entry', text: 'Entries are characters, places, factions, items, events and lore. Each has facts, links to others, a visual description, and Images or 3D model tabs.', anchor: '.editor', go: async () => {
+      ? { title: t('The sample world'), text: t('Camelamamm is a small desert world that comes with Lore-Forge, with characters, places, events, a story and pictures. It is off your shelf now (Show sample world in Settings puts it back), but the tour can still open it: Next opens it.'), anchor: '#library-shelf', go: () => (dirRef.current ? closeWorld() : undefined) }
+      : { title: t('The sample world'), text: t('Camelamamm is a small desert world that comes with Lore-Forge, with characters, places, events, a story and pictures. Next opens it.'), anchor: `.shelf-book[data-key="${CSS.escape(sample)}"]`, go: () => (dirRef.current ? closeWorld() : undefined) },
+    { title: t('World home'), text: t('Each world opens on its home page: the cover (click it to change it), what is in the world, and a card for every entry.'), anchor: '.home-hero', go: async () => { await inSample(); show('home'); } },
+    { title: t('An entry'), text: t('Entries are characters, places, factions, items, events and lore. Each has facts, links to others, a visual description, and Images or 3D model tabs.'), anchor: '.editor', go: async () => {
       const w = await inSample();
       const e = w?.entries.find((x) => x.images?.length) ?? w?.entries[0];
       if (e) transition(() => { setSelectedId(e.id); setReveal(undefined); setPreview(null); setView('editor'); });
     } },
-    { title: 'Relationships and timeline', text: 'The tabs up here show the world as a timeline, a family tree and a relationship web, all built from the links in the entries.', anchor: '.tabs', go: async () => { await inSample(); show('relations', 'web'); } },
-    { title: 'Warnings', text: 'Lore-Forge checks the world as you write: someone acting after their death, a broken link, a date outside its era. Click a warning to jump there, or mark it as intended.', anchor: '.warnings-panel', go: async () => { await inSample(); show('relations', 'web'); } },
-    { title: 'Story', text: 'Write chapters here. Lore-Forge spots the people and places you mention, suggests new entries, and checks the story against the lore.', anchor: '.main-story', go: async () => { await inSample(); show('story'); } },
-    { title: 'Make it yours', text: 'The sample stays as it is. Duplicate it to get a copy you can edit, or go back to the library and start a New book of your own.', anchor: '.home-duplicate', go: async () => { await inSample(); show('home'); } },
+    { title: t('Relationships and timeline'), text: t('The tabs up here show the world as a timeline, a family tree and a relationship web, all built from the links in the entries.'), anchor: '.tabs', go: async () => { await inSample(); show('relations', 'web'); } },
+    { title: t('Warnings'), text: t('Lore-Forge checks the world as you write: someone acting after their death, a broken link, a date outside its era. Click a warning to jump there, or mark it as intended.'), anchor: '.warnings-panel', go: async () => { await inSample(); show('relations', 'web'); } },
+    { title: t('Story'), text: t('Write chapters here. Lore-Forge spots the people and places you mention, suggests new entries, and checks the story against the lore.'), anchor: '.main-story', go: async () => { await inSample(); show('story'); } },
+    { title: t('Make it yours'), text: t('The sample stays as it is. Duplicate it to get a copy you can edit, or go back to the library and start a New book of your own.'), anchor: '.home-duplicate', go: async () => { await inSample(); show('home'); } },
   ] : [];
   const overlays = (
     <>
@@ -2871,18 +3199,18 @@ export function App() {
     </>
   );
 
-  if (!world || !dir) return <><StartScreen onOpen={(d) => { setFresh(null); void open(d); }} error={loadError} onTour={startTour} highlight={fresh} />{overlays}</>;
+  if (!world || !dir) return <Fragment key={lang}><StartScreen onOpen={(d) => { setFresh(null); void open(d); }} error={loadError} onTour={startTour} highlight={fresh} />{overlays}</Fragment>;
 
   const savePdf = async (kind: PdfKind, options: PublishOptions) => {
-    const label = kind === 'codex' ? 'World Codex' : 'Story Book';
+    const label = kind === 'codex' ? t('World Codex') : t('Story Book');
     try {
       await flush();
       const r = await window.lore.exportPdf(dir, kind, options);
       if (!r) return;
       setPreview(null);
-      toasts.push({ tone: 'ok', text: `${label} saved: ${r.pages} pages (plus a .md copy)${r.notes?.length ? `. ${r.notes.join(' ')}` : ''}`, action: { label: 'Show in folder', run: () => void window.lore.showInFolder(r.pdf) } });
+      toasts.push({ tone: 'ok', text: `${t('{label} saved: {pages} pages (plus a .md copy)', { label, pages: r.pages })}${r.notes?.length ? `. ${r.notes.join(' ')}` : ''}`, action: { label: t('Show in folder'), run: () => void window.lore.showInFolder(r.pdf) } });
     } catch (e) {
-      toasts.push({ tone: 'error', text: `${label} failed: ${(e as Error).message}` });
+      toasts.push({ tone: 'error', text: t('{label} failed: {error}', { label, error: (e as Error).message }) });
     }
   };
   const saveDocx = async (options: PublishOptions) => {
@@ -2891,9 +3219,9 @@ export function App() {
       const r = await window.lore.exportDocx(dir, options);
       if (!r) return;
       setPreview(null);
-      toasts.push({ tone: 'ok', text: 'Story Book saved for Word. Word fills in the contents page numbers when it opens the file.', action: { label: 'Show in folder', run: () => void window.lore.showInFolder(r.docx) } });
+      toasts.push({ tone: 'ok', text: t('Story Book saved for Word. Word fills in the contents page numbers when it opens the file.'), action: { label: t('Show in folder'), run: () => void window.lore.showInFolder(r.docx) } });
     } catch (e) {
-      toasts.push({ tone: 'error', text: `Word export failed: ${(e as Error).message}` });
+      toasts.push({ tone: 'error', text: t('Word export failed: {error}', { error: (e as Error).message }) });
     }
   };
   const saveBook = async (book: BookSettings) => {
@@ -2905,17 +3233,17 @@ export function App() {
         return { ...w, manifest: Object.keys(saved).length ? { ...manifest, book: saved } : manifest };
       });
     } catch (e) {
-      toasts.push({ tone: 'error', text: `Could not save the book details: ${(e as Error).message}` });
+      toasts.push({ tone: 'error', text: t('Could not save the book details: {error}', { error: (e as Error).message }) });
     }
   };
   const saveCalendar = async (calendar: Calendar): Promise<boolean> => {
     try {
       const saved = await window.lore.saveCalendar(dir, calendar);
       setWorld((w) => (w ? { ...w, manifest: { ...w.manifest, calendar: saved } } : w));
-      toasts.push({ tone: 'ok', text: 'Calendar saved' });
+      toasts.push({ tone: 'ok', text: t('Calendar saved') });
       return true;
     } catch (e) {
-      toasts.push({ tone: 'error', text: `Could not save the calendar: ${(e as Error).message}` });
+      toasts.push({ tone: 'error', text: t('Could not save the calendar: {error}', { error: (e as Error).message }) });
       return false;
     }
   };
@@ -2926,17 +3254,17 @@ export function App() {
       const { cover: _old, ...manifest } = w.manifest;
       return { ...w, manifest: Object.keys(saved).length ? { ...manifest, cover: saved } : manifest };
     });
-    toasts.push({ tone: 'ok', text: 'Cover saved' });
+    toasts.push({ tone: 'ok', text: t('Cover saved') });
   };
   const openEntry = (id: string) => transition(() => { setSelectedId(id); setView('editor'); });
   const goView = (v: View, mode?: RelationMode) => transition(() => { if (mode) setRelMode(mode); setReveal(undefined); setView(v); });
 
   const selected = world.entries.find((e) => e.id === selectedId);
   const goHome = (to: 'timeline' | 'tree' | 'web' | 'codex' | 'book') => (to === 'codex' || to === 'book' ? setPreview(to) : to === 'timeline' ? goView('timeline') : goView('relations', to));
-  const tabs: [View, IconName, string][] = [['home', 'house', 'Home'], ['editor', 'quill-ink', 'Editor'], ['timeline', 'hourglass', 'Timeline'], ['relations', 'spider-web', 'Relationships'], ['story', 'feather', 'Story']];
+  const tabs: [View, IconName, string][] = [['home', 'house', t('Home')], ['editor', 'quill-ink', t('Editor')], ['timeline', 'hourglass', t('Timeline')], ['relations', 'spider-web', t('Relationships')], ['story', 'feather', t('Story')]];
   // The overlays sit second in both returns (library and world), so the tour keeps its place when a world opens.
   return (
-    <>
+    <Fragment key={lang}>
     <WorldDir.Provider value={dir}>
     <ErasLink.Provider value={() => setSettings(true)}>
     <div class="app" style={{ '--sidebar-w': `${sidebarW}px` }}>
@@ -2944,9 +3272,9 @@ export function App() {
       <header class="topbar">
         <div class="world-title">
           {/* Always the way out to the library; Alt+Left and mouse button 4 still step back through history. */}
-          <button type="button" class="ghost nav-back has-label" onClick={() => void closeWorld()} aria-label="Back to the library" title="Back to the library"><Icon name="plain-arrow" class="point-left" /><span class="btn-label">Library</span></button>
+          <button type="button" class="ghost nav-back has-label" onClick={() => void closeWorld()} aria-label={t('Back to the library')} title={t('Back to the library')}><Icon name="plain-arrow" class="point-left" /><span class="btn-label">{t('Library')}</span></button>
           <h1>
-            <button type="button" class="world-home-btn" onClick={() => goView('home')} aria-current={view === 'home' ? 'page' : undefined} title="World home: cover, counts, timeline, family tree and more">
+            <button type="button" class="world-home-btn" onClick={() => goView('home')} aria-current={view === 'home' ? 'page' : undefined} title={t('World home: cover, counts, timeline, family tree and more')}>
               <span class="mini-book" aria-hidden="true">
                 <span class="mini-page" />
                 <span class="mini-cover"><WorldBookCover dir={dir} world={world} /></span>
@@ -2955,19 +3283,20 @@ export function App() {
             </button>
           </h1>
         </div>
-        <nav class="tabs" aria-label="Views">
+        <nav class="tabs" aria-label={t('Views')}>
           {tabs.map(([v, icon, label], i) => (
             <button key={v} type="button" class={`view-tab v-${v}`} aria-pressed={view === v} onClick={() => goView(v)} aria-label={label} title={`${label} (${i ? `Ctrl+${i}` : 'Ctrl+H'})`}><Icon name={icon} /><span class="tab-label">{label}</span></button>
           ))}
         </nav>
         <div class="top-end">
-          <div class="publish-actions" role="group" aria-label="Export">
-            <button type="button" class="publish p-codex has-label" onClick={() => setPreview('codex')} aria-label="World Codex" title="World Codex: preview every entry with facts, visual description, reference images and art briefs; then save as PDF"><Icon name="book-cover" /><span class="btn-label">World Codex</span></button>
-            <button type="button" class="publish p-book has-label" onClick={() => setPreview('book')} aria-label="Story Book" title="Story Book: preview your events and notes in story order as a book; then save as PDF or Word"><Icon name="open-book" /><span class="btn-label">Story Book</span></button>
+          <div class="publish-actions" role="group" aria-label={t('Export')}>
+            <button type="button" class="publish p-codex has-label" onClick={() => setPreview('codex')} aria-label={t('World Codex')} title={t('World Codex: preview every entry with facts, visual description, reference images and art briefs; then save as PDF')}><Icon name="book-cover" /><span class="btn-label">{t('World Codex')}</span></button>
+            <button type="button" class="publish p-book has-label" onClick={() => setPreview('book')} aria-label={t('Story Book')} title={t('Story Book: preview your events and notes in story order as a book; then save as PDF or Word')}><Icon name="open-book" /><span class="btn-label">{t('Story Book')}</span></button>
           </div>
           <div class="top-actions">
             <SaveIndicator save={save} />
-            <button type="button" class="ghost small top-settings has-label" aria-haspopup="dialog" onClick={() => setSettings(true)} aria-label="World settings" title="World settings: calendar, eras and months"><Icon name="cog" /><span class="btn-label">World settings</span></button>
+            <button type="button" class="ghost small icon-only top-app-settings" aria-haspopup="dialog" onClick={() => setAppSettings(true)} aria-label={t('Settings')} title={t('Settings: language, display and the library')}><Icon name="cog" /></button>
+            <button type="button" class="ghost small top-settings has-label" aria-haspopup="dialog" onClick={() => setSettings(true)} aria-label={t('World settings')} title={t('World settings: calendar, eras and months')}><Icon name="calendar" /><span class="btn-label">{t('World settings')}</span></button>
           </div>
         </div>
       </header>
@@ -2981,14 +3310,14 @@ export function App() {
       <main class={`main${view === 'story' ? ' main-story' : view === 'timeline' ? ' main-fill' : ''}`} id="main">
         {view === 'editor' &&
           (selected ? (
-            <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={updateEntry} onDelete={() => setDoomed({ kind: 'entry', entry: selected })} onOpen={openEntry} />
+            <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={editEntry} onDelete={() => setDoomed({ kind: 'entry', entry: selected })} onOpen={openEntry} />
           ) : (
             <div class="empty-state">
               <Icon class="empty-icon" name={world.entries.length ? 'pointing' : 'world'} />
-              <p>{world.entries.length ? 'Pick an entry on the left to edit it.' : 'This world is empty. Start with a character, a place or an event: use “+ New” on the left.'}</p>
+              <p>{world.entries.length ? t('Pick an entry on the left to edit it.') : t('This world is empty. Start with a character, a place or an event: use “+ New” on the left.')}</p>
             </div>
           ))}
-        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onChange={updateEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} onDuplicate={() => void flush().then(() => setCopying(true))} sample={dir === bundled} />}
+        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onChange={editEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onAppSettings={() => setAppSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} onDuplicate={() => void flush().then(() => setCopying(true))} sample={dir === bundled} />}
         {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} />}
         {view === 'story' && (() => {
           const chapter = story.find((c) => c.file === chapterFile) ?? story[0];
@@ -2998,29 +3327,31 @@ export function App() {
         {view === 'relations' && <RelationsView world={world} entry={selected} mode={relMode} onMode={setRelMode} onOpen={(id) => setSelectedId(id)} onWrite={writeEntries} />}
       </main>
       <WarningsPanel warnings={warnings} selectedId={selectedId} actions={actions} />
+      <p class="sr-only undo-status" role="status">{undone}</p>
       {preview && <PreviewDialog dir={dir} world={world} kind={preview} onClose={() => setPreview(null)} onSave={savePdf} onSaveDocx={saveDocx} onSaveBook={saveBook} />}
       {doomed?.kind === 'entry' && (
-        <ConfirmDialog title={`Delete “${doomed.entry.name}”?`} confirmLabel="Delete entry" onClose={() => setDoomed(null)} onConfirm={() => deleteEntry(doomed.entry).then(() => setDoomed(null))}
-          subject={<div class="confirm-world"><Portrait entry={doomed.entry} size="md" /><div><strong class="confirm-name">{doomed.entry.name}</strong><span class="muted">{TYPE_SINGULAR[doomed.entry.type]} · {world.files[doomed.entry.id]}</span></div></div>}>
-          <p>Removes this entry's file from the world folder. Links to it from other entries will show as warnings.</p>
+        <ConfirmDialog title={t('Delete “{name}”?', { name: doomed.entry.name })} confirmLabel={t('Delete entry')} onClose={() => setDoomed(null)} onConfirm={() => deleteEntry(doomed.entry).then(() => setDoomed(null))}
+          subject={<div class="confirm-world"><Portrait entry={doomed.entry} size="md" /><div><strong class="confirm-name">{doomed.entry.name}</strong><span class="muted">{tm(TYPE_SINGULAR[doomed.entry.type])} · {world.files[doomed.entry.id]}</span></div></div>}>
+          <p>{t("Removes this entry's file from the world folder. Links to it from other entries will show as warnings.")}</p>
         </ConfirmDialog>
       )}
       {doomed?.kind === 'chapter' && (() => {
         const ch = story.find((c) => c.file === doomed.file);
         return ch && (
-          <ConfirmDialog title={`Delete “${ch.title}”?`} confirmLabel="Delete chapter" onClose={() => setDoomed(null)} onConfirm={() => deleteChapter(ch.file).then(() => setDoomed(null))}
-            subject={<div class="confirm-world"><span class="confirm-chapter" aria-hidden="true"><Icon name="feather" /></span><div><strong class="confirm-name">{ch.title}</strong><span class="muted">{ch.body.trim() ? `${ch.body.trim().split(/\s+/).length} words` : 'Empty'} · {ch.file}</span></div></div>}>
-            <p>Removes this chapter's file from the story folder. Entries added from it stay.</p>
+          <ConfirmDialog title={t('Delete “{name}”?', { name: ch.title })} confirmLabel={t('Delete chapter')} onClose={() => setDoomed(null)} onConfirm={() => deleteChapter(ch.file).then(() => setDoomed(null))}
+            subject={<div class="confirm-world"><span class="confirm-chapter" aria-hidden="true"><Icon name="feather" /></span><div><strong class="confirm-name">{ch.title}</strong><span class="muted">{ch.body.trim() ? t('{n} words', { n: ch.body.trim().split(/\s+/).length }) : t('Empty')} · {ch.file}</span></div></div>}>
+            <p>{t("Removes this chapter's file from the story folder. Entries added from it stay.")}</p>
           </ConfirmDialog>
         );
       })()}
       {settings && <WorldSettings world={world} onSave={saveCalendar} onClose={() => setSettings(false)} />}
+      {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}
       {copying && <DuplicateBook dir={dir} name={world.manifest.name} onClose={() => setCopying(false)} onDone={(copy) => { setCopying(false); setFresh(copy); void closeWorld(); }} />}
       <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>
     </ErasLink.Provider>
     </WorldDir.Provider>
     {overlays}
-    </>
+    </Fragment>
   );
 }

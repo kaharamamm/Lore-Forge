@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import { WorldIndex, type Warning, type World } from '@lore-forge/core';
+import { WorldIndex, type FactRef, type Warning, type World } from '@lore-forge/core';
 
 /** A callback that never changes identity but always calls the latest `fn` (so memoized children skip renders). */
 export function useEvent<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
@@ -15,9 +15,23 @@ export function useSame<T>(value: T, same: (a: T, b: T) => boolean): T {
   return kept.current;
 }
 
-/** Two warning lists say the same thing: same warnings, messages, places and intended marks, in the same order. */
+const sameFact = (a: FactRef | undefined, b: FactRef | undefined): boolean =>
+  a === b || (!!a && !!b && a.entryId === b.entryId && a.field === b.field && a.source === b.source && a.chapter === b.chapter && a.span?.[0] === b.span?.[0] && a.span?.[1] === b.span?.[1]);
+
+/**
+ * Two warning lists say the same thing: same warnings, messages, places and intended marks, in the same order.
+ * Field by field rather than as JSON: it runs on every keystroke.
+ */
 export function sameWarnings(a: readonly Warning[], b: readonly Warning[]): boolean {
-  return a.length === b.length && JSON.stringify(a) === JSON.stringify(b);
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]!;
+    const y = b[i]!;
+    if (x.id !== y.id || x.message !== y.message || x.severity !== y.severity || x.intended?.note !== y.intended?.note || !!x.intended !== !!y.intended || x.intended?.warningId !== y.intended?.warningId) return false;
+    if (!sameFact(x.offending, y.offending) || !sameFact(x.conflicting, y.conflicting)) return false;
+  }
+  return true;
 }
 
 /**

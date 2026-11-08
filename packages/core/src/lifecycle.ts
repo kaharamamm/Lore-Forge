@@ -1,3 +1,4 @@
+import { msg } from './i18n.ts';
 import type { IconName } from './icons.ts';
 import type { Entry, EntryType } from './types.ts';
 
@@ -30,23 +31,23 @@ export interface Lifecycle {
 export const LIFECYCLE: Partial<Record<EntryType, Lifecycle>> = {
   character: {
     endField: 'died', endLabel: 'Died',
-    statuses: [{ value: 'alive', label: 'Alive', emoji: '💚', icon: 'heart-beats' }, { value: 'dead', label: 'Dead', emoji: '🪦', icon: 'tombstone' }, { value: 'unknown', label: 'Unknown', emoji: '❔', icon: 'uncertainty' }],
-    ongoing: ['alive'], ended: ['dead'], endedWord: 'dead', endedMark: '🪦', endedIcon: 'tombstone',
+    statuses: [{ value: 'alive', label: msg`Alive`, emoji: '💚', icon: 'heart-beats' }, { value: 'dead', label: msg`Dead`, emoji: '🪦', icon: 'tombstone' }, { value: 'unknown', label: msg`Unknown`, emoji: '❔', icon: 'uncertainty' }],
+    ongoing: ['alive'], ended: ['dead'], endedWord: msg`dead`, endedMark: '🪦', endedIcon: 'tombstone',
   },
   place: {
     endField: 'destroyed', endLabel: 'Destroyed',
-    statuses: [{ value: 'standing', label: 'Standing', emoji: '🏰', icon: 'castle' }, { value: 'destroyed', label: 'Destroyed', emoji: '🏚️', icon: 'castle-ruins' }, { value: 'unknown', label: 'Unknown', emoji: '❔', icon: 'uncertainty' }],
-    ongoing: ['standing'], ended: ['destroyed'], endedWord: 'destroyed', endedMark: '🏚️', endedIcon: 'castle-ruins',
+    statuses: [{ value: 'standing', label: msg`Standing`, emoji: '🏰', icon: 'castle' }, { value: 'destroyed', label: msg`Destroyed`, emoji: '🏚️', icon: 'castle-ruins' }, { value: 'unknown', label: msg`Unknown`, emoji: '❔', icon: 'uncertainty' }],
+    ongoing: ['standing'], ended: ['destroyed'], endedWord: msg`destroyed`, endedMark: '🏚️', endedIcon: 'castle-ruins',
   },
   faction: {
     endField: 'dissolved', endLabel: 'Dissolved',
-    statuses: [{ value: 'active', label: 'Active', emoji: '🚩', icon: 'flying-flag' }, { value: 'dissolved', label: 'Dissolved', emoji: '🏳️', icon: 'broken-shield' }, { value: 'unknown', label: 'Unknown', emoji: '❔', icon: 'uncertainty' }],
-    ongoing: ['active'], ended: ['dissolved'], endedWord: 'dissolved', endedMark: '🏳️', endedIcon: 'broken-shield',
+    statuses: [{ value: 'active', label: msg`Active`, emoji: '🚩', icon: 'flying-flag' }, { value: 'dissolved', label: msg`Dissolved`, emoji: '🏳️', icon: 'broken-shield' }, { value: 'unknown', label: msg`Unknown`, emoji: '❔', icon: 'uncertainty' }],
+    ongoing: ['active'], ended: ['dissolved'], endedWord: msg`dissolved`, endedMark: '🏳️', endedIcon: 'broken-shield',
   },
   item: {
     endField: 'destroyed', endLabel: 'Destroyed',
-    statuses: [{ value: 'intact', label: 'Intact', emoji: '✨', icon: 'sparkles' }, { value: 'destroyed', label: 'Destroyed', emoji: '💥', icon: 'broken-axe' }, { value: 'lost', label: 'Lost', emoji: '🌫️', icon: 'fog' }, { value: 'unknown', label: 'Unknown', emoji: '❔', icon: 'uncertainty' }],
-    ongoing: ['intact', 'lost'], ended: ['destroyed'], endedWord: 'destroyed', endedMark: '💥', endedIcon: 'broken-axe',
+    statuses: [{ value: 'intact', label: msg`Intact`, emoji: '✨', icon: 'sparkles' }, { value: 'destroyed', label: msg`Destroyed`, emoji: '💥', icon: 'broken-axe' }, { value: 'lost', label: msg`Lost`, emoji: '🌫️', icon: 'fog' }, { value: 'unknown', label: msg`Unknown`, emoji: '❔', icon: 'uncertainty' }],
+    ongoing: ['intact', 'lost'], ended: ['destroyed'], endedWord: msg`destroyed`, endedMark: '💥', endedIcon: 'broken-axe',
   },
 };
 

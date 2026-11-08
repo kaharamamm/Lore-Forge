@@ -14,6 +14,7 @@ export { WorldIndex, normalizeName } from './world-index.ts';
 export { appearances, type Appearance } from './appearances.ts';
 export { references, type Reference } from './rules/references.ts';
 export * from './lifecycle.ts';
+export * from './looks.ts';
 export * from './details.ts';
 export * from './entry-icons.ts';
 export * from './relation-kinds.ts';
@@ -22,6 +23,8 @@ export * from './story.ts';
 export * from './extract.ts';
 export * from './story-check.ts';
 export * from './rules/index.ts';
+export { msg, recordMessages, localize, localizeDoc } from './i18n.ts';
+export { CORE_TR } from './i18n-tr.ts';
 
 import { checkWorld, sortWarnings } from './engine.ts';
 import { analyzeStory } from './story-check.ts';

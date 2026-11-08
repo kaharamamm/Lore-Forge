@@ -1,3 +1,6 @@
+import { fixed, msg, msgIn, template, verbatim } from './i18n.ts';
+import type { EntryType } from './types.ts';
+
 /** Past-tense verb or relation type -> [active base form, passive form]. Unknown verbs fall back to a quoted phrase. */
 const VERBS: Record<string, [string, string]> = {
   killed: ['kill', 'be killed by'],
@@ -42,14 +45,53 @@ const VERBS: Record<string, [string, string]> = {
   'serves': ['serve', 'be served by'],
 };
 
-export function activePhrase(verb: string, actorName: string, targetName: string | undefined): string {
-  const v = VERBS[verb.toLowerCase()];
-  if (v) return targetName ? `${v[0]} ${targetName}` : v[0];
-  return `be part of "${actorName} ${verb}${targetName ? ` ${targetName}` : ''}"`;
+/**
+ * The phrases as translatable templates, one set per verb: "kill {0}", "be killed by {0}" and "was killed by {0}".
+ * A language that marks the object (Turkish) needs to know what kind of entry is acted on ("capture" a person or a
+ * city), so the phrases carry the target's entry type as their context (see msgIn).
+ */
+const FORMS: Record<string, { base: string; active: TemplateStringsArray; passive: TemplateStringsArray; was: TemplateStringsArray }> = Object.fromEntries(
+  Object.entries(VERBS).map(([verb, [active, passive]]) => [
+    verb,
+    { base: active, active: template(`${active} `, ''), passive: template(`${passive} `, ''), was: template(`${passive.replace(/^be /, 'was ')} `, '') },
+  ]),
+);
+const formsOf = (key: string) => (Object.hasOwn(FORMS, key) ? FORMS[key] : undefined);
+
+/**
+ * What the actor does, in base form: "kill Queen Ilsa". `targetType` is the target's entry type, when known;
+ * `relation` says the verb is a relation type (a phrase for an unknown one quotes a relation, not a deed).
+ */
+export function activePhrase(verb: string, actorName: string, targetName: string | undefined, targetType?: EntryType, relation = false): string {
+  const key = verb.toLowerCase();
+  const v = VERBS[key];
+  if (v) {
+    const f = formsOf(key);
+    if (!targetName) return f ? fixed(f.base) : v[0];
+    return f ? msgIn(targetType)(f.active, targetName) : `${v[0]} ${targetName}`;
+  }
+  const say = msgIn(relation ? 'relation' : undefined);
+  return targetName ? say`be part of "${actorName} ${verbatim(verb)} ${targetName}"` : say`be part of "${actorName} ${verbatim(verb)}"`;
 }
 
-export function passivePhrase(verb: string, actorName: string, targetName: string): string {
-  const v = VERBS[verb.toLowerCase()];
-  if (v) return `${v[1]} ${actorName}`;
-  return `be part of "${actorName} ${verb} ${targetName}"`;
+/** What happens to the target, in base form: "be killed by Orsan". `targetType` is the target's entry type, when known. */
+export function passivePhrase(verb: string, actorName: string, targetName: string, targetType?: EntryType): string {
+  const key = verb.toLowerCase();
+  const v = VERBS[key];
+  if (v) {
+    const f = formsOf(key);
+    return f ? msgIn(targetType)(f.passive, actorName) : `${v[1]} ${actorName}`;
+  }
+  return msg`be part of "${actorName} ${verbatim(verb)} ${targetName}"`;
+}
+
+/** The same in the past, for a killing: "was killed by Orsan", "was slain by Orsan". */
+export function killedPhrase(verb: string, actorName: string, targetName: string): string {
+  const key = verb.toLowerCase();
+  const v = VERBS[key];
+  if (v) {
+    const f = formsOf(key);
+    return f ? msg(f.was, actorName) : `${v[1]} ${actorName}`.replace(/^be /, 'was ');
+  }
+  return msg`was part of "${actorName} ${verbatim(verb)} ${targetName}"`;
 }

@@ -1,11 +1,12 @@
 /// <reference path="./hyphen.d.ts" />
-import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import PDFDocument from 'pdfkit';
 import en from 'hyphen/en-us/index.js';
 import { bundledFontPath, coverFont } from './fonts.ts';
+import { readPicture } from './gif.ts';
+import { english, type Translate } from './words.ts';
 import { bundledFont, COVER_EMBLEM, DEFAULT_LOOK, ICON_SIZE, ICONS, inlineRuns, placeOnCover, splitAlpha, toMarkdown, trimFor, type Block, type BookLook, type CoverArt, type Doc, type IconName, type Trim } from '@lore-forge/core';
 
 type Pdf = PDFKit.PDFDocument;
@@ -18,6 +19,8 @@ export interface PdfOptions {
   fontDir?: string;
   /** Folder with the bundled cover title fonts (the desktop app's copy). Defaults to their packages. */
   coverFontDir?: string;
+  /** The exporter's own words in the app's language (English without it). */
+  t?: Translate;
 }
 
 export interface PdfResult {
@@ -78,7 +81,8 @@ export function hyphenate(text: string): string {
 type PageRole = 'front' | 'blank' | 'toc' | 'opener' | 'body';
 /** "Chapter 3. The Well" -> ["Chapter 3", "The Well"]. */
 export const chapterParts = (text: string): [string | undefined, string] => {
-  const m = /^(Chapter \d+)\.\s+(.*)$/.exec(text);
+  // "Chapter 3. Title", or in Turkish "Bölüm 3. Title" (core's book heading, translated).
+  const m = /^((?:Chapter|Bölüm) \d+)\.\s+(.*)$/.exec(text);
   return m ? [m[1], m[2]!] : [undefined, text];
 };
 const INK = '#222222';
@@ -107,6 +111,8 @@ class Layout {
 
   private readonly doc: Doc;
   private readonly opts: LayoutOptions;
+  /** The exporter's own words in the app's language. */
+  private readonly say: Translate;
   private readonly numbers: Map<string, number> | undefined;
   /** Print books: trim size and mirrored margins, and what each page (1-based) carries. */
   private readonly trim: Trim | undefined;
@@ -125,6 +131,7 @@ class Layout {
     this.doc = doc;
     this.opts = opts;
     this.numbers = numbers;
+    this.say = opts.t ?? english;
     this.look = doc.print ? doc.print.look ?? DEFAULT_LOOK : undefined;
     this.trim = doc.print ? trimFor(doc.print.trim, this.look?.margins) : undefined;
     this.rightHand = !!doc.print?.rightHand;
@@ -474,11 +481,11 @@ class Layout {
     if (this.trim) {
       this.startPage('toc', 'right');
       this.pdf.y = this.top + 40;
-      this.headFont().fontSize(this.t.heading[1]).fillColor(this.t.accent).text('Contents', this.left, this.pdf.y, { width: this.width, align: 'center' });
+      this.headFont().fontSize(this.t.heading[1]).fillColor(this.t.accent).text(this.say('Contents'), this.left, this.pdf.y, { width: this.width, align: 'center' });
       this.pdf.y += 18;
     } else this.pdf.addPage();
     if (this.trim) return this.tocLines();
-    this.font('b').fontSize(this.t.heading[1]).fillColor(this.t.accent).text('Contents', this.left, this.pdf.y, { width: this.width });
+    this.font('b').fontSize(this.t.heading[1]).fillColor(this.t.accent).text(this.say('Contents'), this.left, this.pdf.y, { width: this.width });
     this.pdf.y += 12;
     this.tocLines();
   }
@@ -537,17 +544,19 @@ class Layout {
   }
 
   private image(b: Extract<Block, { kind: 'image' }>): void {
-    const path = join(this.opts.worldDir, b.file);
-    const ext = extname(b.file).toLowerCase();
     type Img = { width: number; height: number };
     let img: Img | undefined;
-    if (!['.png', '.jpg', '.jpeg'].includes(ext)) this.note(`[Image not embedded: ${b.file}. PDF export embeds PNG and JPEG only.]`);
-    else if (!existsSync(path)) this.note(`[Image file missing: ${b.file}]`);
-    else {
+    // PNG and JPEG go in as they are, a GIF as its first frame.
+    const pic = readPicture(join(this.opts.worldDir, b.file));
+    if ('problem' in pic) {
+      if (pic.problem === 'type') this.note(this.say('[Image not embedded: {file}. PDF export embeds PNG, JPEG and GIF only.]', { file: b.file }));
+      else if (pic.problem === 'missing') this.note(this.say('[Image file missing: {file}]', { file: b.file }));
+      else this.note(this.say('[Image could not be read: {file}]', { file: b.file }));
+    } else {
       try {
-        img = (this.pdf as unknown as { openImage(src: Buffer): Img }).openImage(readFileSync(path));
+        img = (this.pdf as unknown as { openImage(src: Buffer): Img }).openImage(pic.data);
       } catch (e) {
-        this.note(`[Image could not be read: ${b.file} (${(e as Error).message})]`);
+        this.note(this.say('[Image could not be read: {file} ({error})]', { file: b.file, error: (e as Error).message }));
       }
     }
     if (img) {
@@ -635,13 +644,13 @@ class Layout {
     const g = pdf.linearGradient(0, 0, W * 0.4, H);
     g.stop(0, top, topA).stop(1, bottom, bottomA);
     pdf.rect(0, 0, W, H).fill(g);
-    const file = art.image && join(this.opts.worldDir, art.image);
-    if (file && ['.png', '.jpg', '.jpeg'].includes(extname(file).toLowerCase()) && existsSync(file)) {
+    const pic = art.image ? readPicture(join(this.opts.worldDir, art.image)) : null;
+    if (pic && 'data' in pic) {
       try {
         pdf.save();
         pdf.rect(0, 0, W, H).clip();
         pdf.opacity(art.imageOpacity);
-        const img = (pdf as unknown as { openImage(src: Buffer): { width: number; height: number } }).openImage(readFileSync(file));
+        const img = (pdf as unknown as { openImage(src: Buffer): { width: number; height: number } }).openImage(pic.data);
         const s = Math.max(W / img.width, H / img.height);
         pdf.image(img as unknown as Buffer, (W - img.width * s) / 2, (H - img.height * s) / 2, { width: img.width * s, height: img.height * s });
         pdf.restore();
@@ -843,7 +852,7 @@ function docChars(doc: Doc): Set<string> {
  * The Story Book's body and chapter title fonts as files. DejaVu needs none. A bundled font that lacks a letter the
  * book uses (the bundled web fonts carry Latin only, not ş or ğ) falls back to DejaVu, with a note.
  */
-function resolveBookFonts(doc: Doc, look: BookLook, fontDir: string, dir: string | undefined, notes: string[]): BookFonts {
+function resolveBookFonts(doc: Doc, look: BookLook, fontDir: string, dir: string | undefined, notes: string[], say: Translate): BookFonts {
   const chars = [...docChars(doc)];
   const usable = (family: string, bold: boolean): string | undefined => {
     const b = bundledFont(family);
@@ -851,7 +860,7 @@ function resolveBookFonts(doc: Doc, look: BookLook, fontDir: string, dir: string
     if (!file) return undefined;
     const has = glyphCheck(file);
     const missing = chars.find((ch) => ch.codePointAt(0)! > 0x7f && !has(ch.codePointAt(0)!));
-    if (missing) { notes.push(`The font “${family}” has no “${missing}”, so the PDF uses DejaVu for that text instead.`); return undefined; }
+    if (missing) { notes.push(say('The font “{font}” has no “{letter}”, so the PDF uses DejaVu for that text instead.', { font: family, letter: missing })); return undefined; }
     return file;
   };
   const kind = (family: string): 'serif' | 'sans' => (/sans|carlito/i.test(family) ? 'sans' : 'serif');
@@ -870,17 +879,18 @@ export async function renderPdf(source: Doc, options: PdfOptions): Promise<PdfRe
   const fontDir = options.fontDir ?? defaultFontDir();
   const doc = printableDoc(source, glyphCheck(join(fontDir, FONT_FILES.sans)));
   const notes: string[] = [];
+  const say = options.t ?? english;
   const art = doc.cover.art;
   let titleFont: string | undefined;
   if (art?.font && art.showTitle) {
     const found = await coverFont(art.font, art.titleStyle !== 'serif', options.coverFontDir);
-    if (found.note) notes.push(found.note);
+    if (found.note) notes.push(say(found.note, { font: art.font.trim() }));
     const title = art.titleStyle === 'display' ? doc.cover.title.toUpperCase() : doc.cover.title;
     const has = found.file ? glyphCheck(found.file) : undefined;
-    if (has && [...title].some((ch) => ch.trim() && !has(ch.codePointAt(0)!))) notes.push(`The cover font “${art.font}” has no letters for some of the title, so the PDF cover title uses DejaVu.`);
+    if (has && [...title].some((ch) => ch.trim() && !has(ch.codePointAt(0)!))) notes.push(say('The cover font “{font}” has no letters for some of the title, so the PDF cover title uses DejaVu.', { font: art.font }));
     else if (found.file) titleFont = found.file;
   }
-  const bookFonts = doc.print?.look ? resolveBookFonts(doc, doc.print.look, fontDir, options.coverFontDir, notes) : undefined;
+  const bookFonts = doc.print?.look ? resolveBookFonts(doc, doc.print.look, fontDir, options.coverFontDir, notes, say) : undefined;
   const opts: LayoutOptions = { ...options, fontDir, ...(titleFont ? { titleFont } : {}), ...(bookFonts ? { bookFonts } : {}) };
   const first = new Layout(doc, opts, undefined);
   first.run();
@@ -898,17 +908,19 @@ export function sidecarPath(pdfPath: string): string {
 }
 
 /** Writes the PDF and its Markdown sidecar (image links relative to the sidecar). */
-export async function writePublication(doc: Doc, worldDir: string, pdfPath: string, fontDir?: string, coverFontDir?: string): Promise<{ pdf: string; md: string; pages: number; notes: string[] }> {
+export async function writePublication(doc: Doc, worldDir: string, pdfPath: string, fontDir?: string, coverFontDir?: string, t?: Translate): Promise<{ pdf: string; md: string; pages: number; notes: string[] }> {
   const out = resolve(pdfPath);
   const md = sidecarPath(out);
-  const { pdf, pages, notes } = await renderPdf(doc, { worldDir, ...(fontDir ? { fontDir } : {}), ...(coverFontDir ? { coverFontDir } : {}) });
+  const { pdf, pages, notes } = await renderPdf(doc, { worldDir, ...(fontDir ? { fontDir } : {}), ...(coverFontDir ? { coverFontDir } : {}), ...(t ? { t } : {}) });
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, pdf);
   const href = (file: string) => relative(dirname(md), join(resolve(worldDir), file)).split(sep).join('/');
-  await writeFile(md, toMarkdown(doc, href));
+  await writeFile(md, toMarkdown(doc, href, t ?? ((s) => s)));
   return { pdf: out, md, pages, notes };
 }
 
 export { renderDocx, writeDocx, type DocxOptions } from './docx.ts';
 export { BUNDLED_FONTS } from '@lore-forge/core';
 export { bundledFontFile, bundledFontPath, coverFont, systemFontFamilies, systemFonts, type SystemFont } from './fonts.ts';
+export { encodePng, gifFirstFrame, gifToPng, readPicture, type Frame, type Picture } from './gif.ts';
+export { english, type Translate } from './words.ts';

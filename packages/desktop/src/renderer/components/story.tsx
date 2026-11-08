@@ -9,6 +9,7 @@ import { Select } from './select.tsx';
 import { kindOf } from './severity.tsx';
 import { EntryLabel, TypeBadge } from './type.tsx';
 import { ProseEditor, type SpanMark, type TextPick } from './prose.tsx';
+import { lower, num, t, tj, tm, tx } from '../i18n.tsx';
 
 export interface StoryActions {
   onChange: (ch: StoryChapter) => void;
@@ -25,6 +26,14 @@ export interface StoryActions {
 
 // ------------------------------------------------------------------------------------------ chapters
 
+/** Words per chapter, counted once per chapter version: typing in one chapter does not count the others again. */
+const counted = new WeakMap<StoryChapter, number>();
+const wordsOf = (c: StoryChapter): number => {
+  let n = counted.get(c);
+  if (n === undefined) counted.set(c, (n = wordCount(c.body)));
+  return n;
+};
+
 export function ChapterList({ chapters, current, warnings, onSelect, onCreate, onMove, onDelete }: {
   chapters: readonly StoryChapter[];
   current: string | null;
@@ -34,14 +43,14 @@ export function ChapterList({ chapters, current, warnings, onSelect, onCreate, o
   onMove: (file: string, step: -1 | 1) => void;
   onDelete: (file: string) => void;
 }) {
-  const total = chapters.reduce((n, c) => n + wordCount(c.body), 0);
+  const total = chapters.reduce((n, c) => n + wordsOf(c), 0);
   return (
     <aside class="sidebar story-chapters" aria-labelledby="chapters-title">
       <div class="pane-head">
-        <h2 id="chapters-title"><Icon name="scroll-quill" /> Chapters</h2>
-        <button type="button" class="small" onClick={onCreate}><Icon name="feather" /> New chapter</button>
+        <h2 id="chapters-title"><Icon name="scroll-quill" /> {t('Chapters')}</h2>
+        <button type="button" class="small" onClick={onCreate}><Icon name="feather" /> {t('New chapter')}</button>
       </div>
-      <p class="muted small">{chapters.length} chapter{chapters.length === 1 ? '' : 's'} · {total.toLocaleString('en')} words</p>
+      <p class="muted small">{chapters.length === 1 ? t('{n} chapter · {words} words', { n: chapters.length, words: num(total) }) : t('{n} chapters · {words} words', { n: chapters.length, words: num(total) })}</p>
       <ol class="chapter-list">
         {chapters.map((c, i) => {
           const n = warnings.filter((w) => !w.intended && w.offending.chapter === c.file).length;
@@ -49,14 +58,14 @@ export function ChapterList({ chapters, current, warnings, onSelect, onCreate, o
             <li key={c.file} class="chapter-row">
               <button type="button" class="chapter-link" aria-current={c.file === current ? 'page' : undefined} onClick={() => onSelect(c.file)}>
                 <span class="chapter-n">{i + 1}</span>
-                <span class="chapter-name">{c.title || 'Untitled'}</span>
-                {n > 0 && <span class="count count-warning" title={`${n} warning${n === 1 ? '' : 's'}`}><Icon name="hazard-sign" /> {n}</span>}
+                <span class="chapter-name">{c.title || t('Untitled')}</span>
+                {n > 0 && <span class="count count-warning" title={n === 1 ? t('{n} warning', { n }) : t('{n} warnings', { n })}><Icon name="hazard-sign" /> {n}</span>}
               </button>
               {c.file === current && (
                 <span class="chapter-tools">
-                  <button type="button" class="ghost small icon-only" disabled={i === 0} onClick={() => onMove(c.file, -1)} aria-label="Move chapter up" title="Move up"><Icon class="rot-up" name="play-button" /></button>
-                  <button type="button" class="ghost small icon-only" disabled={i === chapters.length - 1} onClick={() => onMove(c.file, 1)} aria-label="Move chapter down" title="Move down"><Icon class="rot-down" name="play-button" /></button>
-                  <button type="button" class="ghost small icon-only danger" onClick={() => onDelete(c.file)} aria-label="Delete chapter" title="Delete chapter"><Icon name="trash-can" /></button>
+                  <button type="button" class="ghost small icon-only" disabled={i === 0} onClick={() => onMove(c.file, -1)} aria-label={t('Move chapter up')} title={t('Move up')}><Icon class="rot-up" name="play-button" /></button>
+                  <button type="button" class="ghost small icon-only" disabled={i === chapters.length - 1} onClick={() => onMove(c.file, 1)} aria-label={t('Move chapter down')} title={t('Move down')}><Icon class="rot-down" name="play-button" /></button>
+                  <button type="button" class="ghost small icon-only danger" onClick={() => onDelete(c.file)} aria-label={t('Delete chapter')} title={t('Delete chapter')}><Icon name="trash-can" /></button>
                 </span>
               )}
             </li>
@@ -101,18 +110,18 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
     return (
       <div class="empty-state">
         <Icon class="empty-icon" name="feather" />
-        <p>Write the whole story here, chapter by chapter. Names you use are linked to your entries, new people, places and events are offered as proposals, and contradictions are flagged as you type.</p>
-        <button type="button" class="primary" onClick={onCreate}>Start the first chapter</button>
+        <p>{t('Write the whole story here, chapter by chapter. Names you use are linked to your entries, new people, places and events are offered as proposals, and contradictions are flagged as you type.')}</p>
+        <button type="button" class="primary" onClick={onCreate}>{t('Start the first chapter')}</button>
       </div>
     );
   }
   const marks: SpanMark[] = [];
   for (const w of warnings) {
     for (const f of [w.offending, w.conflicting]) {
-      if (f?.chapter === chapter.file && f.span) marks.push({ start: f.span[0], end: f.span[1], cls: `warn-line warn-${kindOf(w)}`, title: kindOf(w) === 'error' ? 'Error' : kindOf(w) === 'intended' ? 'Intended' : 'Warning', detail: w.message });
+      if (f?.chapter === chapter.file && f.span) marks.push({ start: f.span[0], end: f.span[1], cls: `warn-line warn-${kindOf(w)}`, title: kindOf(w) === 'error' ? t('Error') : kindOf(w) === 'intended' ? t('Intended') : t('Warning'), detail: tm(w.message) });
     }
   }
-  const words = wordCount(chapter.body);
+  const words = wordsOf(chapter);
   const pickProposal = (pk: TextPick, g: Guess, type: EntryType): Proposal => {
     const s = sentences(chapter.body).find((x) => x.start <= pk.start && x.start + x.text.length >= pk.end);
     const span: SourceSpan = s ? { chapter: chapter.file, start: s.start, end: s.start + s.text.length, quote: s.text } : { chapter: chapter.file, start: pk.start, end: pk.end, quote: pk.text };
@@ -121,16 +130,16 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
   };
   return (
     <div class="story">
-      <section class="story-write" aria-label="Manuscript">
+      <section class="story-write" aria-label={t('Manuscript')}>
         <div class="story-head">
-          <input class="story-title" aria-label="Chapter title" value={chapter.title} placeholder="Chapter title" onInput={(e) => actions.onChange({ ...chapter, title: e.currentTarget.value })} />
+          <input class="story-title" aria-label={t('Chapter title')} value={chapter.title} placeholder={t('Chapter title')} onInput={(e) => actions.onChange({ ...chapter, title: e.currentTarget.value })} />
           <label class="story-date">
-            <span>Date</span>
-            <input value={chapter.date ?? ''} placeholder={chapterDate(chapter) ?? 'e.g. 1872 OK'} onInput={(e) => { const v = e.currentTarget.value; const { date: _d, ...rest } = chapter; actions.onChange(v.trim() ? { ...rest, date: v } : rest); }} />
+            <span>{t('Date')}</span>
+            <input value={chapter.date ?? ''} placeholder={chapterDate(chapter) ?? t('e.g. 1872 OK')} onInput={(e) => { const v = e.currentTarget.value; const { date: _d, ...rest } = chapter; actions.onChange(v.trim() ? { ...rest, date: v } : rest); }} />
           </label>
-          <span class="muted small story-count" role="status">{words.toLocaleString('en')} word{words === 1 ? '' : 's'}</span>
+          <span class="muted small story-count" role="status">{words === 1 ? t('{n} word', { n: num(words) }) : t('{n} words', { n: num(words) })}</span>
         </div>
-        <ProseEditor id="story-text" world={world} value={chapter.body} fill marks={marks} reveal={reveal} label={`Text of ${chapter.title || 'this chapter'}`}
+        <ProseEditor id="story-text" world={world} value={chapter.body} fill marks={marks} reveal={reveal} label={chapter.title ? t('Text of {title}', { title: chapter.title }) : t('Text of this chapter')}
           onInput={(body) => actions.onChange({ ...chapter, body })} onOpen={actions.onOpen} onPick={onPick} />
         {pick && guess && (
           <PickMenu pick={pick} guess={guess} onClose={() => setPick(null)}
@@ -200,29 +209,29 @@ function PickMenu({ pick, guess, onClose, onOpen, onAdd, onLink, onSearch }: {
   const short = pick.text.length > 28 ? `${pick.text.slice(0, 27)}…` : pick.text;
   return (
     <div ref={box} class={`pick-menu${full ? ' is-full' : ''}`} style={{ left: `${at.x}px`, top: `${at.y}px` }} onKeyDown={onKey}
-      role={full ? 'menu' : 'toolbar'} aria-label={`Add “${pick.text}” to the world`}>
+      role={full ? 'menu' : 'toolbar'} aria-label={t('Add “{text}” to the world', { text: pick.text })}>
       {!full && (
         <div class="pick-chip">
           {guess.existing ? (
-            <button type="button" class="small pick-open" onClick={() => onOpen(guess.existing!.id)}><Icon name={TYPE_ICON[guess.type]} /> Open {guess.existing.name}</button>
+            <button type="button" class="small pick-open" onClick={() => onOpen(guess.existing!.id)}><Icon name={TYPE_ICON[guess.type]} /> {t('Open {name}', { name: guess.existing.name })}</button>
           ) : (
-            <button type="button" class="small primary pick-add" onClick={() => onAdd(guess.type)} title="Add the selection (Ctrl+Shift+A)"><Icon name={TYPE_ICON[guess.type]} /> Add “{short}” as {label}</button>
+            <button type="button" class="small primary pick-add" onClick={() => onAdd(guess.type)} title={t('Add the selection (Ctrl+Shift+A)')}><Icon name={TYPE_ICON[guess.type]} /> {t('Add “{text}” as {type}', { text: short, type: tm(label) })}</button>
           )}
-          <button type="button" class="ghost small icon-only pick-more" aria-label="More ways to add" title="More" aria-haspopup="menu" onClick={() => setFull(true)}><Icon class="rot-down" name="play-button" /></button>
+          <button type="button" class="ghost small icon-only pick-more" aria-label={t('More ways to add')} title={t('More')} aria-haspopup="menu" onClick={() => setFull(true)}><Icon class="rot-down" name="play-button" /></button>
         </div>
       )}
       {full && (
         <>
           <p class="pick-title" aria-hidden="true">“{short}”</p>
-          {guess.existing && <button type="button" role="menuitem" class="pick-item pick-open" onClick={() => onOpen(guess.existing!.id)}><Icon name={TYPE_ICON[guess.type]} /> Open {guess.existing.name}</button>}
-          {ENTRY_TYPES.map((t) => (
-            <button key={t} type="button" role="menuitem" class={`pick-item t-${t}${!guess.existing && t === guess.type ? ' is-guess' : ''}`} data-type={t} onClick={() => onAdd(t)}>
-              <Icon name={TYPE_ICON[t]} /> Add as {TYPE_SINGULAR[t]}{!guess.existing && t === guess.type && <span class="pick-hint">best guess</span>}
+          {guess.existing && <button type="button" role="menuitem" class="pick-item pick-open" onClick={() => onOpen(guess.existing!.id)}><Icon name={TYPE_ICON[guess.type]} /> {t('Open {name}', { name: guess.existing.name })}</button>}
+          {ENTRY_TYPES.map((type) => (
+            <button key={type} type="button" role="menuitem" class={`pick-item t-${type}${!guess.existing && type === guess.type ? ' is-guess' : ''}`} data-type={type} onClick={() => onAdd(type)}>
+              <Icon name={TYPE_ICON[type]} /> {t('Add as {type}', { type: tm(TYPE_SINGULAR[type]) })}{!guess.existing && type === guess.type && <span class="pick-hint">{t('best guess')}</span>}
             </button>
           ))}
           <hr />
-          <button type="button" role="menuitem" class="pick-item pick-link" onClick={onLink}><Icon name="linked-rings" /> Link to existing…</button>
-          <button type="button" role="menuitem" class="pick-item pick-search" onClick={onSearch}><Icon name="magnifying-glass" /> Search the world for “{short}”</button>
+          <button type="button" role="menuitem" class="pick-item pick-link" onClick={onLink}><Icon name="linked-rings" /> {t('Link to existing…')}</button>
+          <button type="button" role="menuitem" class="pick-item pick-search" onClick={onSearch}><Icon name="magnifying-glass" /> {t('Search the world for “{text}”', { text: short })}</button>
         </>
       )}
     </div>
@@ -245,10 +254,10 @@ function fieldLines(f: ProposalFields, ix: WorldIndex): [string, string][] {
     const text = k === 'participants' ? (v as string[]).map(name).join(', ')
       : k === 'aliases' ? (v as string[]).join(', ')
       : k === 'actions' ? (f.actions ?? []).map((a) => [name(a.actor), a.verb, a.target ? name(a.target) : ''].join(' ').trim()).join('; ')
-      : k === 'relations' ? (f.relations ?? []).map((r) => `${relationLabel(r.type)} ${name(r.target)}${r.from ? ` (from ${r.from})` : ''}`).join('; ')
+      : k === 'relations' ? (f.relations ?? []).map((r) => (r.from ? t('{relation} {target} (from {date})', { relation: tm(relationLabel(r.type)), target: name(r.target), date: r.from }) : `${tm(relationLabel(r.type))} ${name(r.target)}`)).join('; ')
       : k === 'place' ? name(v as string)
       : String(v);
-    out.push([FIELD_LABEL[k], text]);
+    out.push([k === 'title' ? tx('rank', 'Title') : t(FIELD_LABEL[k]), text]);
   }
   return out;
 }
@@ -268,23 +277,23 @@ function ProposalsPanel({ world, chapter, analysis, actions, manual, onManualDon
   return (
     <section class="proposals" aria-labelledby="proposals-title">
       <div class="pane-head">
-        <h2 id="proposals-title"><Icon name="sparkles" /> Proposals</h2>
-        {open.length > 1 && <button type="button" class="ghost small" onClick={() => actions.onIgnore(open)}><Icon name="semi-closed-eye" /> Ignore all</button>}
+        <h2 id="proposals-title"><Icon name="sparkles" /> {t('Proposals')}</h2>
+        {open.length > 1 && <button type="button" class="ghost small" onClick={() => actions.onIgnore(open)}><Icon name="semi-closed-eye" /> {t('Ignore all')}</button>}
       </div>
-      <p class="muted small">Found in your story. Nothing is added until you choose.</p>
-      {open.length === 0 && <p class="proposals-empty muted">No new people, places or events found. Try “King Camel was born in 1998.”</p>}
+      <p class="muted small">{t('Found in your story. Nothing is added until you choose.')}</p>
+      {open.length === 0 && <p class="proposals-empty muted">{t('No new people, places or events found. Try “King Camel was born in 1998.”')}</p>}
       <ul class="proposal-list">
         {manual && <ProposalCard key={`${manual.p.key}:${manual.mode}`} p={manual.p} ix={ix} world={world} initial={manual.mode} onDone={onManualDone} actions={actions} />}
         {open.map((p) => <ProposalCard key={p.key} p={p} ix={ix} world={world} actions={actions} otherChapter={!here(p) ? world.story?.find((c) => c.file === p.sourceSpan.chapter)?.title : undefined} />)}
       </ul>
       {existing.length > 0 && (
         <>
-          <h3 class="proposals-sub">Already in your world</h3>
+          <h3 class="proposals-sub">{t('Already in your world')}</h3>
           <ul class="exists-list">
             {existing.map(({ entry }) => (
               <li key={entry.id} class="exists-item">
                 <button type="button" class="link exists-link" onClick={() => actions.onOpen(entry.id)}>
-                  Already exists: {entry.name} ({TYPE_SINGULAR[entry.type].toLowerCase()})
+                  {t('Already exists: {name} ({type})', { name: entry.name, type: lower(tm(TYPE_SINGULAR[entry.type])) })}
                 </button>
               </li>
             ))}
@@ -293,12 +302,12 @@ function ProposalsPanel({ world, chapter, analysis, actions, manual, onManualDon
       )}
       {analysis.ignored.length > 0 && (
         <details class="ignored-list">
-          <summary>Ignored ({analysis.ignored.length})</summary>
+          <summary>{t('Ignored ({n})', { n: analysis.ignored.length })}</summary>
           <ul>
             {analysis.ignored.map((p) => (
               <li key={p.key}>
-                <span>{p.kind === 'create' ? 'New' : 'Update'} {TYPE_SINGULAR[p.entryType].toLowerCase()} {p.name}</span>
-                <button type="button" class="ghost small" onClick={() => actions.onRestore(p.key)}>Restore</button>
+                <span>{p.kind === 'create' ? t('New {type} {name}', { type: lower(tm(TYPE_SINGULAR[p.entryType])), name: p.name }) : t('Update {type} {name}', { type: lower(tm(TYPE_SINGULAR[p.entryType])), name: p.name })}</span>
+                <button type="button" class="ghost small" onClick={() => actions.onRestore(p.key)}>{t('Restore')}</button>
               </li>
             ))}
           </ul>
@@ -323,24 +332,24 @@ function ProposalCard({ p, ix, world, actions, otherChapter, initial, onDone }: 
       <div class="proposal-head">
         <TypeBadge type={p.entryType} short />
         <span class="proposal-name">{p.name}</span>
-        <span class="proposal-kind">{onDone ? 'From your selection' : p.kind === 'create' ? `New ${TYPE_SINGULAR[p.entryType].toLowerCase()}` : 'Update'}</span>
+        <span class="proposal-kind">{onDone ? t('From your selection') : p.kind === 'create' ? t('New {type}', { type: lower(tm(TYPE_SINGULAR[p.entryType])) }) : tx('proposal', 'Update')}</span>
       </div>
-      {target && <p class="proposal-target">Changes <button type="button" class="link" onClick={() => actions.onOpen(target.id)}><EntryLabel entry={target} /></button></p>}
+      {target && <p class="proposal-target">{tj('Changes {entry}', { entry: <button type="button" class="link" onClick={() => actions.onOpen(target.id)}><EntryLabel entry={target} /></button> })}</p>}
       <dl class="proposal-fields">
         {fieldLines(p.fields, ix).map(([k, v]) => {
           const was = prev.find(([pk]) => pk === k)?.[1];
-          return <Fragment key={k}><dt>{k}</dt><dd>{was ? <><s class="muted">{was}</s> <span class="sr-only">changes to</span> {v}</> : v}</dd></Fragment>;
+          return <Fragment key={k}><dt>{k}</dt><dd>{was ? <><s class="muted">{was}</s> <span class="sr-only">{t('changes to')}</span> {v}</> : v}</dd></Fragment>;
         })}
       </dl>
-      <button type="button" class="link proposal-quote" onClick={() => actions.onJump(p.sourceSpan)} title="Show the sentence">
+      <button type="button" class="link proposal-quote" onClick={() => actions.onJump(p.sourceSpan)} title={t('Show the sentence')}>
         “{p.sourceSpan.quote}”{otherChapter && <span class="muted"> ({otherChapter})</span>}
       </button>
       {mode === 'view' && (
         <div class="proposal-actions">
-          <button type="button" class="primary small" onClick={() => actions.onAdd(p)}><Icon name="check-mark" /> {p.kind === 'create' ? 'Add' : 'Apply'}</button>
-          <button type="button" class="small" onClick={() => setMode('edit')}><Icon name="pencil" /> Edit…</button>
-          {p.kind === 'create' && <button type="button" class="small" onClick={() => setMode('merge')}><Icon name="linked-rings" /> Merge…</button>}
-          <button type="button" class="ghost small" onClick={() => actions.onIgnore([p])}><Icon name="semi-closed-eye" /> Ignore</button>
+          <button type="button" class="primary small" onClick={() => actions.onAdd(p)}><Icon name="check-mark" /> {p.kind === 'create' ? t('Add') : t('Apply')}</button>
+          <button type="button" class="small" onClick={() => setMode('edit')}><Icon name="pencil" /> {t('Edit…')}</button>
+          {p.kind === 'create' && <button type="button" class="small" onClick={() => setMode('merge')}><Icon name="linked-rings" /> {t('Merge…')}</button>}
+          <button type="button" class="ghost small" onClick={() => actions.onIgnore([p])}><Icon name="semi-closed-eye" /> {t('Ignore')}</button>
         </div>
       )}
       {mode === 'edit' && <ProposalForm p={p} onCancel={() => setMode('view')} onSave={(q) => { setMode('view'); actions.onAdd(q); }} />}
@@ -374,34 +383,34 @@ function ProposalForm({ p, onSave, onCancel }: { p: Proposal; onSave: (p: Propos
       {isCreate && (
         <div class="row">
           <label class="field">
-            <span>Type</span>
-            <Select value={type} onChange={(v) => setType(v as EntryType)} options={ENTRY_TYPES.map((t) => ({ value: t, label: TYPE_SINGULAR[t], icon: TYPE_ICON[t], tone: `t-${t}` }))} />
+            <span>{t('Type')}</span>
+            <Select value={type} onChange={(v) => setType(v as EntryType)} options={ENTRY_TYPES.map((t) => ({ value: t, label: tm(TYPE_SINGULAR[t]), icon: TYPE_ICON[t], tone: `t-${t}` }))} />
           </label>
           <label class="field">
-            <span>Name</span>
+            <span>{t('Name')}</span>
             <input value={name} onInput={(e) => setName(e.currentTarget.value)} autoFocus />
           </label>
         </div>
       )}
       <div class="row">
-        {type === 'character' && <>{text('title', 'Title')}{text('occupation', 'Occupation')}{text('gender', 'Gender')}</>}
-        {(type === 'character' || type === 'faction' || type === 'place' || type === 'item') && <>{text('born', type === 'character' ? 'Born' : 'Founded / made')}{text('died', type === 'character' ? 'Died' : 'Ended')}</>}
-        {type === 'event' && <>{text('date', 'Date')}{text('place', 'Place')}</>}
+        {type === 'character' && <>{text('title', tx('rank', 'Title'))}{text('occupation', t('Occupation'))}{text('gender', t('Gender'))}</>}
+        {(type === 'character' || type === 'faction' || type === 'place' || type === 'item') && <>{text('born', type === 'character' ? t('Born') : t('Founded / made'))}{text('died', type === 'character' ? t('Died') : t('Ended'))}</>}
+        {type === 'event' && <>{text('date', t('Date'))}{text('place', t('Place'))}</>}
       </div>
       {(f.relations ?? []).length > 0 && (
         <fieldset class="proposal-rels">
-          <legend>Relations</legend>
+          <legend>{t('Relations')}</legend>
           {(f.relations ?? []).map((r, i) => (
             <label key={i} class="check">
               <input type="checkbox" checked={keep[i]} onChange={(e) => setKeep(keep.map((k, j) => (j === i ? e.currentTarget.checked : k)))} />
-              {relationLabel(r.type)} {r.target}{r.from ? ` (from ${r.from})` : ''}
+              {r.from ? t('{relation} {target} (from {date})', { relation: tm(relationLabel(r.type)), target: r.target, date: r.from }) : `${tm(relationLabel(r.type))} ${r.target}`}
             </label>
           ))}
         </fieldset>
       )}
       <div class="row">
-        <button type="submit" class="primary small"><Icon name="check-mark" /> {isCreate ? 'Add' : 'Apply'}</button>
-        <button type="button" class="ghost small" onClick={onCancel}>Cancel</button>
+        <button type="submit" class="primary small"><Icon name="check-mark" /> {isCreate ? t('Add') : t('Apply')}</button>
+        <button type="button" class="ghost small" onClick={onCancel}>{t('Cancel')}</button>
       </div>
     </form>
   );
@@ -414,12 +423,12 @@ function MergeForm({ p, world, onMerge, onCancel }: { p: Proposal; world: World;
   return (
     <form class="proposal-form" onSubmit={(e) => { e.preventDefault(); if (id) onMerge(id); }} onKeyDown={(e) => e.key === 'Escape' && onCancel()}>
       <label class="field">
-        <span>Merge “{p.name}” into</span>
-        <Select value={id} onChange={setId} autoFocus options={choices.map((e) => ({ value: e.id, label: `${e.name} (${TYPE_SINGULAR[e.type].toLowerCase()})`, icon: entryIcon(e), tone: `t-${e.type}` }))} />
+        <span>{t('Merge “{name}” into', { name: p.name })}</span>
+        <Select value={id} onChange={setId} autoFocus options={choices.map((e) => ({ value: e.id, label: `${e.name} (${lower(tm(TYPE_SINGULAR[e.type]))})`, icon: entryIcon(e), tone: `t-${e.type}` }))} />
       </label>
       <div class="row">
-        <button type="submit" class="primary small" disabled={!id}><Icon name="linked-rings" /> Merge</button>
-        <button type="button" class="ghost small" onClick={onCancel}>Cancel</button>
+        <button type="submit" class="primary small" disabled={!id}><Icon name="linked-rings" /> {t('Merge')}</button>
+        <button type="button" class="ghost small" onClick={onCancel}>{t('Cancel')}</button>
       </div>
     </form>
   );

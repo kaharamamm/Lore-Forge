@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { memo } from 'preact/compat';
 import type { FactRef, Warning } from '@lore-forge/core';
 import { animated } from '../motion.ts';
+import { t, tj, tm } from '../i18n.tsx';
 import { BADGE, kindOf, SeverityBadge, type BadgeKind } from './severity.tsx';
 import { Icon } from './icon.tsx';
 import { EditErasLink } from './world-settings.tsx';
@@ -21,24 +22,24 @@ export function WarningItem({ w, actions, compact }: { w: Warning; actions: Warn
         <SeverityBadge kind={kindOf(w)} />
         <code class="rule-id">{w.ruleId}</code>
       </div>
-      <p class="warning-message">{w.message}</p>
+      <p class="warning-message">{tm(w.message)}</p>
       <EditErasLink message={w.message} />
-      {w.intended?.note && <p class="warning-note">Note: {w.intended.note}</p>}
+      {w.intended?.note && <p class="warning-note">{t('Note: {note}', { note: w.intended.note })}</p>}
       <div class="warning-actions">
         {!compact && (
           <button type="button" class="link" onClick={() => actions.onJump(w.offending)}>
-            Go to {w.offending.source} <span class="muted">({w.offending.chapter ? 'sentence' : w.offending.field})</span>
+            {tj('Go to {source} {where}', { source: tm(w.offending.source), where: <span class="muted">({w.offending.chapter ? t('sentence') : w.offending.field})</span> })}
           </button>
         )}
         {w.conflicting && (
           <button type="button" class="link" onClick={() => actions.onJump(w.conflicting!)}>
-            Canon: {w.conflicting.source} <span class="muted">({w.conflicting.chapter ? 'sentence' : w.conflicting.field})</span>
+            {tj('Canon: {source} {where}', { source: tm(w.conflicting.source), where: <span class="muted">({w.conflicting.chapter ? t('sentence') : w.conflicting.field})</span> })}
           </button>
         )}
         {w.intended ? (
-          <button type="button" class="ghost small" onClick={() => actions.onUnmark(w)}>Unmark intended</button>
+          <button type="button" class="ghost small" onClick={() => actions.onUnmark(w)}>{t('Unmark intended')}</button>
         ) : (
-          !marking && <button type="button" class="ghost small" onClick={() => setMarking(true)}>Mark intended…</button>
+          !marking && <button type="button" class="ghost small" onClick={() => setMarking(true)}>{t('Mark intended…')}</button>
         )}
       </div>
       {marking && (
@@ -52,12 +53,12 @@ export function WarningItem({ w, actions, compact }: { w: Warning; actions: Warn
           }}
         >
           <label>
-            Why is this intended? (saved in intended.json)
-            <input type="text" value={note} placeholder="e.g. resurrection, unreliable narrator" onInput={(e) => setNote(e.currentTarget.value)} autoFocus onKeyDown={(e) => e.key === 'Escape' && setMarking(false)} />
+            {t('Why is this intended? (saved in intended.json)')}
+            <input type="text" value={note} placeholder={t('e.g. resurrection, unreliable narrator')} onInput={(e) => setNote(e.currentTarget.value)} autoFocus onKeyDown={(e) => e.key === 'Escape' && setMarking(false)} />
           </label>
           <div class="row">
-            <button type="submit" class="primary small">Mark intended</button>
-            <button type="button" class="ghost small" onClick={() => setMarking(false)}>Cancel</button>
+            <button type="submit" class="primary small">{t('Mark intended')}</button>
+            <button type="button" class="ghost small" onClick={() => setMarking(false)}>{t('Cancel')}</button>
           </div>
         </form>
       )}
@@ -85,16 +86,16 @@ export const WarningsPanel = memo(function WarningsPanel({ warnings, selectedId,
   return (
     <aside class="warnings-panel" aria-labelledby="warnings-title">
       <div class="panel-head">
-        <h2 id="warnings-title" tabIndex={-1}>Warnings</h2>
+        <h2 id="warnings-title" tabIndex={-1}>{t('Warnings')}</h2>
         <p class="summary" aria-live="polite">
-          {count('error')} errors · {count('warning')} warnings · {warnings.filter((w) => w.intended).length} intended
+          {t('{errors} errors · {warnings} warnings · {intended} intended', { errors: count('error'), warnings: count('warning'), intended: warnings.filter((w) => w.intended).length })}
         </p>
-        <div class="segmented" role="group" aria-label="Show warnings for">
-          <button type="button" aria-pressed={scope === 'all'} onClick={() => setScope('all')}>All</button>
-          <button type="button" aria-pressed={scope === 'entry'} disabled={!selectedId} onClick={() => setScope('entry')}>This entry</button>
+        <div class="segmented" role="group" aria-label={t('Show warnings for')}>
+          <button type="button" aria-pressed={scope === 'all'} onClick={() => setScope('all')}>{t('All')}</button>
+          <button type="button" aria-pressed={scope === 'entry'} disabled={!selectedId} onClick={() => setScope('entry')}>{t('This entry')}</button>
         </div>
       </div>
-      {active.length === 0 && <p class="ok-line"><span aria-hidden="true">✓ </span>No open warnings{scope === 'entry' ? ' for this entry' : ''}.</p>}
+      {active.length === 0 && <p class="ok-line"><span aria-hidden="true">✓ </span>{scope === 'entry' ? t('No open warnings for this entry.') : t('No open warnings.')}</p>}
       {SECTIONS.map(([kind, label]) => {
         const list = shown.filter((w) => kindOf(w) === kind);
         if (!list.length) return null;
@@ -103,7 +104,7 @@ export const WarningsPanel = memo(function WarningsPanel({ warnings, selectedId,
           <section key={kind} class={`warning-section is-${kind}${open ? ' is-open' : ''}`} data-kind={kind}>
             <h3>
               <button type="button" class="section-toggle" aria-expanded={open} onClick={() => toggle(kind)}>
-                <Icon name="play-button" class="chevron" /> <Icon name={BADGE[kind].icon} /> {label} <span class="section-count">({list.length})</span>
+                <Icon name="play-button" class="chevron" /> <Icon name={BADGE[kind].icon} /> {t(label)} <span class="section-count">({list.length})</span>
               </button>
             </h3>
             {open && (

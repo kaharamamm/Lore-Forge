@@ -251,6 +251,76 @@ test('names: none for contractions, questions, commands, numbers or plurals at t
   assert.deepEqual(proposals('Hadiya waited for Will. Will came at dusk.').map((p) => p.name), ['Hadiya', 'Will'], 'a name in the middle of a sentence still counts');
 });
 
+/** The new entries a story proposes, as { name: type }. */
+const kinds = (story: string) => Object.fromEntries(proposals(story).filter((p) => p.kind === 'create').map((p) => [p.name, p.entryType]));
+
+test('names: the last word of a name says what it is', () => {
+  assert.deepEqual(kinds('The smoke drifted over Hollin Wood.'), { 'Hollin Wood': 'place' });
+  assert.deepEqual(kinds('Coombe Farm lay quiet.'), { 'Coombe Farm': 'place' });
+  assert.deepEqual(kinds('They fished in the Mirror Tarn.'), { 'Mirror Tarn': 'place' }, 'a tarn, not a mirror');
+  assert.deepEqual(kinds('The Seven Founders built the town.'), { 'The Seven Founders': 'faction' });
+  assert.deepEqual(kinds('Wren carried the Copper Paddle.'), { Wren: 'character', 'The Copper Paddle': 'item' });
+  assert.deepEqual(kinds('Crown Prince Arek laughed.'), { 'Crown Prince Arek': 'character' }, 'a prince, not a crown');
+  assert.deepEqual(kinds('The Great Rockfall buried the road.'), { 'The Great Rockfall': 'event' });
+  assert.deepEqual(kinds('The Hero Trials of 527 began at noon.'), { 'The Hero Trials': 'event' });
+  // A surname that is also a place or thing word stays a person without "the" or a place word before it.
+  assert.deepEqual(kinds('Edmund Hall rode north.'), { 'Edmund Hall': 'character' });
+  assert.deepEqual(kinds('Ayla Reyes met Ayla Stone.'), { 'Ayla Reyes': 'character', 'Ayla Stone': 'character' });
+  assert.deepEqual(kinds('They feasted in the Great Hall.'), { 'Great Hall': 'place' });
+  assert.deepEqual(kinds("Zahra wore Hadiya's Bell."), { Zahra: 'character', "Hadiya's Bell": 'item' }, 'named by its owner, without "The"');
+  // A group's name is never a person: Lady Mira is the one born here.
+  const mira = proposals('Lady Mira of House Tarn was born in 1180.');
+  assert.deepEqual(Object.fromEntries(mira.map((p) => [p.name, p.entryType])), { 'House Tarn': 'faction', Mira: 'character' });
+  assert.equal(mira.find((p) => p.name === 'Mira')?.fields.born, '1180');
+});
+
+test('names: "the" names after place words are places, not people or nothing', () => {
+  assert.deepEqual(kinds('The caravan crossed the Red Erg.'), { 'Red Erg': 'place' });
+  assert.deepEqual(kinds('The sun set behind The Snowcrown.'), { Snowcrown: 'place' });
+  assert.deepEqual(kinds('They rode from the Broken Tooth.'), { 'Broken Tooth': 'place' });
+  assert.deepEqual(kinds('Wren swam into the Millpond.'), { Wren: 'character', Millpond: 'place' });
+  assert.deepEqual(kinds('In the Red Erg, the caravan rested.'), { 'Red Erg': 'place' }, 'a sentence opening "In the ..."');
+  assert.deepEqual(kinds('They rode out of Highgate at dawn.'), { Highgate: 'place' });
+  assert.deepEqual(kinds('The wolves of the Greywood howled.'), { Greywood: 'place' });
+  assert.deepEqual(kinds('He drew water from the shaft of the Moon Well.'), { 'Moon Well': 'place' }, '"Well" is a stop word, but not inside a name');
+  assert.deepEqual(kinds('They gathered in the Hall of Heroes.'), { 'The Hall of Heroes': 'place' });
+  assert.deepEqual(kinds('Lanterns hung in The Square of Bells.'), { 'The Square of Bells': 'place' });
+  assert.deepEqual(kinds('They met in the Night Market.'), { 'Night Market': 'place' });
+  assert.deepEqual(kinds('Everyone remembered the Ringing of the Bell.'), { 'The Ringing of the Bell': 'event' });
+  assert.deepEqual(kinds('Rhys carried the Sunblade, a sword forged in Edda.'), { Rhys: 'character', 'The Sunblade': 'item', Edda: 'place' });
+  // ... but people and titles stay people
+  assert.deepEqual(kinds('She looked back at Yusuf.'), { Yusuf: 'character' }, 'looked at a person');
+  assert.deepEqual(kinds('Glen asked for water.'), { Glen: 'character' });
+  assert.deepEqual(kinds('Mira turned toward the Steward.'), { Mira: 'character' }, 'a title, not a place');
+  assert.deepEqual(kinds('Above the Hall rose a tower.'), {}, '"the Hall" alone is too vague');
+});
+
+test('names: no proposals for signs, commands, plain plurals or owners', () => {
+  for (const t of ['"Hang it on the bell," she said.', 'The sign said I RING FOR THE HERO.', 'Children were hanging lanterns.', 'Carpenters were building a wall.', 'Flower of the market!', "It has been in the Heralds' vault ever since."]) {
+    assert.deepEqual(kinds(t), {}, t);
+  }
+  assert.deepEqual(kinds('"Ring the Hero\'s Bell?" she asked.'), { "The Hero's Bell": 'item' }, 'the command is not part of the name');
+  assert.deepEqual(kinds("'Engines are ready,' said Teo."), { Teo: 'character' });
+});
+
+test('names: a first name alone is the one new person whose full name starts with it', () => {
+  assert.deepEqual(kinds('Rhys Varn rode north. Rhys was tired.'), { 'Rhys Varn': 'character' });
+  assert.deepEqual(kinds('Ayla Reyes met Ayla Stone. Ayla smiled.'), { 'Ayla Reyes': 'character', 'Ayla Stone': 'character', Ayla: 'character' }, 'two Aylas: unclear, so kept apart');
+});
+
+test('the extraction of an unchanged chapter is reused; new names or new text read it again', () => {
+  const story = 'Leyla rode to Qarim. Tobias waited.';
+  const w = world([], { story });
+  const first = ruleExtractor.extract({ world: w, chapters: w.story! });
+  const again = ruleExtractor.extract({ world: { ...w, entries: [...w.entries] }, chapters: w.story! });
+  assert.equal(again.proposals[0], first.proposals[0], 'same chapter and names: the same result objects');
+  assert.equal(kinds(story)['Qarim'], 'place', 'Qarim is new without an entry');
+  const known = world([qarim], { story });
+  assert.equal(analyzeStory(known).proposals.some((p) => p.name === 'Qarim'), false, 'with a Qarim entry the chapter is read again and Qarim is known');
+  const edited = { ...w, story: [{ ...w.story![0]!, body: 'Leyla rode to Saltmere.' }] };
+  assert.deepEqual(analyzeStory(edited).proposals.map((p) => p.name).sort(), ['Leyla', 'Saltmere']);
+});
+
 // ---------------------------------------------------------------------------------------- matching
 
 test('existing entries match by name or alias, case-insensitive: a match without news is a link, not a proposal', () => {

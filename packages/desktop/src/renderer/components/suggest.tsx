@@ -1,6 +1,7 @@
 import type { ComponentChildren, RefObject } from 'preact';
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import { foldSearch, type IconName } from '@lore-forge/core';
+import { t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 import { Popover } from './popover.tsx';
 
@@ -18,6 +19,7 @@ export interface Suggestion {
 
 /** At most this many rows are drawn; typing narrows a longer list. */
 const MAX_ROWS = 120;
+const NO_ROWS: Suggestion[] = [];
 
 /** The suggestions matching `query`: label starts first, then anything containing it (label, value or detail). */
 export function filterSuggestions(all: readonly Suggestion[], query: string): Suggestion[] {
@@ -51,7 +53,8 @@ function marked(label: string, query: string): ComponentChildren {
 export function SuggestInput({ id, value, suggestions, onInput, onPick, onKeyDown, onBlur, anchor, placeholder, invalid, describedBy, class: cls, chevron = true, icon }: {
   id?: string;
   value: string;
-  suggestions: readonly Suggestion[];
+  /** The list, or a function that makes it: then it is only built when the list opens (an entry field lists every entry). */
+  suggestions: readonly Suggestion[] | (() => readonly Suggestion[]);
   onInput: (text: string, e: InputEvent) => void;
   onPick: (s: Suggestion) => void;
   /** Runs for keys the list does not use (Enter with nothing highlighted, Backspace, ...). */
@@ -73,7 +76,9 @@ export function SuggestInput({ id, value, suggestions, onInput, onPick, onKeyDow
   // What the list is filtered by: the text typed since it opened, or null to show everything.
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(-1);
-  const rows = filterSuggestions(suggestions, query ?? '');
+  const all = (): readonly Suggestion[] => (typeof suggestions === 'function' ? suggestions() : suggestions);
+  // Filtered only while the list is open: closed, a keystroke in the box costs nothing here.
+  const rows = open ? filterSuggestions(all(), query ?? '') : NO_ROWS;
   const shown = open && rows.length > 0;
   useEffect(() => { if (shown && active >= 0) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: 'nearest' }); }, [shown, active]);
 
@@ -83,7 +88,7 @@ export function SuggestInput({ id, value, suggestions, onInput, onPick, onKeyDow
   const keys = (e: KeyboardEvent) => {
     const k = e.key;
     if (!shown) {
-      if (k === 'ArrowDown' && suggestions.length) { e.preventDefault(); showAll(0); return; }
+      if (k === 'ArrowDown' && all().length) { e.preventDefault(); showAll(0); return; }
       onKeyDown?.(e);
       return;
     }
@@ -105,15 +110,15 @@ export function SuggestInput({ id, value, suggestions, onInput, onPick, onKeyDow
         onClick={() => (open ? close() : showAll())}
         onKeyDown={keys}
         onBlur={() => { close(); onBlur?.(); }} />
-      {chevron && suggestions.length > 0 && (
-        <button type="button" class={`suggest-toggle${shown ? ' is-open' : ''}`} tabIndex={-1} aria-label="Show suggestions" title="Show suggestions"
+      {chevron && (typeof suggestions === 'function' || suggestions.length > 0) && (
+        <button type="button" class={`suggest-toggle${shown ? ' is-open' : ''}`} tabIndex={-1} aria-label={t('Show suggestions')} title={t('Show suggestions')}
           onPointerDown={(e) => e.preventDefault()} onClick={() => { if (shown) close(); else showAll(); input.current?.focus(); }}>
           <span class="select-chevron" aria-hidden="true" />
         </button>
       )}
       {shown && (
         <Popover anchor={anchor} class="select-popover suggest-popover" matchWidth onPointerDown={(e) => e.preventDefault()} onClose={close}>
-          <ul id={listId} role="listbox" class="select-list" aria-label="Suggestions">
+          <ul id={listId} role="listbox" class="select-list" aria-label={t('Suggestions')}>
             {rows.map((s, i) => (
               <li key={s.value} id={`${listId}-${i}`} role="option" aria-selected={i === active}
                 class={`select-option suggest-option${i === active ? ' is-active' : ''}${s.value === value ? ' is-current' : ''}${s.tone ? ` ${s.tone}` : ''}`}

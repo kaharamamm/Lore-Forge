@@ -1,4 +1,5 @@
 import type { IconName, Warning } from '@lore-forge/core';
+import { t } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
 
 export const BADGE = {
@@ -19,9 +20,16 @@ export function SeverityBadge({ kind }: { kind: BadgeKind }) {
   const b = BADGE[kind];
   return (
     <span class={`badge badge-${kind}`}>
-      <Icon name={b.icon} /> {b.label}
+      <Icon name={b.icon} /> {t(b.label)}
     </span>
   );
+}
+
+/** "2 errors", "1 warning", "3 infos": a count badge's name. */
+function countLabel(kind: 'error' | 'warning' | 'info', n: number): string {
+  if (kind === 'error') return n > 1 ? t('{n} errors', { n }) : t('{n} error', { n });
+  if (kind === 'warning') return n > 1 ? t('{n} warnings', { n }) : t('{n} warning', { n });
+  return n > 1 ? t('{n} infos', { n }) : t('{n} info', { n });
 }
 
 /** Compact count, e.g. an error icon and "2", for lists. */
@@ -30,7 +38,7 @@ export function CountBadge({ warnings }: { warnings: Warning[] }) {
   if (active.length === 0) return null;
   const kind = active.some((w) => w.severity === 'error') ? 'error' : active.some((w) => w.severity === 'warning') ? 'warning' : 'info';
   return (
-    <span class={`count count-${kind}`} aria-label={`${active.length} ${BADGE[kind].label.toLowerCase()}${active.length > 1 ? 's' : ''}`}>
+    <span class={`count count-${kind}`} aria-label={countLabel(kind, active.length)}>
       <span aria-hidden="true"><Icon name={BADGE[kind].icon} /> {active.length}</span>
     </span>
   );

@@ -17,6 +17,10 @@ const TOUCH_MS = 3000;
 export function ownWrite(full: string, content: string): void {
   ownText.set(key(full), content);
 }
+/** Whether `text` is what the app itself last wrote to this file (and nobody else wrote since). */
+export function isOwnText(full: string, text: string): boolean {
+  return ownText.get(key(full)) === text;
+}
 /** Call just before the app copies, moves or deletes a file (or folder). */
 export function ownTouch(full: string): void {
   touched.set(key(full), Date.now());
@@ -83,7 +87,10 @@ export class FolderWatch {
   }
 }
 
-/** The open world: any file in it except 3D models (loaded on demand). */
-export const worldFiles = (rel: string): boolean => !rel.startsWith('models/');
+/**
+ * The open world: any file in it except 3D models (loaded on demand). Folders are left out: the app makes
+ * `story/` and `images/<id>/` itself when it writes the first file there, and the files inside report themselves.
+ */
+export const worldFiles = (rel: string): boolean => !rel.startsWith('models/') && /\.[^/.]+$/.test(rel);
 /** The worlds folder: a book folder appearing or going, or a book's world.json (its name or cover) changing. */
 export const libraryFiles = (rel: string): boolean => /^[^/]+(\/world\.json)?$/.test(rel);
