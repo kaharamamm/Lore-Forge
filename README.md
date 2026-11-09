@@ -57,9 +57,9 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 ## Why Lore-Forge
 
 - **Canon you can trust.** Consistency rules run while you type: a character acting after their death, a parent born after their child, a city visited before it was founded. Each warning points at the exact field and the fact it breaks; **Go to** jumps there, **Mark intended** keeps a contradiction on purpose.
-- **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. Nothing leaves your machine unless you connect an AI app or picture service yourself.
-- **Works with your AI.** Ask Claude, Codex, Cursor or another MCP app for a story and it writes the whole book in Lore-Forge: entries, relationships, chapters and pictures, checked for contradictions.
-- **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, art briefs and reference images for artists and 3D tools. An entry can change its look over time (after a war, in old age), each look with its own pictures and 3D models.
+- **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. **Share…** packs a whole book into one file to send to a friend. Nothing you write leaves your machine unless you connect an AI app or picture service yourself.
+- **Works with your AI.** Ask Claude, Codex, Cursor or another MCP app for a story and it writes the whole book in Lore-Forge: entries, relationships, chapters and pictures, checked for contradictions. Or ask from inside a book: the **Ask AI** tab runs Claude Code or Codex on your own plan and shows each change as it happens.
+- **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, maps with your places pinned on them, art briefs and reference images for artists and 3D tools. An entry can change its look over time (after a war, in old age), each look with its own pictures and 3D models.
 - **From notes to a book.** Write the story chapter by chapter; Lore-Forge proposes entries from your prose and exports a typeset Story Book (PDF, Word or Markdown), with A4 among the trim sizes and Word matching the PDF including the cover.
 
 ## Features

@@ -137,6 +137,20 @@
     "dissolved": { "$ref": "#/$defs/date" },
     "created": { "$ref": "#/$defs/date" },
     "partOf": { "$ref": "#/$defs/ref" },
+    "pins": {
+      "type": "array",
+      "description": "Place: where it is on the world's maps (world.json maps), in percent of the map's picture from its left and top edges.",
+      "items": {
+        "type": "object",
+        "required": ["map", "x", "y"],
+        "properties": {
+          "map": { "type": "string", "minLength": 1, "description": "The map's id." },
+          "x": { "type": "number", "minimum": 0, "maximum": 100 },
+          "y": { "type": "number", "minimum": 0, "maximum": 100 }
+        },
+        "additionalProperties": false
+      }
+    },
     "date": { "$ref": "#/$defs/date" },
     "end": { "$ref": "#/$defs/date" },
     "place": { "$ref": "#/$defs/ref" },

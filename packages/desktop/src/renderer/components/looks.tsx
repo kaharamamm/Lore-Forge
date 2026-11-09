@@ -116,7 +116,7 @@ export function LooksPanel({ dir, world, entry, onChange }: { dir: string; world
           </div>
         </div>
       )}
-      <EntryMedia dir={dir} entry={entry} look={look} onChange={(images) => { const { images: _old, ...rest } = entry; onChange((images ? { ...rest, images } : rest) as Entry); }} />
+      <EntryMedia dir={dir} world={world} entry={entry} look={look} onChange={(images) => { const { images: _old, ...rest } = entry; onChange((images ? { ...rest, images } : rest) as Entry); }} />
       {doomed && (
         <ConfirmDialog title={t('Delete the look “{name}”?', { name: doomed.name.trim() || doomed.id })} confirmLabel={t('Delete look')} onClose={() => setDoomed(null)}
           onConfirm={async () => { remove(doomed); setDoomed(null); }}>

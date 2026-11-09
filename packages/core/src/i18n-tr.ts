@@ -772,4 +772,19 @@ const LOOKS: Record<string, string> = {
   'Art brief: {0} ({1})': 'Sanatçı özeti: {0} ({1})',
 };
 
-export const CORE_TR: Readonly<Record<string, string>> = Object.freeze({ ...VERBS, ...DATES, ...WORDS, ...WARNINGS, ...FILES, ...RULES, ...LABELS, ...DOCUMENTS, ...LOOKS });
+const MAPS: Record<string, string> = {
+  // Maps (world.json "maps", a place's "pins", rules/maps.ts). A pin is "işaret": a place is "işaretli" on a map.
+  'Pin on a map that does not exist': 'Olmayan bir haritada işaret',
+  'A place is pinned on a map that the book does not have, or a map is set to show a place that does not exist.':
+    'Bir yer, kitapta olmayan bir haritada işaretli; ya da bir harita, var olmayan bir yeri gösterecek şekilde ayarlanmış.',
+  '{0} is pinned on the map "{1}", which this book does not have (source: {2}).': '{0}, “{1}” haritasında işaretli, ama bu kitapta böyle bir harita yok (kaynak: {2}).',
+  'The map "{0}" is set to show {1}, which is not a place (source: {2}).': '“{0}” haritası {1} kaydını gösterecek şekilde ayarlanmış, ama bu kayıt bir yer değil (kaynak: {2}).',
+  'The map "{0}" is set to show "{1}", but no entry has that id or name (source: {2}).': '“{0}” haritası “{1}” kaydını gösterecek şekilde ayarlanmış, ama bu kimlikte ya da adda bir kayıt yok (kaynak: {2}).',
+  '"{0}" should be from 0 to 100 (percent of the map).': '“{0}” 0 ile 100 arasında olmalı (haritanın yüzdesi).',
+  '"maps" should be a list of maps, each with an id, a name and a picture. The maps were left out.':
+    '“maps” bir harita listesi olmalı; her haritanın bir kimliği, adı ve resmi olmalı. Haritalar dışarıda bırakıldı.',
+  'Map {0} in "maps" needs a text "id", "name" and "image". It was left out.': '“maps” içindeki {0}. haritanın metin olarak “id”, “name” ve “image” alanları olmalı. Bu harita dışarıda bırakıldı.',
+  'Map {0} in "maps" has the id of an earlier map ("{1}"). It was left out.': '“maps” içindeki {0}. harita, önceki bir haritanın kimliğini taşıyor (“{1}”). Bu harita dışarıda bırakıldı.',
+};
+
+export const CORE_TR: Readonly<Record<string, string>> = Object.freeze({ ...VERBS, ...DATES, ...WORDS, ...WARNINGS, ...FILES, ...RULES, ...LABELS, ...DOCUMENTS, ...LOOKS, ...MAPS });

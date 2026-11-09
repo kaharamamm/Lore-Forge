@@ -47,9 +47,13 @@ my-world/
   images/<entryId>/<view>.<ext>   reference images (any entry type); a look's in images/<entryId>/<lookId>/
   models/<entryId>/<name>.<ext>   3D models: .glb, embedded .gltf, .obj, .fbx (optional, 1.0; not listed in the entry);
                                   a look's in models/<entryId>/<lookId>/
+  maps/<mapId>.<ext>              map pictures, listed in world.json "maps" (optional)
   story/NN-slug.md    the manuscript, one file per chapter (optional, 0.4)
   story-ignored.json  story proposals the author ignored (optional, 0.4)
 ```
+
+A shared book file (`.loreforge`) is a zip of this folder under one top folder named after the book, without
+`exports/`, hidden files and temporary files. Opening one copies it into the worlds folder with a new `id`.
 
 An entry file has YAML front matter followed by a Markdown body:
 
@@ -82,7 +86,8 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   preferred.
 - Type-specific fields:
   - character: `born`, `died`, `status`, `locations`
-  - place: `founded`, `destroyed`, `partOf`
+  - place: `founded`, `destroyed`, `partOf`, `pins` (list of `{map, x, y}`: where it is on the world's maps, in
+    percent of the map's picture from its left and top edges)
   - faction: `founded`, `dissolved`
   - item: `created`, `destroyed`
   - event: `date`, `end`, `place`, `participants[{id, role}]`, `actions[{actor, verb, target}]`
@@ -136,7 +141,9 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   colours are `#rrggbb` or `#rrggbbaa`, `image` is a world-relative path or `"none"`, `icon` a game-icons name or
   `"none"`, `titleStyle` is `display`, `serif` or `sans`) for the book cover on the shelf, Home and the PDFs.
   `"artStyle"` (optional string) describes the look of the world's pictures; the MCP server adds it to every
-  picture prompt. Image tools of your own can use it the same way.
+  picture prompt. Image tools of your own can use it the same way. `"maps"` (optional) lists the world's maps as
+  `{id, name, image, place?}`: `image` is the picture (in `maps/`), `place` the place a map shows (see
+  [Maps](FORMAT.md#maps)).
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so
   diffs stay small.
 
@@ -336,7 +343,8 @@ Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral 
   `relation-kind` rule, snapshot `references`), 0.3.1 (dotted and day-month dates, character `race`) and
   0.4 (`story/`, `story-ignored.json`, snapshot `story`, fact `chapter`/`span`, the `story-contradiction`
   rule, detail fields, `picture`, several races, manifest `cover` and the new `book` keys) and 1.0 (`models/`, manifest
-  `artStyle`), so worlds stay at version 1. Older files load unchanged and are never migrated.
+  `artStyle`), and so is what came after it (entry `looks`, manifest `maps`, place `pins`, the `look-*` and `map-pin`
+  rules), so worlds stay at version 1. Older files load unchanged and are never migrated.
   Consumers should ignore fields they don't know.
 - **Breaking changes** bump the version: removing or renaming fields, or changing the meaning of a field or
   of the date syntax. Lore-Forge will migrate older worlds when it opens them. Consumers should check

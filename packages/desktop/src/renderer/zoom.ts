@@ -26,15 +26,15 @@ export interface PanZoom {
 }
 
 /**
- * d3-zoom on an element: drag to pan, Ctrl (⌘)+scroll or pinch to zoom; a plain wheel still scrolls the page.
- * `xOnly` keeps panning horizontal (the timeline scrolls its lanes natively). Clicks on things marked
- * with `ignore` never start a pan.
+ * d3-zoom on an element: drag to pan, Ctrl (⌘)+scroll or pinch to zoom; a plain wheel still scrolls the page, unless
+ * `anyWheel` (a map, which has nothing to scroll) lets it zoom too. `xOnly` keeps panning horizontal (the timeline
+ * scrolls its lanes natively). Clicks on things marked with `ignore` never start a pan.
  *
  * With `live`, a gesture does not re-render on every event: `live(next, shown)` may draw a frame itself (say, a
  * CSS offset for a pure pan) and return true; otherwise the state follows at most once per animation frame. The
  * state always catches up when the gesture ends (mouse up, the wheel at rest, any button or programmatic move).
  */
-export function usePanZoom<E extends Element>(ref: { current: E | null }, opts: { min: number; max: number; xOnly?: boolean; ignore?: string; clamp?: (t: ZoomTransform) => ZoomTransform; live?: (next: ZoomTransform, shown: ZoomTransform) => boolean }): PanZoom {
+export function usePanZoom<E extends Element>(ref: { current: E | null }, opts: { min: number; max: number; xOnly?: boolean; anyWheel?: boolean; ignore?: string; clamp?: (t: ZoomTransform) => ZoomTransform; live?: (next: ZoomTransform, shown: ZoomTransform) => boolean }): PanZoom {
   // The latest clamp, read by d3 on every drag, wheel and programmatic move.
   const clamp = useRef(opts.clamp);
   clamp.current = opts.clamp;
@@ -64,7 +64,8 @@ export function usePanZoom<E extends Element>(ref: { current: E | null }, opts: 
     if (!el) return;
     const behavior = zoom<E, unknown>()
       .scaleExtent([opts.min, opts.max])
-      .filter((ev: MouseEvent & WheelEvent) => (ev.type === 'wheel' ? ev.ctrlKey || ev.metaKey : !ev.button) && !(opts.ignore && (ev.target as Element).closest?.(opts.ignore)))
+      // With anyWheel, the wheel zooms over the things in `ignore` too (a pin on a map); they only keep a drag from panning.
+      .filter((ev: MouseEvent & WheelEvent) => (ev.type === 'wheel' ? opts.anyWheel || ev.ctrlKey || ev.metaKey : !ev.button) && !(opts.ignore && !(opts.anyWheel && ev.type === 'wheel') && (ev.target as Element).closest?.(opts.ignore)))
       .wheelDelta((ev: WheelEvent) => -ev.deltaY * (ev.deltaMode === 1 ? 0.05 : ev.deltaMode ? 1 : 0.002))
       .on('zoom', (ev: { transform: ZoomTransform }) => onZoom(ev.transform))
       .on('end', (ev: { transform: ZoomTransform }) => { if (live.current) setT(ev.transform); });

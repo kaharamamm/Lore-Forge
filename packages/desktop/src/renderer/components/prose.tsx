@@ -6,6 +6,7 @@ import { lower, t, tj, tm } from '../i18n.tsx';
 import { EntryLabel, TypeBadge } from './type.tsx';
 import { Portrait } from './cover.tsx';
 import { Icon } from './icon.tsx';
+import { markOwnMenu } from '../spelling.ts';
 
 const IS_MAC = navigator.platform.toLowerCase().includes('mac');
 const MOD = IS_MAC ? '⌘' : 'Ctrl';
@@ -256,7 +257,10 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
         const more = /^[ \t]+(?:of[ \t]+(?:the[ \t]+)?)?\p{Lu}[\p{L}\p{M}'’-]*/u;
         for (let m = more.exec(value.slice(end)); m; m = more.exec(value.slice(end))) end += m[0].length;
       }
-      if (end > start) el.setSelectionRange(start, end);
+      // Selected a moment later: the browser first reads the word under the pointer for its spelling (main/spelling.ts).
+      // A misspelled word it selected itself stays selected.
+      const [from, to] = [start, end];
+      if (to > from) setTimeout(() => { if (document.activeElement === el && el.selectionStart === el.selectionEnd) el.setSelectionRange(from, to); }, 0);
     }
     const raw = value.slice(start, end);
     const lead = raw.length - raw.trimStart().length;
@@ -322,7 +326,7 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
         onInput={(e) => { onPick?.(null); onInput(e.currentTarget.value); }} onMouseMove={onMove} onMouseDown={onDown} onKeyDown={onKey}
         onMouseUp={onPick ? (e) => { if (e.button === 0) setTimeout(() => pick('select', { x: e.clientX, y: e.clientY + 14 }), 0); } : undefined}
         onKeyUp={onPick ? (e) => { if (e.shiftKey && /^(Arrow|Home|End|Page)/.test(e.key)) pick('select'); else if (/^(Arrow|Home|End|Page)/.test(e.key)) onPick(null); } : undefined}
-        onContextMenu={onPick ? (e) => { if (pick('menu', { x: e.clientX, y: e.clientY })) e.preventDefault(); } : undefined}
+        onContextMenu={onPick ? (e) => { if (pick('menu', { x: e.clientX, y: e.clientY })) markOwnMenu(); } : undefined}
         onScroll={(e) => { onPick?.(null); if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop; }} />
       {popup && (
         <div ref={card} class={`mention-card${popup.pick ? ' is-picker' : ''}`} role={popup.pick ? 'dialog' : 'tooltip'} aria-label={popup.pick && popup.mention ? t('Which “{name}”?', { name: popup.mention.text }) : undefined}>

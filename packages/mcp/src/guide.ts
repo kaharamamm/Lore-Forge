@@ -76,6 +76,9 @@ When an entry's appearance changes for good or for a while (a war wound, a coron
 save_entries matches looks one by one, by id or else by name: give only the looks and the fields that change; looks you leave out stay. {id, remove: true} removes a look, and its pictures and 3D models go back to the Default look.
 look_at tells how entries look on a date (without entry: everyone who is not in their Default look then). create_image and add_image take look to make or attach a picture of the entry in that look; it is kept with that look.
 
+## Maps
+A book can have maps: pictures of the world (or of one city or region) with places pinned on them. save_map adds one from a picture: a file, a web address, a data: URL, or a picture the book already has (create_image can draw one: a place with view "map"). Give place for a map of one place; its pin on the other maps then opens it. get_map shows you the picture with the pins and the places not on it yet. A place's pins are [{map, x, y}], x and y in percent of the picture from its left and top edges: look at the map first and put each place where the picture shows it (a city on the coast on the coast). save_entries matches pins by map, so pins on other maps stay; {map, remove: true} takes a place off a map.
+
 ## What check_book checks
 ${rules}
 - story-contradiction (warning): a sentence in the story disagrees with an entry (a date, place, status or title).

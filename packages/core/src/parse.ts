@@ -2,7 +2,8 @@ import { Document, isMap, isScalar, isSeq, parseDocument, visit, type Node as Ya
 import {
   ENTRY_TYPES, RULE_SETTINGS, SCHEMA_VERSION, TYPE_FOLDERS,
   type Action, type Entry, type EntryType, type IntendedMark, type LoadIssue, type LocationSpan,
-  type FactionStatus, type ItemStatus, type Look, type Participant, type Picture, type PlaceStatus, type Provenance, type RefImage, type Relation, type StoryChapter, type StoryIgnore, type World, type WorldManifest,
+  type FactionStatus, type ItemStatus, type Look, type MapPin, type Participant, type Picture, type PlaceStatus, type Provenance, type RefImage, type Relation, type StoryChapter, type StoryIgnore, type World, type WorldManifest,
+  type WorldMap,
 } from './types.ts';
 import { isMonth } from './dates.ts';
 import { DETAIL_FIELDS } from './details.ts';
@@ -92,7 +93,7 @@ function clean<T extends object>(o: T): T {
 
 const KNOWN_KEYS: Record<EntryType, string[]> = {
   character: ['race', 'born', 'died', 'status', 'locations'],
-  place: ['status', 'founded', 'destroyed', 'partOf'],
+  place: ['status', 'founded', 'destroyed', 'partOf', 'pins'],
   faction: ['status', 'founded', 'dissolved'],
   item: ['status', 'created', 'destroyed'],
   event: ['date', 'end', 'place', 'participants', 'actions'],
@@ -250,9 +251,24 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
       });
       break;
     }
-    case 'place':
-      entry = clean({ ...base, type: t, status: status as PlaceStatus | undefined, founded: r.str(o, 'founded'), destroyed: r.str(o, 'destroyed'), partOf: r.str(o, 'partOf') });
+    case 'place': {
+      // A pin needs its map and both numbers; a number past the edge is moved onto it.
+      const pin = (x: Obj, w: string): MapPin | undefined => {
+        const map = r.need(x, 'map', w)?.trim();
+        const at = (k: 'x' | 'y'): number | undefined => {
+          if (x[k] === undefined || x[k] === null) return void r.problems.push(msg`"${verbatim(w)}" needs "${verbatim(k)}".`);
+          const v = r.num(x, k);
+          if (v === undefined) return undefined;
+          if (v < 0 || v > 100) r.problems.push(msg`"${verbatim(`${w}.${k}`)}" should be from 0 to 100 (percent of the map).`);
+          return Math.min(100, Math.max(0, v));
+        };
+        const px = at('x');
+        const py = at('y');
+        return map && px !== undefined && py !== undefined ? { map, x: px, y: py } : undefined;
+      };
+      entry = clean({ ...base, type: t, status: status as PlaceStatus | undefined, founded: r.str(o, 'founded'), destroyed: r.str(o, 'destroyed'), partOf: r.str(o, 'partOf'), pins: r.list(o, 'pins', pin) });
       break;
+    }
     case 'faction':
       entry = clean({ ...base, type: t, status: status as FactionStatus | undefined, founded: r.str(o, 'founded'), dissolved: r.str(o, 'dissolved') });
       break;
@@ -277,7 +293,7 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
 
 /** Front-matter key order used when writing files, so diffs stay small. */
 const DETAIL_KEYS = [...new Set(Object.values(DETAIL_FIELDS).flatMap((fs) => fs.map((f) => f.key)))];
-const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'race', ...DETAIL_KEYS, 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'visual', 'looks', 'picture', 'images', 'chapter', 'bookOrder'];
+const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'race', ...DETAIL_KEYS, 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'pins', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'visual', 'looks', 'picture', 'images', 'chapter', 'bookOrder'];
 
 export function serializeEntry(entry: Entry): string {
   const { body, extra, details, ...fields } = entry;
@@ -359,7 +375,38 @@ export function parseManifest(content: string): { manifest?: WorldManifest; prob
       if (!(RULE_SETTINGS as readonly unknown[]).includes(v)) issues.push(msg`"rules": "${verbatim(id)}" is ${verbatim(String(JSON.stringify(v)))}; use "error", "warning", "info" or "off". The rule keeps its default.`);
     }
   }
-  return { manifest: { ...o, calendar } as unknown as WorldManifest, problems, issues };
+  const manifest: Obj = { ...o, calendar };
+  const maps = parseMaps(o['maps'], issues);
+  if (maps) manifest['maps'] = maps;
+  else delete manifest['maps'];
+  return { manifest: manifest as unknown as WorldManifest, problems, issues };
+}
+
+/**
+ * world.json `maps`: each map needs a text id, name and picture (and the place it shows, when given, as text).
+ * Maps that cannot be used are set aside with an issue, so the others still work; so is a second map with an id
+ * already taken. Keys Lore-Forge does not know stay on the map.
+ */
+function parseMaps(v: unknown, issues: string[]): WorldMap[] | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v)) {
+    issues.push(msg`"maps" should be a list of maps, each with an id, a name and a picture. The maps were left out.`);
+    return undefined;
+  }
+  const seen = new Set<string>();
+  const out: WorldMap[] = [];
+  v.forEach((m, i) => {
+    const text = (k: string) => (isObj(m) && typeof m[k] === 'string' ? (m[k] as string).trim() : '');
+    if (!isObj(m) || !text('id') || typeof m['name'] !== 'string' || !text('image') || (m['place'] !== undefined && m['place'] !== null && typeof m['place'] !== 'string')) {
+      return void issues.push(msg`Map ${i + 1} in "maps" needs a text "id", "name" and "image". It was left out.`);
+    }
+    const id = text('id');
+    if (seen.has(id.toLowerCase())) return void issues.push(msg`Map ${i + 1} in "maps" has the id of an earlier map ("${verbatim(id)}"). It was left out.`);
+    seen.add(id.toLowerCase());
+    const { place: _place, ...rest } = m;
+    out.push({ ...rest, id, name: m['name'] as string, image: text('image'), ...(text('place') ? { place: text('place') } : {}) } as WorldMap);
+  });
+  return out;
 }
 
 export function parseIntended(content: string): { intended: IntendedMark[]; problems: string[] } {

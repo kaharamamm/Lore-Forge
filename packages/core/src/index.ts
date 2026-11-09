@@ -37,7 +37,7 @@ export function check(world: World): Warning[] {
   return world.story?.length ? sortWarnings([...base, ...analyzeStory(world).warnings]) : base;
 }
 export * from './publish/doc.ts';
-export { artBrief, type ArtBrief } from './publish/art.ts';
+export { artBrief, PICTURE_VIEW, picturePrompt, withArtStyle, type ArtBrief } from './publish/art.ts';
 export { worldCodex, CODEX_FORMAT_VERSION, type CodexOptions } from './publish/codex.ts';
 /** Old names from before the World Bible became the World Codex (0.3.1); kept so existing callers keep working. */
 export { worldCodex as worldBible, CODEX_FORMAT_VERSION as BIBLE_FORMAT_VERSION, type CodexOptions as BibleOptions } from './publish/codex.ts';
@@ -45,4 +45,5 @@ export { bookChapters, storyBook, writtenChapters, CHRONICLE_APPENDIX, LORE_AND_
 export { toMarkdown } from './publish/markdown.ts';
 export { familyTree, TREE_LAYOUT, type FamilyTree, type TreeNode, type TreeEdge } from './views/family-tree.ts';
 export { relationWeb, WEB_LAYOUT, type RelationWeb, type WebOptions, type WebNode, type WebEdge } from './views/relation-web.ts';
-export { timelineModel, yearLabel, yearTicks, monthTicks, packRows, involvesEntry, type TimelineModel, type TimelineLane, type TimelineGroup, type EraBand } from './views/timeline-model.ts';
+export { timelineModel, yearLabel, yearTicks, monthTicks, packRows, involvesEntry, type TimelineModel, type TimelineLane, type TimelineLook, type TimelineGroup, type EraBand } from './views/timeline-model.ts';
+export { findMap, mapModel, newMapId, pinNumber, pinOn, withPin, withoutPin, type MapModel, type MapPlace } from './views/map-model.ts';

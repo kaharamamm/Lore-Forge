@@ -98,6 +98,20 @@
     "rules": {
       "type": "object",
       "additionalProperties": { "enum": ["error", "warning", "info", "off"] }
+    },
+    "maps": {
+      "type": "array",
+      "description": "Maps of the world: pictures with places pinned on them (each place's pins).",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "image"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "description": "Made from the first name; it stays when the map is renamed, since the pins use it." },
+          "name": { "type": "string" },
+          "image": { "type": "string", "minLength": 1, "description": "The picture, relative to the world folder. The app keeps it in maps/." },
+          "place": { "type": "string", "description": "The place the map shows (a city on a map of the land), by id or name. Its pin on other maps opens this map." }
+        }
+      }
     }
   },
   "additionalProperties": false

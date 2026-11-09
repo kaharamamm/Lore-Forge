@@ -53,6 +53,14 @@ test('world.json book settings: the right-hand chapters switch is a boolean', ()
   assert.equal(ajv.getSchema(`${base}world-manifest.schema.json`)!({ ...manifest, book: { rightHandChapters: 'yes' } }), false);
 });
 
+test('maps in world.json and the pins of a place', () => {
+  const manifest = JSON.parse(readFileSync(join(exampleDir, 'world.json'), 'utf8'));
+  valid('world-manifest.schema.json', { ...manifest, maps: [{ id: 'land', name: 'The Land', image: 'maps/land.png' }, { id: 'city', name: 'The City', image: 'maps/city.jpg', place: 'place-city' }] });
+  valid('entry.schema.json', { id: 'place-city', type: 'place', name: 'The City', pins: [{ map: 'land', x: 12.5, y: 80 }] });
+  assert.equal(ajv.getSchema(`${base}world-manifest.schema.json`)!({ ...manifest, maps: [{ id: 'land', name: 'The Land' }] }), false, 'a map needs its picture');
+  assert.equal(ajv.getSchema(`${base}entry.schema.json`)!({ id: 'p', type: 'place', name: 'P', pins: [{ map: 'land', x: 120, y: 5 }] }), false, 'a pin stays on the map');
+});
+
 test('every entry in the sample world has at least one image, and every image file is there', async () => {
   const w = await loadWorld(exampleDir);
   assert.ok(w.entries.length > 0);

@@ -9,7 +9,8 @@ import { Icon } from './icon.tsx';
 /** Above this a model still loads, with a warning that it may be slow. */
 const LARGE_BYTES = 25 * 1024 * 1024;
 
-const size = (bytes: number): string => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+/** A file's size in KB or MB. */
+export const size = (bytes: number): string => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 const extOf = (file: string): string => file.slice(file.lastIndexOf('.')).toLowerCase();
 const message = (e: unknown): string => ((e as Error)?.message ?? String(e)).replace(/^Error invoking remote method '\w+': (Error: )?/, '');
 

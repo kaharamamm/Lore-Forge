@@ -10,6 +10,10 @@ features: Ridges of green glass that ring when the wind blows, and the Hollow of
 status: standing
 founded: unknown
 partOf: place-sunsea
+pins:
+  - map: the-sunsea
+    x: 43.5
+    y: 69
 visual:
   climate: Blinding at noon; at night the glass holds the starlight.
   palette: Bottle green, white glare, black shadow.

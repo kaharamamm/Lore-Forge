@@ -19,6 +19,10 @@ A small desert world used to test Lore-Forge (the sample world on the shelf is `
 | file-error | notes/broken-draft.md has no name |
 | relation-kind | The Glass Compass (an item) is "parent-of" Leyla |
 | image-view | "Songs of the Caravan" has an image labelled `sketch` (not a usual view for a note) |
+| look-time | Sefa's look "Old ways" is in the era XX, which the calendar does not have |
+| look-outside-life | Sefa's look "Young novice" starts in 1890, before she was born (1910) |
+| look-overlap | Sefa's looks "Pilgrim cloak" and "Mourning veil" apply at the same time |
+| map-pin | The Shifting Dunes is pinned on the map "old-caravan-chart", which the world does not have |
 | story-contradiction | The story chapter "The Salt Road" says Orsan the Grey was born in 1745; his page says 1740 |
 
 The world also shows the v0.2 features: visual descriptions on Kadir, Orsan, Saltmere, the Glass Compass

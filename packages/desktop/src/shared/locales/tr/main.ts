@@ -70,4 +70,34 @@ export const MAIN: Readonly<Record<string, string>> = {
 
   // The save dialog of Download… (a picture or a 3D model).
   'Save a copy': 'Kopyasını kaydet',
+  // Ask AI (ask.ts): what the window shows when a message cannot be sent.
+  'Write what the AI should do first.': 'Önce yapay zekânın ne yapacağını yazın.',
+  'An AI is already working on this book. Wait for it to finish, or stop it.': 'Bu kitapta zaten bir yapay zekâ çalışıyor. Bitirmesini bekleyin ya da durdurun.',
+  '{agent} was not found on this computer.': '{agent} bu bilgisayarda bulunamadı.',
+  'This version of {agent} is too old for Ask AI. Update it, then try again.': 'Bu {agent} sürümü “Yapay zekâya sor” için çok eski. Güncelleyip yeniden deneyin.',
+  'It stopped with exit code {code}.': '{code} çıkış koduyla durdu.',
+  'Stop the AI first.': 'Önce yapay zekâyı durdurun.',
+  // The right-click menu of text fields (spelling.ts), and the Story's spelling suggestions (story.tsx).
+  'No suggestions': 'Öneri yok',
+  'Add “{word}” to the dictionary': '“{word}” sözcüğünü sözlüğe ekle',
+  'Cut': 'Kes',
+  'Copy': 'Kopyala',
+  'Paste': 'Yapıştır',
+  'Select all': 'Tümünü seç',
+  // A book as one file (main.ts, share.ts).
+  'Share this book as one file': 'Bu kitabı tek dosya olarak paylaş',
+  'Lore-Forge book': 'Lore-Forge kitabı',
+  'Open a book file': 'Bir kitap dosyası aç',
+  'This book file holds too many files to open.': 'Bu kitap dosyasında açılamayacak kadar çok dosya var.',
+  'This book file is too large to open.': 'Bu kitap dosyası açılamayacak kadar büyük.',
+  'This file is not a Lore-Forge book file, or it is damaged ({error}).': 'Bu dosya bir Lore-Forge kitap dosyası değil ya da bozuk ({error}).',
+  'This file is not a Lore-Forge book: it has no world.json.': 'Bu dosya bir Lore-Forge kitabı değil: içinde world.json yok.',
+  'The book in this file cannot be opened: {error}': 'Bu dosyadaki kitap açılamıyor: {error}',
+  // Saving a map (main.ts saveMaps).
+  'A map needs a name.': 'Haritanın bir adı olmalı.',
+  'That map is not in this book any more.': 'Bu harita artık kitapta yok.',
+  'That picture can no longer be used. Choose it again.': 'Bu resim artık kullanılamıyor. Yeniden seçin.',
+  'A map can be a PNG, JPEG, WebP or GIF picture.': 'Harita PNG, JPEG, WebP ya da GIF biçiminde bir resim olabilir.',
+  'The picture is not there any more: {file}': 'Resim artık orada değil: {file}',
+  'A map needs a picture.': 'Haritanın bir resmi olmalı.',
 };

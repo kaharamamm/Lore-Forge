@@ -13,15 +13,17 @@ The start screen is a bookcase. Every world is a book: a 3D spine with its title
 - **Duplicate** and **Delete** sit on a book's cover. Duplicate asks for a name (it suggests "<name> (copy)"), copies the whole world into the worlds folder with a new id, keeps the cover and opens the copy. It works on the read-only sample too, which is how you get your own copy of Camelamamm. Delete asks first and moves the folder to the system trash. Nothing is deleted outright.
 - **Take the tour** shows a short guided tour (eight steps) through the library and the sample world. It starts by itself the first time Lore-Forge opens; **Skip** or Esc ends it, Back and Next (or the arrow keys) move through it, and it does not change the sample. **About** has the same button.
 - **Open a world folder…** opens a world from anywhere on disk; it then stays on the shelf.
+- **Open a book file…** opens a book someone shared as one file (`.loreforge`, see **Share…** on World Home). The book is copied into the worlds folder, under a name of its own if a book with that name is already there, and opens.
 - **Settings** (the gear; also in an open book, left of **World settings** in the top bar and on world Home):
   - **Language**: English or Türkçe (Turkish), each with its flag. The whole app changes at once, including warnings, the patch notes and the labels in the World Codex and Story Book. Until you pick one, Lore-Forge follows the system's language.
   - **Display**:
     - **Window**: Windowed, Maximized or Full screen.
     - **Resolution**: the window's size, from 1280 × 720 to 3840 × 2160. Sizes larger than the screen are greyed out, and a size dragged by hand shows as Custom.
     - **Interface scale**: Auto, or 80% to 150%. Auto keeps the proportions Lore-Forge was designed in at 1920 × 1080: larger on 2K and 4K screens, smaller in small windows.
+  - **Spelling**: the languages to check (English (US), English (UK), Türkçe), any of them or none. Until you choose, the app's language is checked. A word the dictionary does not know gets a wavy line: right-click it for suggestions or **Add to the dictionary**. Right-click in any text field also has Cut, Copy, Paste and Select all. The names in the open book (entries and their other names, eras, months and maps) count as spelled right while it is open. On Windows and Linux, a dictionary the computer does not have is downloaded once from Google; what you write is never sent. On macOS the system's checker picks the language, so Spelling is only on or off there.
   - **Where new worlds go**, and whether the sample world is on the shelf.
 
-  Language and display changes apply at once and are remembered; the folder and the sample are saved with **Save**.
+  Language, display and spelling changes apply at once and are remembered; the folder and the sample are saved with **Save**.
 - **Patch notes** lists what changed in each version, newest first, from the changelog that comes with the app (it works offline). When the updater has found a newer version, its notes show on top.
 - **Connect AI** connects Lore-Forge to an AI app (Claude Desktop, Claude Code, Codex, Cursor, or another app through **Copy the settings**). You can then ask the assistant to write a story in Lore-Forge, and it writes the whole book here. **Pictures** sets up the image service it uses (OpenAI, Google Gemini or xAI Grok) with your own API key. See [AI assistants](MCP.md).
 - **About** lists the credits and licences, and has **Updates** (see [Updates](#updates)).
@@ -30,7 +32,9 @@ Behind the shelf is a quiet animated scene (light through a window, dust, runes,
 
 ### World Home
 
-Opening a world lands on Home: **Duplicate** (as on the shelf), the book's cover (click it to edit the cover), counts of entries, eras and warnings, links to the timeline, family tree, relationship web and the two exports, and a card for every entry with its picture. The paint button on a card changes that entry's picture: an icon with its colours, or one of its images.
+Opening a world lands on Home: **Duplicate** (as on the shelf), **Share…**, the book's cover (click it to edit the cover), counts of entries, eras and warnings, links to the timeline, family tree, relationship web and the two exports, and a card for every entry with its picture. The paint button on a card changes that entry's picture: an icon with its colours, or one of its images.
+
+**Share…** saves the whole book as one `.loreforge` file, to send to someone or keep as a backup: its entries, chapters, pictures, maps, 3D models and settings, without the exports folder. Anyone with Lore-Forge opens it with **Open a book file…** in the library. It is a zip file, so any zip tool can open it too.
 
 The **Book cover** editor sets the background (gradient or plain colour), a picture, the emblem and its colour, the title font and colour, and the spine colours. The title can be hidden on the cover; it always stays on the spine.
 
@@ -48,7 +52,8 @@ A structured form per entry type, in collapsible sections, then the body text.
 - **Suggestion lists** (race, gender, kind, relation types, verbs) are themed lists with an icon for every word; the chosen value shows its icon too. Gender offers female (♀), male (♂) and genderless (⚲).
 - **Undo and redo:** Ctrl+Z undoes the open entry's last change, whatever it was: a status pill (alive to dead), a list choice, a picture or icon, a row added or removed, or typing (one step per pause). Ctrl+Y or Ctrl+Shift+Z redoes it. The field comes into view and flashes. A change made outside the app since (by an AI assistant or an editor) is never undone by accident.
 - **Relationships:** typed and dated relations to other entries. The type list only offers types that fit the two entry types; custom types are still allowed.
-- **Visual description, reference images and 3D models** for artists and 3D tools, under **Images | 3D model** tabs (see [Images](FORMAT.md#images) and [3D models](FORMAT.md#3d-models)). The download button on a picture saves a copy of it anywhere. Pictures can be PNG, JPEG, WebP or GIF; an animated GIF moves everywhere the picture shows (Mr Camel's portrait in the sample world is one), and the World Codex and Story Book print its first frame. Mr Camel also has a 3D model, as an example.
+- **Visual description, reference images and 3D models** for artists and 3D tools, under **Images | 3D model** tabs (see [Images](FORMAT.md#images) and [3D models](FORMAT.md#3d-models)). Pointing at a picture shows its buttons: Details (where it came from) and Remove in its top corners, and Make a new picture, Replace and Save a copy (anywhere you choose) along the bottom. Pictures can be PNG, JPEG, WebP or GIF; an animated GIF moves everywhere the picture shows (Mr Camel's portrait in the sample world is one), and the World Codex and Story Book print its first frame. Mr Camel also has a 3D model, as an example.
+  - **Make a picture…** (under the pictures, and on each picture's toolbar to make a new one for that view) draws one with the picture service set in **Connect AI → Pictures** (OpenAI, Google Gemini or xAI Grok, billed to your key). The prompt is built from the visual description and the book's art style, and you can change it before drawing; the dialog says which service and model will draw. Drawing takes 10 to 60 seconds; you can close the dialog meanwhile, and the picture lands in its tile. It is saved like an added picture, with the tool and prompt in its details, for the look you are on.
   - **3D model:** **Add model…** copies a `.glb`, `.gltf` (with its data embedded), `.obj` or `.fbx` file into the world. A model turns by itself when it opens (**Auto-rotate**, off when the system asks for reduced motion). Drag to orbit, scroll to zoom, right-drag (or Shift+drag) to pan; **Reset view** frames it again. An entry can have several models: pick one from the row above the viewer, or download, rename and delete it there. **Download…** saves a copy anywhere, to use it in other programs. Files over 25 MB get a warning, since they are slow to load. The viewer needs WebGL; if the graphics driver offers none, it says so instead.
 - **Looks:** the visual description, pictures and models above are the entry's **Default** look. When it looks different for a while or from some point on (after a war, in coronation robes, in old age), **+ New look** adds a look: give it a name, why it looks different, and when it applies (**Always**, **After an event**, **Before an event**, **Between dates** or **In an era**). A look after an event starts once the event is over, and one before an event ends as it begins. A look's visual description holds only what changes (the Default text shows in its empty fields), and it has its own pictures and 3D models, kept in a folder of their own. **Delete look** moves its pictures and models to the Default look. The checks warn about a look tied to an era or event that does not exist, a look before birth or after death, and two looks at the same time; **Go to** opens the look. Mr Camel's "Caravan days" in the sample world is an example.
 - **Body:** Markdown with `[[links]]` and `@mentions`. Names and aliases typed in any text link themselves: they are highlighted in their type colour, show a hover card, and open with Ctrl/⌘+click.
@@ -57,9 +62,23 @@ A structured form per entry type, in collapsible sections, then the body text.
 
 Updates live while you type. Warnings are grouped into Errors, Warnings, Info and Marked intended. Each one says what is wrong, the canon fact it conflicts with and where that fact comes from. **Go to** jumps to the offending field; **Mark intended** keeps a contradiction on purpose (a resurrection, an unreliable narrator) with a note. Warnings never block saving.
 
+### Ask AI (Ctrl+J)
+
+The side panel has two tabs, **Warnings** and **Ask AI**. Ask AI runs Claude Code or Codex on the open book, so you can give an AI tasks without leaving the app: *"Write the next chapter"*, *"Give every character a visual description"*, *"Fix the open warnings"*.
+
+- **What you need:** Claude Code or Codex installed on this computer and signed in once in a terminal (`claude`, or `codex login`). The panel finds them by itself, and **Check again** looks again after you install one or sign in. A dot shows each one's state: green when signed in, amber when it could not tell, red when signed out or too old.
+- **What it costs:** it runs on your own Claude or ChatGPT plan, the same as using that app yourself. If the app is signed in with an API key instead, every message is billed to that key, and the panel says so. With Claude, the panel also tells you when you get close to your usage limit and when it resets.
+- **What it can do:** only use Lore-Forge's own tools: read the book, save and link entries, write chapters, check the book, and make pictures when a picture service is set up. It cannot run commands, change other files or use the web. Claude Code runs with no built-in tools and only the Lore-Forge server; Codex runs read-only, with its shell, apps, plugins and browser off and only Lore-Forge's tools approved. Neither reads settings from the book's folder.
+- **While it works:** its replies and steps appear as they happen (*Save 3 entries: …*, *Write the chapter …*), names in a step link to their entries and chapters, and every change shows in the rest of the window at once. You can keep working meanwhile. **Stop** ends it; what it already saved stays in the book.
+- **Ask AI about this:** **Ask AI** in an entry's header, or in the Story view (about the chapter, or about the text you chose in it; the right-click menu on chosen text has it too), opens the panel with *About …* on the message box and a few suggestions. The AI is told which entry or chapter to read first, and the exact text you chose. × drops it.
+- **Undo:** after a task that changed the book, a line names what it changed, with **Undo**. Files you saved yourself while it worked are never counted as its changes. If something it changed was edited again since, Lore-Forge asks first; the later version stays in the [book history](#book-history).
+- **The conversation** remembers earlier messages, so you can ask follow-up questions, and each book keeps its own, also after a restart. **New conversation** starts over (the book keeps every change). Claude Code and Codex each have their own conversation.
+- The **sample book** is read-only: the AI can read it and answer questions. Duplicate it to let the AI change it.
+- Claude Desktop, Cursor and other AI apps cannot be run this way; connect them with **Connect AI** in the library (see [AI assistants](MCP.md)).
+
 ### Timeline (Ctrl+2)
 
-A Gantt chart of the world: era ribbons and coloured era columns (an era's own colour when the calendar sets one), a year axis that names the months once you zoom in far enough, and one lane per dated entry, grouped by type. Lifespans and existence spans are solid cards in their type's colour with their icon, name and dates, and a taller card with the picture behind it when the entry has a picture; events without an end are diamonds (a round picture when they have one); warning markers sit after each one. **Lanes** shows one lane per entry; **Stacked** packs each type's entries side by side on as few rows as fit. Turn types on and off with the chips. Drag or Shift+scroll moves along time, Ctrl+scroll or −/Fit/+ zooms, and it stops at the first and last year. The **Overview** strip at the bottom shows the whole span with a frame around what is on screen: click or drag in it to jump, or use the arrow keys, Page Up/Down, Home and End. Click a bar or name to open it.
+A Gantt chart of the world: era ribbons and coloured era columns (an era's own colour when the calendar sets one), a year axis that names the months once you zoom in far enough, and one lane per dated entry, grouped by type. Lifespans and existence spans are solid cards in their type's colour with their icon, name and dates, and a taller card with the picture behind it when the entry has a picture; events without an end are diamonds (a round picture when they have one); warning markers sit after each one. A gold line along the bottom of a card shows when one of the entry's looks applies, with a small diamond where it starts: hover it for the look's name and when, and click it to open the entry on that look. **Lanes** shows one lane per entry; **Stacked** packs each type's entries side by side on as few rows as fit. Turn types on and off with the chips. Drag or Shift+scroll moves along time, Ctrl+scroll or −/Fit/+ zooms, and it stops at the first and last year. The **Overview** strip at the bottom shows the whole span with a frame around what is on screen: click or drag in it to jump, or use the arrow keys, Page Up/Down, Home and End. Click a bar or name to open it.
 
 ### Relationships (Ctrl+3)
 
@@ -74,11 +93,28 @@ A manuscript space for the whole story, written chapter by chapter, with a word 
 
 As you write, Lore-Forge reads the text and **proposes** what it finds, never adding anything by itself: *King Camel was born in 1998.* proposes a character Camel, born 1998, with the title King. Each proposal shows the sentence it came from, with **Add**, **Edit…**, **Merge…** (fold it into an existing entry as an alias) and **Ignore**. Names that already exist are listed instead of proposed again, and new facts about them show as **Update**.
 
-The same rules check what the story says: a sentence that breaks canon is underlined, and the `story-contradiction` rule flags the story disagreeing with an entry. Select words, or right-click a name, to add it to the world with its type guessed.
+The same rules check what the story says: a sentence that breaks canon is underlined, and the `story-contradiction` rule flags the story disagreeing with an entry. Right-clicking a misspelled word puts the spelling suggestions at the top of the menu. Select words, or right-click a name, to add it to the world with its type guessed.
+
+### Map (Ctrl+5)
+
+Your world's maps, with its places pinned on them (the sample world has a map of the Sunsea to try). **Add a map…** takes a picture of a map (PNG, JPEG, WebP or GIF; a picture the book already has in the Map view works too) and copies it into the book's `maps/` folder. A book can have several maps: the whole world, a region, a city. Under **Shows**, a map of one place is tied to it: that place's pin on the other maps gets a small map button that opens its map, and its own map has a button back up.
+
+Drag to move around and scroll to zoom (or use −, Fit and +; with the map in focus, the arrow keys move it). Each pin shows the place's picture and name. Hover a pin for what is tied to the place (who lives or stays there, the factions and items kept there, what happened there, the places inside it), and click it to open the place. A destroyed place has a dashed ring and a struck-through name. Choosing a place in the sidebar while the map is open shows it in the middle.
+
+**Edit pins** lists the places on one side. Drag a place onto the map, or use its **Pin** button to put it in the middle of the view. Drag a pin to move it; the arrow keys nudge the pin in focus (Shift for bigger steps) and Delete takes it off. Ctrl+Z and Ctrl+Y undo and redo pin changes. **Map settings** (the gear) renames a map, changes its picture or the place it shows, or deletes it; the book history keeps a copy of a deleted map's picture. Pins are kept in percent of the picture, so they stay in place when the picture is replaced by a larger one.
 
 ### World Settings
 
 **World settings** in the top bar (the calendar button): the default era (dates without an era abbreviation count in it), the eras (name, abbreviation, start and end, colour, and how many dates use each), and the months with their lengths. Saved in `world.json`.
+
+### Book History
+
+Lore-Forge keeps snapshots of each book on this computer, in its own folder (not in the book, so git and shared folders stay clean): when you open the book, every 20 minutes while it changes, before each Ask AI task and before every restore.
+
+- **History** on World Home lists them. Pick one to see what changed since (entries, chapters, the book's settings, pictures), then put one thing back (**Put back**, **Bring back** or **Remove**) or **Restore the whole book to this point**. **Keep a snapshot now** keeps one when you want.
+- **History** in an entry's header shows that entry's earlier versions, field by field next to what it says now, with **Restore this version**.
+- Every restore keeps the book as it was first, so a restore can be taken back too.
+- The 80 newest snapshots are kept. Each file's content is stored once, so snapshots of a book that hardly changed take little room.
 
 ### Changes from Outside the App
 
@@ -94,16 +130,17 @@ The arrow at the top left always returns to the library. Alt+←/→ and mouse b
 | Keys | Action |
 | --- | --- |
 | Ctrl+H | World Home |
-| Ctrl+1 / 2 / 3 / 4 | Editor, Timeline, Relationships, Story |
+| Ctrl+1 / 2 / 3 / 4 / 5 | Editor, Timeline, Relationships, Story, Map |
 | Ctrl+F | Search (the sidebar in a world, the shelf in the library; `/` also works there) |
 | Ctrl+S | Save now (saving is automatic) |
 | Alt+← / Alt+→ | Back and forward (also mouse buttons 4 and 5) |
 | Alt+↑ / Alt+↓ | Previous or next entry |
 | Ctrl+Shift+W | Focus the warnings panel |
+| Ctrl+J | Ask AI, at its message box |
 | Ctrl/⌘+click, Ctrl/⌘+Enter | Open the name under the pointer or cursor |
 | Ctrl+Shift+A | Story: add the selected words to the world |
-| Ctrl+Z | Undo: the open entry's last change in the Editor, the last link change on a graph |
-| Ctrl+Y, Ctrl+Shift+Z | Redo in the Editor |
+| Ctrl+Z | Undo: the open entry's last change in the Editor, the last link change on a graph, the last pin change on the Map |
+| Ctrl+Y, Ctrl+Shift+Z | Redo in the Editor and on the Map |
 | Esc | Close a dialog, list or preview |
 | F11 | Full screen on and off |
 | Ctrl + / Ctrl − | Interface scale up or down (saved, as in Settings) |

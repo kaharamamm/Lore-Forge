@@ -29,6 +29,8 @@ const USED = [
   'cube', 'clockwise-rotation', 'direction-signs', 'cloud-download', 'upgrade',
   // patch notes
   'tied-scroll',
+  // sharing a book as one file
+  'envelope', 'box-unpacking',
 ];
 
 const require = createRequire(import.meta.url);

@@ -29,6 +29,11 @@
       "source": "./src/images.ts",
       "types": "./dist/images.d.ts",
       "default": "./dist/images.js"
+    },
+    "./books": {
+      "source": "./src/books.ts",
+      "types": "./dist/books.d.ts",
+      "default": "./dist/books.js"
     }
   },
   "files": [

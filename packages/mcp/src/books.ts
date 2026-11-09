@@ -8,12 +8,12 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import YAML from 'yaml';
 import {
-  analyzeStory, applyFields, artBrief, bodyLinks, calendarProblems, chapterDate, chapterPath, check, cleanCoverSettings, DATE_FORMATS_HINT,
-  DEFAULT_STATUS, DETAIL_FIELDS, ENTRY_TYPES, entryPath, isStoryFact, LIFECYCLE, lookAt, lookImages, lookVisual, lookWhen, newEntryId, newLookId,
+  analyzeStory, applyFields, bodyLinks, calendarProblems, chapterDate, chapterPath, check, cleanCoverSettings, DATE_FORMATS_HINT,
+  DEFAULT_STATUS, DETAIL_FIELDS, ENTRY_TYPES, entryPath, findMap, isStoryFact, LIFECYCLE, lookAt, lookImages, lookVisual, lookWhen, mapModel, newEntryId, newLookId, newMapId, PICTURE_VIEW, picturePrompt, pinNumber, withoutPin,
   normalizeName, parseEntry, proposalEntry, relationFits, relationKind, serializeEntry, slugify, sortChapters, splitFrontMatter, storyBook, TRIMS,
   TYPE_LABELS, TYPE_SINGULAR, wordCount, WorldIndex, worldCodex,
-  type Calendar, type Entry, type EntryType, type FactRef, type Look, type ParsedDate, type Proposal, type Relation, type StoryChapter,
-  type TrimSize, type Warning, type World, type WorldCoverSettings,
+  type Calendar, type Entry, type EntryType, type FactRef, type Look, type MapPin, type ParsedDate, type Place, type Proposal, type Relation, type StoryChapter,
+  type TrimSize, type Warning, type World, type WorldCoverSettings, type WorldMap,
 } from '@lore-forge/core';
 import {
   createWorld, duplicateWorld, listModels, loadWorld, moveModels, saveChapter, saveEntry, saveIntended, saveStoryIgnored, uniqueWorldDir,
@@ -136,12 +136,19 @@ export async function bookOverview(lib: Library, dir: string): Promise<Obj> {
     cover: m.cover,
     counts: Object.fromEntries(ENTRY_TYPES.map((t) => [TYPE_LABELS[t].toLowerCase(), world.entries.filter((e) => e.type === t).length])),
     entries: world.entries.map(entrySummary),
+    ...(m.maps?.length ? { maps: m.maps.map((x) => mapSummary(world, x)) } : {}),
     chapters: sortChapters(world.story ?? []).map((c, i) => ({ number: i + 1, title: c.title, date: chapterDate(c), words: wordCount(c.body), file: c.file })),
     warnings: { errors: open.filter((w) => w.severity === 'error').length, warnings: open.filter((w) => w.severity === 'warning').length, info: open.filter((w) => w.severity === 'info').length, intended: warnings.length - open.length },
   };
 }
 
 const DATE_KEYS = ['born', 'died', 'founded', 'created', 'dissolved', 'destroyed', 'date', 'end'] as const;
+
+/** A map in short: its name, the place it shows and how many places are pinned on it. */
+function mapSummary(world: World, map: WorldMap): Obj {
+  const model = mapModel(world, map.id);
+  return { id: map.id, name: map.name, ...(model?.place ? { shows: model.place.name } : {}), pinned: model?.pins.length ?? 0 };
+}
 
 function entrySummary(e: Entry): Obj {
   const r = e as unknown as Obj;
@@ -182,7 +189,7 @@ export function entryJson(world: World, e: Entry): Obj {
 const COMMON_KEYS = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'relations', 'images', 'picture', 'visual', 'looks', 'chapter', 'bookOrder', 'body'];
 const TYPE_KEYS: Record<EntryType, readonly string[]> = {
   character: ['race', 'born', 'died', 'status', 'locations'],
-  place: ['status', 'founded', 'destroyed', 'partOf'],
+  place: ['status', 'founded', 'destroyed', 'partOf', 'pins'],
   faction: ['status', 'founded', 'dissolved'],
   item: ['status', 'created', 'destroyed'],
   event: ['date', 'end', 'place', 'participants', 'actions'],
@@ -202,7 +209,7 @@ const kebab = (s: string): string => s.trim().toLowerCase().replace(/[\s_]+/g, '
 function normalizeFields(input: Obj, type: EntryType, ref: (s: unknown) => unknown): Obj {
   const out: Obj = {};
   for (const [k, v] of Object.entries(input)) {
-    if (['id', 'type', 'body', 'looks'].includes(k)) continue;
+    if (['id', 'type', 'body', 'looks', 'pins'].includes(k)) continue;
     if (v === null) { out[k] = null; continue; }
     if ((DATE_KEYS as readonly string[]).includes(k)) out[k] = asText(v);
     else if (k === 'aliases' || k === 'tags') out[k] = asList(v).map(asText);
@@ -404,6 +411,15 @@ export async function saveEntries(dir: string, items: EntryInput[]): Promise<Sav
           });
         }
       }
+      if (p.item['pins'] !== undefined) {
+        if (p.type !== 'place') said.push(`${p.name}: only places can be pinned on a map; "pins" was left out.`);
+        else {
+          const m = mergePins((p.existing as Place | undefined)?.pins ?? [], p.item['pins'], world.manifest.maps ?? []);
+          if (m.pins.length) fm['pins'] = m.pins;
+          else delete fm['pins'];
+          said.push(...m.notes.map((n) => `${p.name}: ${n}.`));
+        }
+      }
       const body = typeof p.item.body === 'string' ? p.item.body : (p.existing?.body ?? '');
       const parsed = parseEntry(`---\n${YAML.stringify(fm, { lineWidth: 0 })}---\n\n${body.replace(/^\n+/, '')}`);
       if (!parsed.entry || parsed.problems.length) throw new Error(parsed.problems.join(' '));
@@ -431,6 +447,39 @@ export async function saveEntries(dir: string, items: EntryInput[]): Promise<Sav
   const ids = new Set(saved.map((s) => s.id));
   const warnings = check(world).filter((w) => !w.intended && w.severity !== 'info' && (ids.has(w.offending.entryId) || (w.conflicting && ids.has(w.conflicting.entryId))));
   return { saved, problems, notes, warnings: warnings.map((w) => formatWarning(world, w)) };
+}
+
+/**
+ * A place's pins after save_entries, matched by map: each pin given replaces the place's pin on that map (by its name
+ * or id) or is added; {map, remove: true} takes the place off that map; pins on maps not given stay. null removes all.
+ */
+function mergePins(have: readonly MapPin[], input: unknown, maps: readonly WorldMap[]): { pins: MapPin[]; notes: string[] } {
+  if (input === null) return { pins: [], notes: [] };
+  const pins = [...have];
+  const notes: string[] = [];
+  for (const x of asList(input)) {
+    if (!isObj(x) || typeof x['map'] !== 'string') { notes.push('a pin needs {map, x, y}; one was left out'); continue; }
+    const map = findMap(maps, x['map']);
+    if (!map) {
+      notes.push(`there is no map "${x['map']}" (${maps.length ? `maps: ${maps.map((m) => m.name).join(', ')}` : 'add one with save_map first'}); that pin was left out`);
+      continue;
+    }
+    const at = pins.findIndex((pin) => findMap([map], pin.map) === map);
+    if (x['remove'] === true) {
+      if (at >= 0) pins.splice(at, 1);
+      continue;
+    }
+    const px = Number(x['x']), py = Number(x['y']);
+    if (x['x'] === undefined || x['y'] === undefined || !Number.isFinite(px) || !Number.isFinite(py)) {
+      notes.push(`the pin on "${map.name}" needs x and y (percent of the picture from its left and top edges); it was left out`);
+      continue;
+    }
+    if (px < 0 || px > 100 || py < 0 || py > 100) notes.push(`the pin on "${map.name}" was off the picture and was moved onto its edge`);
+    const pin: MapPin = { map: map.id, x: pinNumber(px), y: pinNumber(py) };
+    if (at >= 0) pins[at] = pin;
+    else pins.push(pin);
+  }
+  return { pins, notes };
 }
 
 export async function deleteEntry(dir: string, ref: string): Promise<{ id: string; name: string; file: string }> {
@@ -769,14 +818,9 @@ export async function pictureBrief(dir: string, ref: string, view?: string, look
   }
   const entry = findEntry(world, ref);
   const look = findLook(entry, lookRef);
-  const v = view?.trim() ? kebab(view) : ({ character: 'three-quarter', place: 'establishing', faction: 'emblem', item: 'front', event: 'scene', note: 'illustration' } as const)[entry.type];
-  const brief = artBrief(entry, new WorldIndex(world), look);
-  // Factions and notes have no art brief: the same parts, said plainly.
-  const visual = Object.values(lookVisual(entry, look));
-  const lookLine = look ? ` As they look in "${look.name || look.id}"${look.reason?.trim() ? `: ${look.reason.trim().replace(/\.$/, '')}` : ''}.` : '';
-  const base = brief?.prompt ?? `${entry.type === 'faction' ? `Emblem and banner design for ${entry.name}` : `Illustration of ${entry.name}`}.${entry.summary ? ` ${entry.summary}` : ''}${lookLine}${visual.length ? ` ${visual.join(' ')}` : ''} Setting: the world of ${world.manifest.name}.`;
-  const viewHint = v === 'a-pose' ? ' Full body, neutral A-pose, plain background.' : v === 'front' && entry.type === 'character' ? ' Full body, front view.' : '';
-  return { world, entry, ...(look ? { look } : {}), view: v, prompt: `${base}${viewHint} No text, no captions, no watermark.`, ...(artStyle ? { artStyle } : {}) };
+  const v = view?.trim() ? kebab(view) : PICTURE_VIEW[entry.type];
+  // The same prompt the app's own picture making builds (core picturePrompt).
+  return { world, entry, ...(look ? { look } : {}), view: v, prompt: picturePrompt(entry, new WorldIndex(world), v, look), ...(artStyle ? { artStyle } : {}) };
 }
 
 function freePath(dir: string, rel: string): string {
@@ -838,6 +882,87 @@ export async function loadPictureSource(source: string, fetchFn: typeof fetch = 
   if (!existsSync(path)) throw new Error(`There is no file at ${path}.`);
   const tmp = await readFile(path);
   return { data: new Uint8Array(tmp), ext };
+}
+
+// -------------------------------------------------------------------------------------------------- maps
+
+const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
+/** Pictures larger than this are not sent with get_map (clients refuse very large images). */
+const MAX_MAP_BYTES = 3.5 * 1024 * 1024;
+
+export interface MapInput { map: string; name?: string; picture?: string; place?: string | null; remove?: boolean }
+
+/**
+ * Adds a map or changes one (world.json "maps"): its name, its picture (copied to maps/<id>.<ext>) and the place it
+ * shows. remove takes it out with its picture and every pin on it.
+ */
+export async function saveMap(dir: string, input: MapInput, fetchFn: typeof fetch = fetch): Promise<Obj> {
+  const world = await loadWorld(dir);
+  const raw = await readManifestRaw(dir);
+  const maps = (Array.isArray(raw['maps']) ? raw['maps'] : []) as WorldMap[];
+  const known = world.manifest.maps ?? [];
+  const found = findMap(known, input.map);
+  const list = (): string => (known.length ? ` Maps: ${known.map((m) => `"${m.name}"`).join(', ')}.` : '');
+  const unused = (file: string | undefined, rest: readonly WorldMap[]): boolean => !!file && file.startsWith('maps/') && !rest.some((m) => m.image === file);
+  if (input.remove) {
+    if (!found) throw new Error(`There is no map "${input.map}" in ${world.manifest.name}.${list()}`);
+    const rest = maps.filter((m) => m.id !== found.id);
+    if (rest.length) raw['maps'] = rest;
+    else delete raw['maps'];
+    await writeManifestRaw(dir, raw);
+    if (unused(found.image, rest)) await rm(join(dir, found.image), { force: true });
+    const pinned = world.entries.filter((e): e is Place => e.type === 'place' && (e.pins ?? []).some((p) => findMap([found], p.map) === found));
+    for (const p of pinned) await saveEntry(dir, withoutPin(p, found), world.files[p.id] ?? entryPath(p));
+    return { removed: found.name, unpinned: pinned.map((p) => p.name) };
+  }
+  if (!found && !input.picture?.trim()) throw new Error(`A new map needs a picture.${list()}`);
+  const name = (input.name ?? (found ? found.name : input.map)).trim();
+  if (!name) throw new Error('A map needs a name.');
+  const map: WorldMap = found ? { ...(maps.find((m) => m.id === found.id) ?? found) } : { id: newMapId(known, name), name, image: '' };
+  map.name = name;
+  if (input.place === null) delete map.place;
+  else if (input.place !== undefined) map.place = findEntry(world, input.place, 'place').id;
+  if (input.picture?.trim()) {
+    // A picture of the book itself (create_image's) by its path inside the book, or a file, address or data: URL.
+    const inBook = !/^(data:|https?:)/i.test(input.picture.trim()) && !isAbsolute(input.picture.trim()) && existsSync(join(dir, input.picture.trim()));
+    const pic = await loadPictureSource(inBook ? join(dir, input.picture.trim()) : input.picture, fetchFn);
+    const file = `maps/${map.id.replace(/[^\w-]+/g, '-')}.${pic.ext}`;
+    await mkdir(join(dir, 'maps'), { recursive: true });
+    await writeFile(join(dir, file), pic.data);
+    const old = map.image;
+    map.image = file;
+    if (old !== file && unused(old, maps.filter((m) => m.id !== map.id).concat(map))) await rm(join(dir, old), { force: true });
+  }
+  raw['maps'] = found ? maps.map((m) => (m.id === map.id ? map : m)) : [...maps, map];
+  await writeManifestRaw(dir, raw);
+  return {
+    map: { id: map.id, name: map.name, picture: map.image, ...(map.place ? { shows: findEntry(world, map.place, 'place').name } : {}) },
+    created: !found,
+    next: 'Look at it with get_map, then pin places on it with save_entries: a place\'s pins [{map, x, y}], x and y in percent of the picture from its left and top edges.',
+  };
+}
+
+/** One map for get_map: what is pinned where, what is not on it yet, and its picture to look at (when not too large). */
+export async function mapView(dir: string, ref?: string): Promise<{ info: Obj; image?: { data: string; mimeType: string } }> {
+  const world = await loadWorld(dir);
+  const maps = world.manifest.maps ?? [];
+  if (!maps.length) throw new Error(`${world.manifest.name} has no maps yet. Add one with save_map.`);
+  const map = ref?.trim() ? findMap(maps, ref) : maps[0];
+  if (!map) throw new Error(`There is no map "${ref}" in ${world.manifest.name}. Maps: ${maps.map((m) => `"${m.name}"`).join(', ')}.`);
+  const model = mapModel(world, map.id)!;
+  const info: Obj = {
+    map: { id: map.id, name: map.name, picture: map.image, ...(model.place ? { shows: model.place.name } : {}) },
+    pins: model.pins.map((p) => ({ place: p.entry.name, id: p.entry.id, x: p.x, y: p.y })),
+    notOnThisMap: model.unpinned.map((p) => p.name),
+    ...(maps.length > 1 ? { otherMaps: maps.filter((m) => m.id !== map.id).map((m) => m.name) } : {}),
+    howPinsWork: 'x and y are percent of the picture from its left and top edges (0 to 100).',
+  };
+  const file = join(dir, map.image);
+  if (!existsSync(file)) return { info: { ...info, picture: `The picture ${map.image} is missing.` } };
+  const data = await readFile(file);
+  const ext = extname(file).slice(1).toLowerCase().replace('jpeg', 'jpg');
+  if (data.length > MAX_MAP_BYTES || !MIME[ext]) return { info: { ...info, picture: `The picture is too large to show here (${(data.length / 1048576).toFixed(1)} MB).` } };
+  return { info, image: { data: data.toString('base64'), mimeType: MIME[ext]! } };
 }
 
 // ------------------------------------------------------------------------------------------------ export

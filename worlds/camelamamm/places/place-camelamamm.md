@@ -10,6 +10,10 @@ features: The Singing Well, the copper-domed palace, the Street of Kettles.
 status: standing
 founded: "1"
 partOf: place-sunsea
+pins:
+  - map: the-sunsea
+    x: 47
+    y: 33.5
 visual:
   architecture: Sand-coloured houses with blue doors, stepped palm terraces, a copper-domed palace on the hill.
   climate: Shade under the palms, heat everywhere else; the evening wind smells of mint.

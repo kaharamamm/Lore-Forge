@@ -17,6 +17,7 @@ my-world/
   notes/note-*.md
   story/01-the-first-chapter.md   story chapters (optional)
   images/<entry-id>/<view>.png    reference images (optional)
+  maps/<map-id>.png            map pictures, with places pinned on them (optional)
   intended.json                warnings marked intended (optional)
   story-ignored.json           ignored story proposals (optional)
 ```
@@ -31,6 +32,7 @@ my-world/
 | `rules` | per-rule severity overrides, e.g. `{ "duplicate-name": "info", "two-places-at-once": "off" }` |
 | `book` | Story Book details: `title`, `author`, `publisher`, `dedication`, `epigraph`, `epigraphSource`, `copyright`, `trim`, `rightHandChapters`, `chapterYears` |
 | `cover` | cover colours, picture, emblem, title font and colour, show title or emblem, spine colours |
+| `maps` | the world's maps: `id`, `name`, `image` (its picture, in `maps/`) and the `place` a map shows, if any; see [Maps](#maps) |
 
 ### Entries
 
@@ -97,6 +99,29 @@ looks:
 
 On a date, the look that applies is the one that covers it and started last, else the Default look. The World Codex shows each look with its own pictures and art brief, and an event's art brief describes each participant in the look they have on the event's date.
 
+### Maps
+
+A book can have maps: pictures of the world, or of one city or region, with places pinned on them. `world.json` lists them, and their pictures are kept in `maps/`:
+
+```json
+"maps": [
+  { "id": "the-sunsea", "name": "The Sunsea", "image": "maps/the-sunsea.png" },
+  { "id": "camelamamm", "name": "Camelamamm", "image": "maps/camelamamm.jpg", "place": "place-camelamamm" }
+]
+```
+
+- `id` is made from the first name and stays when the map is renamed, since the pins use it.
+- `place` (optional) is the place a map shows, by id or name. Its pin on the other maps opens this map.
+
+A place says where it is with `pins`, one per map, in percent of the map's picture from its left and top edges. The pins stay in place when the picture is replaced by a larger one:
+
+```yaml
+pins:
+  - map: the-sunsea
+    x: 41.5
+    y: 62.25
+```
+
 ### Intended marks and ignored proposals
 
 `intended.json` keeps the warnings you marked intended, with your note and the date. `story-ignored.json` keeps the story proposals you ignored, so they are not proposed again.
@@ -145,6 +170,7 @@ The older `1920-03-12` form still works. Each date field shows how it was unders
 | `look-time` | warning | a look names an era or entry that does not exist, or an entry with no date, or ends before it starts; or a picture names a look its entry does not have |
 | `look-outside-life` | warning | a look starts after its entry ended (died, destroyed, dissolved), or starts or ends before it existed |
 | `look-overlap` | warning | two looks of one entry apply at the same time: they start together, or one runs on by its own end into a later one (a look without an end just gives way to the next) |
+| `map-pin` | warning | a place is pinned on a map the book does not have, or a map is set to show something that is not a place |
 | `story-contradiction` | warning | a story chapter says something different from an entry |
 
 Story sentences are also checked with the timeline rules, as if their proposals were already added. A rule's severity can be changed or the rule turned off in `world.json` under `rules`. The rule library and custom rules are described in [docs/INTEGRATION.md](INTEGRATION.md#custom-rules-library).

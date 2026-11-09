@@ -132,6 +132,18 @@ LORE_FORGE_SMOKE=1 LORE_FORGE_OPEN=$PWD/packages/core/test/fixtures/shifting-san
 
 It prints `SMOKE OK {...}` and exits 0, or exits 1 on a failed check, a renderer error, a crash or a failed export. It works on a temporary copy of the world and a throwaway library, so nothing real is touched. The virtual screen must be a little larger than the biggest size checked. Set `LORE_FORGE_SMOKE_OUT=<dir>` to keep the exported files.
 
+### Ask AI without an AI
+
+`packages/desktop/src/main/ask.ts` runs Claude Code or Codex for the Ask AI panel; `ask-stream.ts` (command lines and reading their JSON output) is covered by `packages/desktop/test/ask.test.ts`. To try the panel without an AI app or its usage, point `LORE_FORGE_ASK_SCRIPT` at a Node script that reads the prompt on stdin and prints Claude Code's `stream-json` events: the app then runs it (with its own Node) as Claude Code.
+
+```bash
+LORE_FORGE_ASK_SCRIPT=$PWD/my-fake-claude.cjs npx electron packages/desktop
+```
+
+### Pictures without a picture service
+
+`LORE_FORGE_PICTURE_FILE` points **Make a picture** at a picture file instead of a service: the app "draws" by copying it, after `LORE_FORGE_PICTURE_DELAY` milliseconds. Nothing is sent anywhere and no key is used.
+
 ### Icons
 
 Icons come from [game-icons.net](https://game-icons.net). Only the icons the app uses are kept, as SVG path data in `packages/core/src/icons.ts`; add a name to `scripts/gen-icons.mjs` and run `node scripts/gen-icons.mjs` to regenerate it. The app icon's source is `packages/desktop/src/renderer/icon.svg`; `npm run icons -w @lore-forge/desktop` renders the installer icons into `packages/desktop/build/` (it runs Electron, so it needs a display or `xvfb-run -a`).

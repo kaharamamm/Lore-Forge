@@ -1,5 +1,5 @@
 import { lookAt, lookVisual } from '../looks.ts';
-import { VISUAL_FIELDS, type Entry, type Look } from '../types.ts';
+import { VISUAL_FIELDS, type Entry, type EntryType, type Look } from '../types.ts';
 import type { WorldIndex } from '../world-index.ts';
 import { showDate } from './doc.ts';
 
@@ -17,6 +17,28 @@ const sentence = (s: string): string => {
   const t = s.trim();
   return /[.!?]$/.test(t) ? t : `${t}.`;
 };
+
+/** The view a picture of an entry gets when none is asked for. */
+export const PICTURE_VIEW: Record<EntryType, string> = { character: 'three-quarter', place: 'establishing', faction: 'emblem', item: 'front', event: 'scene', note: 'illustration' };
+
+/**
+ * A ready text-to-image prompt for a picture of an entry (or one of its looks) in a view: its art brief (factions
+ * and notes have none: the same parts, said plainly) and a hint for the view. The app and the AI tools both use it.
+ */
+export function picturePrompt(entry: Entry, ix: WorldIndex, view: string, look?: Look): string {
+  const brief = artBrief(entry, ix, look);
+  const visual = Object.values(lookVisual(entry, look));
+  const lookLine = look ? ` As they look in "${look.name || look.id}"${look.reason?.trim() ? `: ${look.reason.trim().replace(/\.$/, '')}` : ''}.` : '';
+  const base = brief?.prompt ?? `${entry.type === 'faction' ? `Emblem and banner design for ${entry.name}` : `Illustration of ${entry.name}`}.${entry.summary ? ` ${entry.summary}` : ''}${lookLine}${visual.length ? ` ${visual.join(' ')}` : ''} Setting: the world of ${ix.world.manifest.name}.`;
+  const viewHint = view === 'a-pose' ? ' Full body, neutral A-pose, plain background.' : view === 'front' && entry.type === 'character' ? ' Full body, front view.' : '';
+  return `${base}${viewHint} No text, no captions, no watermark.`;
+}
+
+/** A prompt with the book's art style added (when it does not say it already). */
+export function withArtStyle(prompt: string, artStyle: string | undefined): string {
+  const style = artStyle?.trim();
+  return style && !prompt.toLowerCase().includes(style.toLowerCase()) ? `${prompt} Style: ${style}.` : prompt;
+}
 
 /**
  * Build an art brief from an entry's name, summary and visual description. Characters, places, items and events only.

@@ -94,6 +94,16 @@ export const LIBRARY: Readonly<Record<string, string>> = {
   'Clear search': 'Aramayı temizle',
   'Clear search (Esc)': 'Aramayı temizle (Esc)',
   'Open a world folder…': 'Dünya klasörü aç…',
+  // Settings, Spelling (settings.tsx).
+  'Spelling': 'Yazım',
+  'Check spelling in': 'Yazım denetimi dilleri',
+  'On (macOS picks the language)': 'Açık (dili macOS seçer)',
+  'Words the dictionary does not know get a wavy line: right-click one for suggestions. The names in the open book count as spelled right. A dictionary this computer does not have is downloaded once from Google; nothing you write is sent.':
+    "Sözlükte olmayan sözcüklerin altı dalgalı çizilir; öneriler için sözcüğe sağ tıklayın. Açık kitaptaki adlar doğru yazılmış sayılır. Bu bilgisayarda olmayan bir sözlük bir kez Google'dan indirilir; yazdıklarınız gönderilmez.",
+  // A book someone shared as one file (start.tsx).
+  'Open a book someone shared as one file (.loreforge): it goes on your shelf': 'Birinin tek dosya olarak paylaştığı bir kitabı açın (.loreforge): kitaplığınıza eklenir',
+  'Opening…': 'Açılıyor…',
+  'Open a book file…': 'Kitap dosyası aç…',
   'A short guided tour of Lore-Forge, using the sample world': "Örnek dünyayla Lore-Forge'u tanıtan kısa bir rehberli tur",
   'Take the tour': 'Turu başlat',
   'Connect AI': 'Yapay zekâ bağla',

@@ -1,5 +1,7 @@
 /** Turkish for the desktop app's own texts (story). Keys are the English texts exactly as the code passes them to t(). */
 export const STORY: Readonly<Record<string, string>> = {
+  // story.tsx: the spelling of a word in the right-click menu
+  'Spelling of “{word}”': '“{word}” sözcüğünün yazımı',
   // story.tsx: chapters
   'Chapters': 'Bölümler',
   'New chapter': 'Yeni bölüm',

@@ -51,6 +51,21 @@ export function useImage(dir: string | null, file: string | undefined): string |
   }, [dir, file]);
   return src;
 }
+/** Like useImage, but undefined while the picture is still being read, so a missing one can be told apart. */
+export function useImageState(dir: string | null, file: string | undefined): string | null | undefined {
+  const known = () => (dir && file && imagesRead.has(imageKey(dir, file)) ? imagesRead.get(imageKey(dir, file))! : undefined);
+  const [src, setSrc] = useState<string | null | undefined>(known);
+  useEffect(() => {
+    setSrc(known());
+    if (!dir || !file) return;
+    const key = imageKey(dir, file);
+    if (!images.has(key)) images.set(key, window.lore.readImage(dir, file).then(objectUrl));
+    let live = true;
+    void images.get(key)!.then((s) => { imagesRead.set(key, s); if (live) setSrc(s); });
+    return () => void (live = false);
+  }, [dir, file]);
+  return dir && file ? src : null;
+}
 /** Forget cached images (after Reload, files may have changed on disk). */
 export const forgetImages = () => { images.clear(); imagesRead.clear(); };
 /** Forget only these files (paths inside the world), which changed on disk: the other pictures stay as they are. */

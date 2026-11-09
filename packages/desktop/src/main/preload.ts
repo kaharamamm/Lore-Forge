@@ -47,6 +47,18 @@ const api: LoreApi = {
   saveBook: (dir, book) => ipcRenderer.invoke('saveBook', dir, book),
   saveCalendar: (dir, calendar) => ipcRenderer.invoke('saveCalendar', dir, calendar),
   saveCover: (dir, cover, picked) => ipcRenderer.invoke('saveCover', dir, cover, picked),
+  saveMaps: (dir, maps, picture) => ipcRenderer.invoke('saveMaps', dir, maps, picture),
+  shareBook: (dir) => ipcRenderer.invoke('shareBook', dir),
+  spelling: () => ipcRenderer.invoke('spelling'),
+  setSpelling: (languages) => ipcRenderer.invoke('setSpelling', languages),
+  spellingWords: (words) => ipcRenderer.invoke('spellingWords', words),
+  addToDictionary: (word) => ipcRenderer.invoke('addToDictionary', word),
+  onSpelling: (cb) => {
+    const listener = (_e: unknown, spelling: Parameters<typeof cb>[0]) => cb(spelling);
+    ipcRenderer.on('spelling', listener);
+    return () => void ipcRenderer.removeListener('spelling', listener);
+  },
+  openBookFile: () => ipcRenderer.invoke('openBookFile'),
   showInFolder: (path) => ipcRenderer.invoke('showInFolder', path),
   saveCopy: (dir, path) => ipcRenderer.invoke('saveCopy', dir, path),
   onNavigate: (cb) => void ipcRenderer.on('navigate', (_e, direction: 'back' | 'forward') => cb(direction)),
@@ -56,6 +68,25 @@ const api: LoreApi = {
     return () => void ipcRenderer.removeListener('flush-before-close', listener);
   },
   flushed: (ok) => ipcRenderer.send('flushed', ok),
+  askAgents: (refresh) => ipcRenderer.invoke('askAgents', refresh),
+  askChat: (dir) => ipcRenderer.invoke('askChat', dir),
+  askSend: (dir, agent, text, bookName, about) => ipcRenderer.invoke('askSend', dir, agent, text, bookName, about ?? null),
+  askStop: (dir) => ipcRenderer.invoke('askStop', dir),
+  askClear: (dir) => ipcRenderer.invoke('askClear', dir),
+  askUndo: (dir, task, force) => ipcRenderer.invoke('askUndo', dir, task, force),
+  pictureService: () => ipcRenderer.invoke('pictureService'),
+  pictureMake: (dir, entryId, type, view, look, prompt) => ipcRenderer.invoke('pictureMake', dir, entryId, type, view, look, prompt),
+  historyList: (dir) => ipcRenderer.invoke('historyList', dir),
+  historyVersions: (dir, path) => ipcRenderer.invoke('historyVersions', dir, path),
+  historyChanges: (dir, id) => ipcRenderer.invoke('historyChanges', dir, id),
+  historyRead: (dir, id, path) => ipcRenderer.invoke('historyRead', dir, id, path),
+  historyKeep: (dir, label) => ipcRenderer.invoke('historyKeep', dir, label),
+  historyRestore: (dir, id, paths, label) => ipcRenderer.invoke('historyRestore', dir, id, paths, label),
+  onAskChanged: (cb) => {
+    const listener = (_e: unknown, chat: Parameters<typeof cb>[0]) => cb(chat);
+    ipcRenderer.on('ask-changed', listener);
+    return () => void ipcRenderer.removeListener('ask-changed', listener);
+  },
   onWorldChanged: (cb) => {
     const listener = (_e: unknown, change: { dir: string; files: string[] }) => cb(change);
     ipcRenderer.on('world-changed', listener);

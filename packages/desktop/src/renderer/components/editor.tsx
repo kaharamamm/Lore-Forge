@@ -24,10 +24,14 @@ interface Props {
   actions: WarningActions;
   onChange: (e: Entry) => void;
   onDelete: () => void;
+  /** This entry's history: its earlier versions. */
+  onHistory: () => void;
+  /** Ask AI about this entry. */
+  onAsk: () => void;
   onOpen: (id: string) => void;
 }
 
-export function EntryEditor({ dir, world, entry, warnings, actions, onChange, onDelete, onOpen }: Props) {
+export function EntryEditor({ dir, world, entry, warnings, actions, onChange, onDelete, onHistory, onAsk, onOpen }: Props) {
   const cal = world.manifest.calendar;
   // Each type section gets a setter typed for its own entry shape.
   const set = <E extends Entry>(e: E) => (patch: Partial<E>) => onChange({ ...e, ...patch });
@@ -44,7 +48,11 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
             {world.files[entry.id] && <span class="meta-chip" title={t('Its file in the world folder')}><Icon name="open-folder" /><span class="meta-chip-path">{world.files[entry.id]}</span></span>}
           </p>
         </div>
-        <button type="button" class="ghost danger" onClick={onDelete}><Icon name="trash-can" /> {t('Delete entry')}</button>
+        <span class="editor-head-actions">
+          <button type="button" class="ghost entry-ask" onClick={onAsk} title={t('Ask AI about this entry (Ctrl+J opens Ask AI)')}><Icon name="magic-lamp" /> {t('Ask AI')}</button>
+          <button type="button" class="ghost entry-history" onClick={onHistory} title={t('Earlier versions of this entry, and putting one back')}><Icon name="tied-scroll" /> {t('History')}</button>
+          <button type="button" class="ghost danger" onClick={onDelete}><Icon name="trash-can" /> {t('Delete entry')}</button>
+        </span>
       </header>
 
       <section class="live-warnings" aria-live="polite" aria-label={t('Live warnings for this entry')}>

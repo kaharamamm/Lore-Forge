@@ -22,10 +22,17 @@ interface Props {
   onAppSettings: () => void;
   /** Read every file of the world again from disk (after editing them outside Lore-Forge). */
   onReload: () => void;
+  /** The book history: its snapshots, what changed since, putting things back. */
+  onHistory: () => void;
+  /** Show the Warnings tab of the side panel, its heading focused. */
+  onWarnings: () => void;
   /** Close the world and go back to the library shelf. */
   onLibrary: () => void;
   /** Make an editable copy of this world (and open it). */
   onDuplicate: () => void;
+  /** Save the whole book as one file; `sharing` while it is being packed. */
+  onShare: () => void;
+  sharing?: boolean;
   /** This is the read-only sample that ships with the app. */
   sample?: boolean;
 }
@@ -38,7 +45,7 @@ function tagline(ix: WorldIndex, e: Entry): string {
 }
 
 /** The world at a glance: its cover, what is in it, and a card for every entry. */
-export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCoverSave, onSettings, onAppSettings, onReload, onLibrary, onDuplicate, sample = false }: Props) {
+export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCoverSave, onSettings, onAppSettings, onReload, onWarnings, onHistory, onLibrary, onDuplicate, onShare, sharing = false, sample = false }: Props) {
   const ix = useMemo(() => new WorldIndex(world), [world]);
   const [editing, setEditing] = useState<string | null>(null);
   const [coverOpen, setCoverOpen] = useState(false);
@@ -71,7 +78,7 @@ export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCove
             <li class="t-era"><a href="#timeline" title={t('Open the Timeline')} onClick={(e) => { e.preventDefault(); onGo('timeline'); }}><Icon name="hourglass" /> {tj('{n} Eras', { n: <strong>{eras}</strong> })}</a></li>
             {open.length > 0 && (
               <li class={`home-warn ${errors ? 'is-error' : 'is-warning'}`}>
-                <a href="#warnings-title" title={t('{errors} errors, {warnings} warnings: show them', { errors, warnings: open.length - errors })} onClick={(e) => { e.preventDefault(); const h = document.getElementById('warnings-title'); h?.scrollIntoView({ block: 'start' }); h?.focus(); }}>
+                <a href="#warnings-title" title={t('{errors} errors, {warnings} warnings: show them', { errors, warnings: open.length - errors })} onClick={(e) => { e.preventDefault(); onWarnings(); }}>
                   <Icon name="hazard-sign" /> {open.length === 1 ? tj('{n} Warning', { n: <strong>{open.length}</strong> }) : tj('{n} Warnings', { n: <strong>{open.length}</strong> })}
                 </a>
               </li>
@@ -86,6 +93,8 @@ export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCove
               <button type="button" class="ghost home-settings" onClick={onSettings}><Icon name="calendar" /> {t('World settings')}</button>
             </span>
             <button type="button" class={sample ? 'primary home-duplicate' : 'ghost home-duplicate'} onClick={onDuplicate} title={t('Make a full copy of this world under a new name, and open it')}><Icon name="files" /> {t('Duplicate')}</button>
+            <button type="button" class="ghost home-share" onClick={onShare} disabled={sharing} title={t('Save the whole book as one file, to send to someone or keep as a backup. Anyone with Lore-Forge can open it.')}><Icon name="envelope" /> {sharing ? t('Packing…') : t('Share…')}</button>
+            <button type="button" class="ghost home-history" onClick={onHistory} title={t('Book history: earlier versions of this book, and putting them back')}><Icon name="tied-scroll" /> {t('History')}</button>
             <button type="button" class="ghost home-reload" onClick={onReload} title={t('Read every file of this world again, after editing them outside Lore-Forge')}><Icon name="cycle" /> {t('Reload from disk')}</button>
           </div>
         </div>

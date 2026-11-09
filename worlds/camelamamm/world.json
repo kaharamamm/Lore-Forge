@@ -66,5 +66,13 @@
     "titleColor": "#fff1d2",
     "image": "images/cover.png",
     "showEmblem": false
-  }
+  },
+  "maps": [
+    {
+      "id": "the-sunsea",
+      "name": "The Sunsea",
+      "image": "maps/the-sunsea.jpg",
+      "place": "place-sunsea"
+    }
+  ]
 }

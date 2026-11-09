@@ -8,6 +8,8 @@ The assistant writes the whole book in Lore-Forge, not only in the chat. It crea
 
 The connection uses the [Model Context Protocol](https://modelcontextprotocol.io) (MCP). Lore-Forge includes an MCP server, `lore mcp`. Your AI app starts it on your computer when it needs it, and it reads and writes your books there.
 
+Claude Code and Codex can also be run from inside Lore-Forge: the **Ask AI** tab next to Warnings in a book gives them a task with these same tools, without a terminal (see [Ask AI](USER-GUIDE.md#ask-ai-ctrlj)). It needs no connection: the app hands them the server itself, for that run only.
+
 ## Connect an AI app
 
 In the library, choose **Connect AI** (top right), then **Connect** next to your app.
@@ -96,6 +98,7 @@ The server gives the assistant these tools. Most apps show them under **lore-for
 | `story_proposals` | What the chapters mention that the book does not have yet: add it or ignore it |
 | `check_book`, `mark_intended` | The consistency rules the app runs; keep a contradiction on purpose with a note |
 | `create_image`, `add_image` | Make a picture with your service, or attach one, for an entry, one of its looks, or the cover |
+| `save_map`, `get_map` | Add, rename or remove a map of the world (from a picture file, a web address or a picture the book has); look at a map with its pins and the places not on it yet. Places are pinned with `save_entries` (a place's `pins`) |
 | `export_book` | The Story Book (PDF or Word) or the World Codex (PDF), to the book's `exports/` folder or a path you give |
 
 Apps that show MCP prompts also list **Write a story in Lore-Forge** (`write_story`): give it the idea, and optionally the number of chapters, the audience and a style.

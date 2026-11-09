@@ -11,7 +11,7 @@ import { check, DETAIL_FIELDS, ENTRY_TYPES } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 import {
   attachPicture, bookOverview, checkBook, createBook, deleteEntry, duplicateBook, entryJson, exportBook, findEntry, formatWarning, linkEntries,
-  loadPictureSource, looksOn, markIntended, patchBook, pictureBrief, readStory, saveEntries, storyProposals, writeChapter, type BookPatch,
+  loadPictureSource, looksOn, mapView, markIntended, patchBook, pictureBrief, readStory, saveEntries, saveMap, storyProposals, writeChapter, type BookPatch,
   type EntryInput,
 } from './books.ts';
 import { guide, INSTRUCTIONS, writeStoryPrompt } from './guide.ts';
@@ -21,7 +21,7 @@ import {
 } from './images.ts';
 import { bundledResources, Library, readManifestInfo, type LibraryOptions } from './library.ts';
 
-export const SERVER_VERSION = '1.2.0';
+export const SERVER_VERSION = '1.3.0';
 
 export interface ServerOptions extends LibraryOptions {
   /** fetch for the image services (tests replace it). */
@@ -32,7 +32,8 @@ export interface ServerOptions extends LibraryOptions {
 }
 
 type Text = { type: 'text'; text: string };
-type Result = { content: Text[]; isError?: boolean };
+type Picture = { type: 'image'; data: string; mimeType: string };
+type Result = { content: (Text | Picture)[]; isError?: boolean };
 const ok = (v: unknown): Result => ({ content: [{ type: 'text', text: typeof v === 'string' ? v : JSON.stringify(v, null, 1) }] });
 const fail = (e: unknown): Result => ({ content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }], isError: true });
 async function attempt(fn: () => Promise<Result | unknown>): Promise<Result> {
@@ -96,6 +97,12 @@ const entrySchema = z.object({
   looks: opt(z.array(lookSchema)).describe('Other looks over time. When the appearance changes for good or for a while (a war wound, a coronation, new clothes, growing old), add a look instead of rewriting visual. Each look given changes the look with its id (else its name), only in the fields given, or is added; looks you leave out stay.'),
   picture: opt(z.object({ icon: z.string().optional(), color: z.string().optional(), accent: z.string().optional(), image: z.string().optional() })).describe('Card look: a game-icons.net icon name and #rrggbb colours, or one of its images.'),
   chapter: opt(z.string()), bookOrder: opt(z.number()),
+  pins: opt(z.array(z.object({
+    map: z.string().describe('The map\'s name or id.'),
+    x: z.union([z.number(), z.string()]).optional().describe('Percent of the picture from its left edge (0 to 100).'),
+    y: z.union([z.number(), z.string()]).optional().describe('Percent of the picture from its top edge (0 to 100).'),
+    remove: z.boolean().optional().describe('true takes the place off this map.'),
+  }))).describe('Place: where it is on the book\'s maps (look with get_map first). Matched by map: pins on maps you leave out stay.'),
   ...detailShape,
 }).loose();
 
@@ -408,6 +415,29 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     const pic = await loadPictureSource(a.source, fetchFn as typeof fetch);
     const saved = await attachPicture(dir, a.entry, brief.view, pic.data, pic.ext, { ...(a.tool ? { tool: a.tool } : {}), ...(a.prompt ? { prompt: a.prompt } : {}), ...(/^https?:/i.test(a.source) ? { sources: [a.source] } : {}) }, brief.look?.id);
     return { saved: saved.file, for: saved.entry ?? 'the book cover', ...(brief.look ? { look: brief.look.name || brief.look.id } : {}), view: brief.view };
+  }));
+
+  server.registerTool('save_map', {
+    title: 'Save a map',
+    description: 'Add a map of the world, or change or remove one. A new map needs a picture: a local file, an http(s) address, a data:image URL, or a picture the book already has (its path inside the book, such as one create_image made of a place with view "map"). Then look at it with get_map and pin places on it with save_entries (a place\'s pins).',
+    inputSchema: {
+      book: bookRef,
+      map: z.string().describe('The map\'s name or id. A name no map has adds a new map.'),
+      name: z.string().optional().describe('A new name for the map (its id stays).'),
+      picture: z.string().optional().describe('The map\'s picture; replaces the one it had.'),
+      place: opt(z.string()).describe('The place the map shows (a city, a region), by name: its pin on other maps opens this map. null: the whole world.'),
+      remove: z.boolean().optional().describe('true removes the map, its picture and every pin on it.'),
+    },
+  }, async (a) => attempt(() => saveMap(writable(a.book), { map: a.map, ...(a.name !== undefined ? { name: a.name } : {}), ...(a.picture !== undefined ? { picture: a.picture } : {}), ...(a.place !== undefined ? { place: a.place } : {}), ...(a.remove ? { remove: true } : {}) }, fetchFn as typeof fetch)));
+
+  server.registerTool('get_map', {
+    title: 'Look at a map',
+    description: 'One of the book\'s maps: its picture, so you can see where things are, every place pinned on it with x and y (percent of the picture from its left and top edges), and the places not on it yet.',
+    inputSchema: { book: bookRef, map: z.string().optional().describe('The map\'s name or id; default the first one.') },
+    annotations: { readOnlyHint: true },
+  }, async (a) => attempt(async () => {
+    const r = await mapView(lib.resolveBook(a.book), a.map);
+    return { content: [{ type: 'text', text: JSON.stringify(r.info, null, 1) }, ...(r.image ? [{ type: 'image' as const, ...r.image }] : [])] };
   }));
 
   server.registerTool('export_book', {

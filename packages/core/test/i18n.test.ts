@@ -138,7 +138,7 @@ const EVERYTHING = (): World => world([
   { id: 'char-blank', type: 'character', name: '' },
   { id: 'place-gate', type: 'place', name: 'Gate', status: 'standing', founded: '1500', destroyed: '1850', partOf: 'place-qarim', kind: 'city', ruler: 'char-x', images: [{ file: 'images/g.png', view: 'establishing' }] },
   { id: 'place-qarim', type: 'place', name: 'Qarim', status: 'standing', founded: '~1200' },
-  { id: 'place-oasis', type: 'place', name: 'Oasis', status: 'standing' },
+  { id: 'place-oasis', type: 'place', name: 'Oasis', status: 'standing', pins: [{ map: 'land', x: 40, y: 60 }, { map: 'nowhere', x: 10, y: 20 }] },
   { id: 'char-t', type: 'character', name: 'Tarık', locations: [{ place: 'place-oasis', from: '01.01.1900', to: '30.01.1900' }] },
   { id: 'evt-t', type: 'event', name: 'Market Day', date: '15.01.1900', place: 'place-qarim', participants: [{ id: 'char-t' }] },
   { id: 'fac-guard', type: 'faction', name: 'Guard', status: 'active', founded: '1930', dissolved: '1990', leader: 'char-x', relations: [{ type: 'parent-of', target: 'char-x' }, { type: 'part-of', target: 'place-gate' }, { type: 'involved-in', target: 'char-x' }] },
@@ -154,7 +154,7 @@ const EVERYTHING = (): World => world([
   { id: 'note-b', type: 'note', name: 'Yearless', date: '~12.03', body: 'x' },
   { id: 'note-c', type: 'note', name: 'Unreadable', date: 'zz', body: 'x' },
 ], {
-  manifest: { calendar: { eras: [{ id: 'OK', name: 'Old Kingdom', start: -1000, end: -500 }, { id: 'AS', name: 'After the Sundering', start: 1 }], defaultEra: 'AS' }, book: { title: 'Tales', author: 'Ayşe', publisher: 'Pub', dedication: 'For you', epigraph: 'Words', epigraphSource: 'Someone' } },
+  manifest: { maps: [{ id: 'land', name: 'The Land', image: 'maps/land.png', place: 'char-x' }, { id: 'lost', name: 'Lost Isles', image: 'maps/lost.png', place: 'Atlantis' }], calendar: { eras: [{ id: 'OK', name: 'Old Kingdom', start: -1000, end: -500 }, { id: 'AS', name: 'After the Sundering', start: 1 }], defaultEra: 'AS' }, book: { title: 'Tales', author: 'Ayşe', publisher: 'Pub', dedication: 'For you', epigraph: 'Words', epigraphSource: 'Someone' } },
   story: [
     'Orsan was born in 1700. Ilsa died in 1991. Orsan was dead.',
     'Orsan fought at Qarim in 1930. Ilsa killed Orsan in 1999. Ilsa, the Empress of Qarim, smiled. Siege happened in 1766.',
@@ -204,7 +204,7 @@ describe('every text core shows has Turkish', () => {
     cover(await loadWorld(join(ROOT, 'packages/core/test/fixtures/shifting-sands')), 'shifting-sands', true);
     cover(EVERYTHING(), 'everything', true);
     const broken = parseWorld([
-      { path: 'world.json', content: JSON.stringify({ schemaVersion: 1, id: 'b', name: 'B', calendar: { eras: [{ id: 'Y', name: 'Year', start: 1 }], defaultEra: 'Y', months: 'x', approxYears: -1 }, rules: { 'after-death': 'Off' } }) },
+      { path: 'world.json', content: JSON.stringify({ schemaVersion: 1, id: 'b', name: 'B', calendar: { eras: [{ id: 'Y', name: 'Year', start: 1 }], defaultEra: 'Y', months: 'x', approxYears: -1 }, rules: { 'after-death': 'Off' }, maps: [{ id: 'a', name: 'A', image: 'a.png' }, { id: 'A', name: 'B', image: 'b.png' }, { name: 'C' }] }) },
       { path: 'intended.json', content: '{}' },
       { path: 'story-ignored.json', content: 'x' },
       { path: 'characters/a.md', content: 'no front matter' },
@@ -216,6 +216,7 @@ describe('every text core shows has Turkish', () => {
       { path: 'characters/g.md', content: '---\nid: g\nname: G\ntype: character\nstatus: Zombie\naliases: 5\nrelations: x\nlocations: [3]\nimages: [{file: a.png}]\nbookOrder: x\nvisual: 4\npicture: {color: red}\nlanguages: [{a: 1}]\ngender: [1]\n---\n' },
       { path: 'places/h.md', content: '---\nid: f\nname: Twice\ntype: place\n---\n' },
       { path: 'places/i.md', content: '---\nid: i\nname: Misplaced\ntype: item\n---\n' },
+      { path: 'places/j.md', content: '---\nid: j\nname: Pinned\ntype: place\npins: [{map: a, x: 200, y: 5}, {x: 1, y: 2}, {map: a, x: wide, y: 1}, {map: a, y: 3}]\n---\n' },
       { path: 'story/01-bad.md', content: '---\ntitle: [1]\norder: x\ndate: 99 ZZ\n---\nBody' },
       { path: 'story/02-bad.md', content: '---\n- x\n---\nBody' },
     ]);
@@ -223,6 +224,7 @@ describe('every text core shows has Turkish', () => {
     for (const t of ['x', '[]', '{"schemaVersion":2}', '{"schemaVersion":1,"id":"a","name":"b","calendar":{"eras":[{"id":1}],"defaultEra":"A"}}', '{"schemaVersion":1,"id":"a","name":"b","calendar":{"eras":[{"id":"B","name":"b","start":1}],"defaultEra":"A"}}']) {
       for (const p of parseManifest(t).problems) localize(p, CORE_TR, note('world.json'));
     }
+    for (const i of parseManifest('{"schemaVersion":1,"id":"a","name":"b","calendar":{"eras":[{"id":"B","name":"b","start":1}],"defaultEra":"B"},"maps":5}').issues) localize(i, CORE_TR, note('world.json maps'));
     for (const files of [[], [{ path: 'world.json', content: '{}' }]]) assert.throws(() => parseWorld(files), (e: Error) => (localize(e.message, CORE_TR, note('parseWorld')), true));
     for (const json of ['x', '{"buffers":[{"uri":"a.bin"}]}']) assert.throws(() => gltfMustBeEmbedded(json), (e: Error) => (localize(e.message, CORE_TR, note('3D models')), true));
     const cal = { eras: [{ id: 'OK', name: 'Old', start: -1000 }, { id: 'AS', name: 'After', start: 1 }], defaultEra: 'AS', months: [{ name: 'Ashfall', days: 30 }] };

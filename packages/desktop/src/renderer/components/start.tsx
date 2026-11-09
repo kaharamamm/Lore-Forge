@@ -1013,6 +1013,20 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
       setProblem((e as Error).message);
     }
   };
+  /** A book someone shared as one file: it goes on the shelf, and opens. */
+  const [unpacking, setUnpacking] = useState(false);
+  const openBookFile = async () => {
+    setProblem(null);
+    setUnpacking(true);
+    try {
+      const book = await window.lore.openBookFile();
+      if (book) onOpen(book.dir);
+    } catch (e) {
+      setProblem((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+    } finally {
+      setUnpacking(false);
+    }
+  };
   return (
     <main class="start library">
       <Aura scene />
@@ -1029,6 +1043,7 @@ export function StartScreen({ onOpen, error, onTour, highlight = null }: { onOpe
         </div>
         <div class="start-actions">
           <button type="button" class="ghost" onClick={() => void openFolder()}><Icon name="open-folder" /> {t('Open a world folder…')}</button>
+          <button type="button" class="ghost start-open-file" onClick={() => void openBookFile()} disabled={unpacking} title={t('Open a book someone shared as one file (.loreforge): it goes on your shelf')}><Icon name="box-unpacking" /> {unpacking ? t('Opening…') : t('Open a book file…')}</button>
           <button type="button" class="ghost start-tour" onClick={onTour} title={t('A short guided tour of Lore-Forge, using the sample world')}><Icon name="direction-signs" /> {t('Take the tour')}</button>
           <button type="button" class="ghost start-ai has-label" onClick={() => setDialog({ kind: 'ai' })} aria-label={t('Connect AI')} title={t('Let Claude, Codex or another AI app write worlds and stories in Lore-Forge, with pictures')}><Icon name="magic-lamp" /><span class="btn-label">{t('Connect AI')}</span></button>
           <button type="button" class="ghost start-notes has-label" onClick={() => setDialog({ kind: 'notes' })} aria-label={t('Patch notes')} title={t('Patch notes: what is new in each version of Lore-Forge')}><Icon name="tied-scroll" /><span class="btn-label">{t('Patch notes')}</span></button>

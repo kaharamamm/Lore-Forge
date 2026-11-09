@@ -13,9 +13,17 @@ const ownText = new Map<string, string>();
 const touched = new Map<string, number>();
 const TOUCH_MS = 3000;
 
+/** Told of every file the app itself writes, copies, moves or deletes (book history: the person's own saves). */
+const ownListeners = new Set<(full: string) => void>();
+export function onOwnChange(listener: (full: string) => void): () => void {
+  ownListeners.add(listener);
+  return () => void ownListeners.delete(listener);
+}
+
 /** Call just before the app writes a text file. */
 export function ownWrite(full: string, content: string): void {
   ownText.set(key(full), content);
+  for (const f of ownListeners) f(full);
 }
 /** Whether `text` is what the app itself last wrote to this file (and nobody else wrote since). */
 export function isOwnText(full: string, text: string): boolean {
@@ -24,6 +32,7 @@ export function isOwnText(full: string, text: string): boolean {
 /** Call just before the app copies, moves or deletes a file (or folder). */
 export function ownTouch(full: string): void {
   touched.set(key(full), Date.now());
+  for (const f of ownListeners) f(full);
 }
 
 function isOwn(full: string): boolean {

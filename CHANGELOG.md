@@ -2,7 +2,7 @@
 
 All notable changes to Lore-Forge are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-11-09
 
 ### Added
 
@@ -12,8 +12,28 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 - **Undo and redo in the editor.** Ctrl+Z undoes the open entry's last change, whatever it was: a status (alive to dead), a list choice, a picture or icon, a row added or removed, or typing (one step per pause). Ctrl+Y or Ctrl+Shift+Z redoes it. The field comes into view and flashes. A change made outside the app since (by an AI assistant or an editor) is never undone by accident.
 - **GIF pictures.** Animated GIFs play everywhere a picture shows. The World Codex and Story Book (PDF and Word) print a GIF's first frame instead of leaving it out.
 - In the sample world, Mr Camel's portrait is an animated GIF (steam rises from his kettle), and he has a 3D model.
+- **Ask AI.** A tab next to Warnings runs Claude Code or Codex on the open book. Type a task (*"Write the next chapter"*, *"Fix the open warnings"*) and watch its replies, its steps and every change it makes as they happen; names in its steps link to the entries.
+  - It runs on your own Claude or ChatGPT plan, says when you are close to your Claude usage limit, and can be stopped at any time.
+  - It can only use Lore-Forge's own tools: no commands, no other files, no web.
+  - Each book keeps its conversation, so follow-up questions work, also after a restart. Ctrl+J opens it.
+  - **Ask AI about this:** an **Ask AI** button on each entry and in the Story view (also for the text you chose, and in its right-click menu) tells the AI what you mean and offers matching suggestions.
+- **Book history.** Lore-Forge keeps snapshots of each book on this computer: when it opens, every 20 minutes while it changes, before each Ask AI task and before every restore.
+  - **History** on World Home shows what changed since any snapshot and puts one entry, chapter or picture back, or the whole book.
+  - **History** in an entry's header shows its earlier versions field by field, with **Restore this version**.
+  - Every restore can be taken back too.
+- **Undo an AI task.** After Ask AI changes the book, the panel lists what changed with an **Undo** button. Your own edits made meanwhile are left alone, and if something was edited again since, it asks first.
+- **Make pictures from the app.** **Make a picture…** under an entry's pictures (and on each picture, to make a new one) draws one with the picture service set in Connect AI. The prompt comes from the visual description and the book's art style, and can be changed first; the picture lands in its view, for the look you are on. The AI tools and the app build the same prompt.
+- **Spell checking in English and Turkish.** **Settings → Spelling** chooses the languages: English (US), English (UK), Türkçe, or none. Right-click a word with a wavy line for suggestions or **Add to the dictionary**; in the Story they sit at the top of its own menu. The names in the open book count as spelled right while it is open. Right-click in a text field now also offers Cut, Copy, Paste and Select all.
+- **Share a book as one file.** **Share…** on World Home saves the whole book (entries, chapters, pictures, maps, 3D models and settings) as one `.loreforge` file, to send to someone or keep as a backup. **Open a book file…** in the library puts a shared book on the shelf as a copy of its own and opens it.
+- **World maps.** A new **Map** view (Ctrl+5) shows the world's maps with its places pinned on them.
+  - **Add a map…** takes a picture of a map. A book can have several (the world, a region, a city), and a map of one place opens from that place's pin on the other maps.
+  - Each pin shows the place's picture and name. Hovering shows who lives there, what happened there and the places inside it; a click opens the place.
+  - **Edit pins**: drag places onto the map and pins around it, nudge a pin with the arrow keys, undo with Ctrl+Z.
+  - AI assistants can add maps (`save_map`), look at one with its pins (`get_map`) and pin places with `save_entries`. The new `map-pin` check warns about a pin on a map the book does not have.
+  - The sample world has a map of the Sunsea, with Camelamamm, the Glass Dunes and the Hollow of Echoes on it.
 - **Looks.** An entry can look different over time: after a war, in coronation robes, in old age. In the editor's Appearance section, **+ New look** adds one next to the **Default** look, with a name, why it looks different, and when it applies (always, after or before an event, between dates, or in an era). A look has its own visual description (only what changes; the rest comes from the Default look), its own pictures and its own 3D models.
   - The checks warn about a look tied to an era or event that does not exist, a look before birth or after death, and two looks at the same time.
+  - On the Timeline, a gold line along the bottom of an entry's card shows when each look applies; click it to open the entry on that look.
   - The World Codex shows every look with its pictures and its own art brief, and an event's art brief describes each participant as they look on its date.
   - AI assistants can add, change and remove looks, ask how entries look on a date (the new `look_at` tool), see the looks of the people a dated chapter names, and make or attach a picture of a look.
   - Mr Camel's "Caravan days" in the sample world is an example.
@@ -30,6 +50,8 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 - Gender suggests female (♀), male (♂) and genderless (⚲), instead of non-binary.
 - 3D models turn by themselves when they open (Auto-rotate starts on), unless the system asks for reduced motion.
 - Questions such as deleting a 3D model dim the whole window, like the others.
+- The Warnings panel is wider, as wide as Ask AI next to it.
+- The buttons on a picture are roomier: Details and Remove sit in its top corners, and Make a new picture, Replace and Save a copy share one bar along the bottom.
 - World home has **Settings** next to **World settings**, and changing the language keeps Settings open.
 - **Library settings** is called **Settings**. The display settings no longer explain themselves under each row, and the resolutions no longer carry HD, Full HD, 2K and 4K tags.
 - **Story proposals find far more, and fewer wrong ones.**
@@ -162,5 +184,5 @@ First public release. The downloads of 4 November were replaced on 7 November by
 
 Copies downloaded before 7 November 2026 have no updater. Download the current version once from the links in the README; from then on Lore-Forge updates itself.
 
-[Unreleased]: https://github.com/kaharamamm/Lore-Forge/compare/v1.0.0...HEAD
+[1.1.0]: https://github.com/kaharamamm/Lore-Forge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kaharamamm/Lore-Forge/releases/tag/v1.0.0

@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  artBrief, CORE_TR, imageLook, localize, lookAt, lookImages, lookSpan, lookVisual, lookWhen, newLookId, parseEntry, recordMessages, serializeEntry, worldCodex,
+  artBrief, CORE_TR, imageLook, timelineModel, localize, lookAt, lookImages, lookSpan, lookVisual, lookWhen, newLookId, parseEntry, recordMessages, serializeEntry, worldCodex,
   WorldIndex, type Entry,
 } from '@lore-forge/core';
 import { importModel, listModels, moveModels, renameModel } from '@lore-forge/core/node';
@@ -182,4 +182,22 @@ test('3D models of a look live in their own folder, and go back to the Default l
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('the timeline shows each look on the lane of its entry, clipped to the lane', () => {
+  const model = timelineModel(world([camel, gate]), [])!;
+  const lane = model.groups.find((g) => g.type === 'character')!.lanes.find((l) => l.entry.id === 'char-camel')!;
+  const perYear = model.daysPerYear;
+  assert.deepEqual(lane.looks.map((l) => [l.id, l.name, l.when]), [
+    ['caravan-days', 'Caravan days', 'from 490 to 498'],
+    ['after-the-war', 'After the war', 'after Battle of Gate'],
+    ['old-age', 'Old age', 'from 560'],
+  ]);
+  const [caravan, war, old] = lane.looks;
+  assert.equal(caravan!.from, 490 * perYear);
+  assert.equal(caravan!.to, 499 * perYear - 1);
+  assert.equal(war!.from, 521 * perYear, 'after the battle: the day after it ends');
+  assert.equal(old!.to, lane.to, 'a look without an end runs to the end of the lane (died 600)');
+  assert.equal(lane.to, 601 * perYear - 1);
+  assert.deepEqual(model.groups.find((g) => g.type === 'event')!.lanes[0]!.looks, [], 'a moment has no looks');
 });

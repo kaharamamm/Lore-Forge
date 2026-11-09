@@ -4,6 +4,7 @@ import { LANGUAGES, pct, switchLanguage, t, useLanguage, type Lang } from '../i1
 import { Dialog } from './dialog.tsx';
 import { Flag } from './flag.tsx';
 import { Icon } from './icon.tsx';
+import { SPELL_NAMES } from '../../shared/spelling.ts';
 
 /** One pill of a PillChoices row. A pill that cannot be chosen says why in `why` (its tooltip). */
 interface PillChoice<T extends string> { value: T; label: preact.ComponentChildren; why?: string }
@@ -135,6 +136,49 @@ function DisplaySection() {
 }
 
 /**
+ * Settings, Spelling: the languages to check, applied at once and kept for the next start. None is off. On macOS the
+ * system's checker picks the language, so it is only on or off there.
+ */
+function SpellingSection() {
+  const [s, setS] = useState<{ languages: string[]; offered: string[]; choose: boolean } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void window.lore.spelling().then((x) => { if (live) setS(x); });
+    return () => { live = false; };
+  }, []);
+  if (!s) return null;
+  const set = (languages: string[]) => {
+    setS({ ...s, languages });
+    void window.lore.setSpelling(languages).then((next) => setS((x) => x && { ...x, languages: next }));
+  };
+  return (
+    <section class="settings-section spelling-settings" aria-labelledby="settings-spelling">
+      <h3 id="settings-spelling" class="settings-heading">{t('Spelling')}</h3>
+      <div class="settings-row">
+        <span class="settings-label" id="spelling-label">{t('Check spelling in')}</span>
+        {s.choose ? (
+          <div class="spelling-choice" role="group" aria-labelledby="spelling-label">
+            {s.offered.map((l) => (
+              <label key={l} class="check">
+                <input type="checkbox" class="spelling-language" value={l} checked={s.languages.includes(l)}
+                  onChange={(e) => set(e.currentTarget.checked ? [...s.languages, l] : s.languages.filter((x) => x !== l))} />
+                <span lang={l}>{SPELL_NAMES[l] ?? l}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <label class="check"><input type="checkbox" class="spelling-on" checked={s.languages.length > 0} onChange={(e) => set(e.currentTarget.checked ? ['en-US'] : [])} /> {t('On (macOS picks the language)')}</label>
+        )}
+      </div>
+      <div class="settings-row">
+        <span class="settings-label" aria-hidden="true" />
+        <p class="muted settings-help">{t('Words the dictionary does not know get a wavy line: right-click one for suggestions. The names in the open book count as spelled right. A dictionary this computer does not have is downloaded once from Google; nothing you write is sent.')}</p>
+      </div>
+    </section>
+  );
+}
+
+/**
  * Settings, from the library (the gear) and from inside a book (the top bar): the language and the display, which
  * apply at once, then where new worlds go (a folder field with Browse…) and whether the sample world is on the shelf.
  * Those two are a draft until Save, and Cancel, Escape or a click outside leave them as they were.
@@ -172,6 +216,7 @@ export function AppSettings({ onClose, onSaved }: { onClose: () => void; onSaved
         <>
           <LanguageSection />
           <DisplaySection />
+          <SpellingSection />
           <section class="settings-section" aria-labelledby="settings-where">
             <h3 id="settings-where" class="settings-heading">{t('Where new worlds go')}</h3>
             <div class="settings-row">

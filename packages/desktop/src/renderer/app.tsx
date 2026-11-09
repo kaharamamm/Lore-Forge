@@ -3,20 +3,23 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   analyzeStory, applyFields, builtinRules, imageLook, chapterPath, check, checkWorld, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, isStoryFact, newEntryId, normalizeName, parseWorld,
   proposalEntry, relationWeb, searchEntries, eraUsage, worldCoverArt, serializeChapter, serializeEntry, serializeIntended, serializeStoryIgnored, sortChapters, sortWarnings, STORY_IGNORED_FILE, storyFact, timelineModel, TYPE_SINGULAR, WorldIndex,
-  type BookSettings, type Calendar, type Entry, type EntryType, type FactRef, type IconName, type Proposal, type ProposalFields, type StoryAnalysis, type StoryChapter, type StoryIgnore, type Warning, type World, type WorldCoverSettings,
+  type BookSettings, type Calendar, type Entry, type EntryType, type FactRef, type IconName, type Proposal, type ProposalFields, type StoryAnalysis, type StoryChapter, type StoryIgnore, type Warning, type World, type WorldCoverSettings, type WorldMap,
 } from '@lore-forge/core';
-import type { PdfKind, PublishOptions } from '../shared/api.ts';
+import type { AskAbout, MapPicture, PdfKind, PublishOptions } from '../shared/api.ts';
 import { EntryEditor } from './components/editor.tsx';
 import { RelationsView, type RelationMode } from './components/relations.tsx';
 import { Sidebar } from './components/sidebar.tsx';
 import { DuplicateBook, StartScreen } from './components/start.tsx';
 import { Tour, type TourStep } from './components/tour.tsx';
 import { UpdateToast } from './components/updates.tsx';
-import { viewers } from './components/models.tsx';
+import { size as fileSize, viewers } from './components/models.tsx';
 import { TimelineView } from './components/timeline.tsx';
+import { MapView } from './components/map.tsx';
 import { PreviewDialog, previewDoc, sheetsOf } from './components/preview.tsx';
 import { ToastStack, useToasts } from './components/toasts.tsx';
 import { involves, WarningsPanel, type WarningActions } from './components/warnings.tsx';
+import { AskAiPanel } from './components/ask-ai.tsx';
+import { HistoryDialog } from './components/history.tsx';
 import { Icon } from './components/icon.tsx';
 import { Aura } from './components/aura.tsx';
 import { ErasLink, WorldSettings } from './components/world-settings.tsx';
@@ -28,13 +31,14 @@ import { mergeLive, type LiveMerge } from './merge.ts';
 import { caretAfter, EMPTY_HISTORY, getPath, record, redo, undo, type EntryHistory } from './undo.ts';
 import { SHOW_IMAGES } from './components/images.tsx';
 import { SHOW_LOOK } from './components/looks.tsx';
+import { bookWords } from './spelling.ts';
 import { WorldHome } from './components/home.tsx';
 import { forgetImageFiles, forgetImages, Portrait, portraitFile, WorldBookCover, WorldDir } from './components/cover.tsx';
 import { ConfirmDialog } from './components/confirm.tsx';
 import { PaneResizer, SaveIndicator, sidebarMax, useSidebarWidth, type SaveState } from './components/chrome.tsx';
 import { ChapterList, StoryView, type StoryActions } from './components/story.tsx';
 
-type View = 'home' | 'editor' | 'timeline' | 'relations' | 'story';
+type View = 'home' | 'editor' | 'timeline' | 'relations' | 'story' | 'map';
 
 const SAVE_DELAY_MS = 400;
 /** A save that failed (a locked or read-only file) is tried again after this. */
@@ -63,7 +67,7 @@ function paneFit(): string[] {
   const doc = document.scrollingElement!;
   if (doc.scrollHeight > h + 1) bad.push(`page scrolls (${doc.scrollHeight} > ${h})`);
   const top = $('.topbar')!.getBoundingClientRect().bottom;
-  for (const sel of ['.sidebar', '.main', '.warnings-panel']) {
+  for (const sel of ['.sidebar', '.main', '.side-pane']) {
     const r = $(sel)?.getBoundingClientRect();
     if (!r) bad.push(`${sel} missing`);
     else if (Math.abs(r.bottom - h) > 1 || Math.abs(r.top - top) > 1) bad.push(`${sel} spans ${Math.round(r.top)}-${Math.round(r.bottom)}, window ${Math.round(top)}-${h}`);
@@ -197,6 +201,32 @@ export function App() {
   const [appSettings, setAppSettings] = useState(false);
   const [creating, setCreating] = useState<EntryType | null>(null);
   const [chapterFile, setChapterFile] = useState<string | null>(null);
+  // The side panel shows Warnings or Ask AI (kept for next time); both stay alive, so nothing is lost by switching.
+  const [side, setSideState] = useState<'warnings' | 'ask'>(() => { try { return localStorage.getItem('lore:side') === 'ask' ? 'ask' : 'warnings'; } catch { return 'warnings'; } });
+  const setSide = (next: 'warnings' | 'ask'): void => {
+    setSideState(next);
+    try { localStorage.setItem('lore:side', next); } catch { /* not kept */ }
+  };
+  /** The Warnings tab, its heading focused (Ctrl+Shift+W, the warnings chip on World home). */
+  const showWarnings = (): void => {
+    setSide('warnings');
+    setTimeout(() => {
+      const h = document.getElementById('warnings-title');
+      h?.scrollIntoView({ block: 'start' });
+      h?.focus();
+    }, 0);
+  };
+  const [asking, setAsking] = useState(false);
+  /** Book history open: for the whole book (entryId null) or one entry. */
+  const [historyFor, setHistoryFor] = useState<{ entryId: string | null } | null>(null);
+  const [askFocus, setAskFocus] = useState(0);
+  /** What the next Ask AI message is about (an entry, a chapter, a part of one). */
+  const [askAbout, setAskAbout] = useState<AskAbout | null>(null);
+  const askAboutThis = (about: AskAbout): void => {
+    setAskAbout(about);
+    setSide('ask');
+    setAskFocus((n) => n + 1);
+  };
   const [reveal, setReveal] = useState<{ start: number; end: number; n: number } | undefined>(undefined);
   const history = useHistory({ dir: world ? dir : null, view, id: selectedId, preview, relMode, chapter: chapterFile }, (loc) => {
     const apply = () => transition(() => {
@@ -357,7 +387,13 @@ export function App() {
           expect(open ? !!warn && warn.querySelector('strong')?.textContent === String(open) && /Warnings?$/.test(warn.textContent?.trim() ?? '') : !warn, `a warnings chip only when there are open warnings (${open}, chip ${warn?.textContent ?? 'none'})`);
           const chipH = (a: Element | null) => a?.getBoundingClientRect().height ?? 0;
           expect(Math.abs(chipH(era) - chipH($('.home-stats .t-note a'))) < 1 && (!warn || Math.abs(chipH(warn) - chipH(era)) < 1), 'the Eras and Warnings chips match the other chips');
-          if (warn) { warn.click(); await tick(); expect(document.activeElement?.id === 'warnings-title', 'the warnings chip opens the warnings'); }
+          if (warn) {
+            // From the Ask AI tab too: the chip brings the Warnings tab back.
+            $<HTMLButtonElement>('#side-tab-ask')?.click();
+            await tick();
+            warn.click();
+            expect(await until(() => document.activeElement?.id === 'warnings-title' && $('#side-tab-warnings')?.getAttribute('aria-selected') === 'true'), 'the warnings chip opens the warnings');
+          }
         }
         expect(paneFit().length === 0, `home layout: ${paneFit().join('; ')}`);
         const leyla = w.entries.find((e) => e.id === 'char-leyla') ?? w.entries.find((e) => e.type === 'character');
@@ -457,6 +493,10 @@ export function App() {
           mouse(4);
           expect(await until(current(other.id)), 'Forward still works after two quick Backs');
           dom['history'] = 1;
+          // The Map: a book without maps offers to add one, and its tab shows as the open view.
+          setView('map');
+          expect(await until(() => !!$('.map-empty .map-add-first') && !!$('.view-tab.v-map[aria-pressed="true"]')), 'the Map without maps offers to add one');
+          dom['map'] = 1;
           setSelectedId(leyla.id);
           setView('editor');
           await tick();
@@ -544,7 +584,7 @@ export function App() {
           const top = (t: string) => [...document.querySelectorAll<HTMLButtonElement>('.topbar button')].some((b) => (b.textContent ?? '').includes(t) || b.getAttribute('aria-label') === t);
           const gear = $<HTMLButtonElement>('.topbar .top-actions > .top-settings');
           const back = $<HTMLButtonElement>('.topbar .world-title > .nav-back'), unit = $<HTMLButtonElement>('.topbar .world-title .world-home-btn');
-          expect(JSON.stringify(tabLabels) === JSON.stringify(['Home', 'Editor', 'Timeline', 'Relationships', 'Story']) && !!gear?.querySelector('svg') && gear.getAttribute('aria-label') === 'World settings' && gear.querySelector('.btn-label')?.textContent === 'World settings',
+          expect(JSON.stringify(tabLabels) === JSON.stringify(['Home', 'Editor', 'Timeline', 'Relationships', 'Story', 'Map']) && !!gear?.querySelector('svg') && gear.getAttribute('aria-label') === 'World settings' && gear.querySelector('.btn-label')?.textContent === 'World settings',
             `the view tabs, and World settings as a gear with its name in the top-right actions: ${JSON.stringify(tabLabels)}`);
           {
             // The words show on wide windows and fold away on narrow ones, where the tooltip and the accessible name stay.
@@ -1178,6 +1218,15 @@ export function App() {
         expect(await until(() => toggle.getAttribute('aria-expanded') === String(!wasOpen)), 'a warning section collapses');
         toggle.click();
         await tick();
+        // Side panel: Ask AI is a tab next to Warnings, as wide; it looks for the AI apps and keeps Warnings alive.
+        const sideWidth = $('.side-pane')!.getBoundingClientRect().width;
+        $<HTMLButtonElement>('#side-tab-ask')!.click();
+        expect(await until(() => !!$('#side-ask:not([hidden]) .ask-compose textarea') && !!$('#side-warnings[hidden] .warnings-panel')), 'the Ask AI tab shows its panel and keeps Warnings');
+        expect(Math.abs($('.side-pane')!.getBoundingClientRect().width - sideWidth) < 1, `Ask AI and Warnings are as wide (${Math.round(sideWidth)} px)`);
+        expect(await until(() => document.querySelectorAll('.ask-agents button').length === 2 && !!($('.ask-intro') || $('.ask-you')), 8000), 'Ask AI lists Claude Code and Codex');
+        expect(paneFit().length === 0, `the side pane fills the window with Ask AI: ${paneFit().join('; ')}`);
+        $<HTMLButtonElement>('#side-tab-warnings')!.click();
+        expect(await until(() => !!$('#side-warnings:not([hidden]) .warning-section')), 'Warnings comes back');
         // Editor: sections, chips for races, no Tags field; a detail field writes a top-level key.
         setSelectedId(hero.id);
         expect(await until(() => count('.editor-section') >= 3), 'the editor is split into sections');
@@ -2120,7 +2169,7 @@ export function App() {
             // sit at the bottom right, outside the scrolling body.
             const dlg = $('.library-settings')!;
             const heads = [...dlg.querySelectorAll('.settings-heading')].map((h) => h.textContent);
-            expect(heads.join('|') === 'Language|Where new worlds go|Sample world', `Settings has the language, then the library's two sections (${heads.join(', ')})`);
+            expect(heads.join('|') === 'Language|Spelling|Where new worlds go|Sample world', `Settings has the language and spelling, then the library's two sections (${heads.join(', ')})`);
             const langs = [...dlg.querySelectorAll<HTMLElement>('.language-choice [role="radio"]')];
             expect(langs.map((b) => b.textContent).join('|') === 'English|Türkçe' && langs.every((b) => !!b.querySelector('img.flag')) && langs[0]!.getAttribute('aria-checked') === 'true',
               `the language is English or Türkçe, each with its flag, English chosen (${langs.map((b) => b.textContent).join(', ')})`);
@@ -2712,6 +2761,13 @@ export function App() {
     if (d === dirRef.current) void open(d, files);
   }), [open]);
 
+  // The open book's names count as spelled right while it is open; sent once the names stop changing.
+  const spellKey = useMemo(() => (world ? bookWords(world).join('\n') : ''), [world]);
+  useEffect(() => {
+    const timer = setTimeout(() => void window.lore.spellingWords(spellKey ? spellKey.split('\n') : []), 800);
+    return () => clearTimeout(timer);
+  }, [spellKey]);
+
   const updateEntry = (entry: Entry): void => {
     const world = worldRef.current;
     const dir = dirRef.current;
@@ -3102,13 +3158,17 @@ export function App() {
       } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'h') {
         e.preventDefault();
         transition(() => setView('home'));
-      } else if (mod && ['1', '2', '3', '4'].includes(e.key)) {
+      } else if (mod && ['1', '2', '3', '4', '5'].includes(e.key)) {
         e.preventDefault();
-        const next = (['editor', 'timeline', 'relations', 'story'] as const)[Number(e.key) - 1]!;
+        const next = (['editor', 'timeline', 'relations', 'story', 'map'] as const)[Number(e.key) - 1]!;
         transition(() => setView(next));
       } else if (mod && e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
-        document.getElementById('warnings-title')?.focus();
+        showWarnings();
+      } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setSide('ask');
+        setAskFocus((n) => n + 1);
       } else if (e.altKey && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
         navigate(e.key === 'ArrowLeft' ? 'back' : 'forward');
@@ -3213,6 +3273,23 @@ export function App() {
       toasts.push({ tone: 'error', text: t('{label} failed: {error}', { label, error: (e as Error).message }) });
     }
   };
+  /** The whole book as one file (after saving what is still waiting), to send or keep. */
+  const [sharing, setSharing] = useState(false);
+  const shareBook = async (): Promise<void> => {
+    setSharing(true);
+    try {
+      await flush();
+      const r = await window.lore.shareBook(dir);
+      if (r) {
+        const file = r.file.split(/[\\/]/).pop() ?? r.file;
+        toasts.push({ tone: 'ok', text: t('Saved {file} ({size}). Anyone with Lore-Forge can open it with Open a book file in the library.', { file, size: fileSize(r.bytes) }), action: { label: t('Show in folder'), run: () => void window.lore.showInFolder(r.file) } });
+      }
+    } catch (e) {
+      toasts.push({ tone: 'error', text: t('Could not share the book: {error}', { error: (e as Error).message }) });
+    } finally {
+      setSharing(false);
+    }
+  };
   const saveDocx = async (options: PublishOptions) => {
     try {
       await flush();
@@ -3256,12 +3333,35 @@ export function App() {
     });
     toasts.push({ tone: 'ok', text: t('Cover saved') });
   };
+  /** world.json "maps" (and one map's picture copied in); the new picture shows at once, even under an old name. */
+  const saveMaps = async (maps: WorldMap[], picture?: MapPicture & { map: string }): Promise<WorldMap[]> => {
+    const saved = await window.lore.saveMaps(dir, maps, picture);
+    forgetImageFiles(dir, saved.map((m) => m.image));
+    setWorld((w) => {
+      if (!w) return w;
+      const { maps: _old, ...manifest } = w.manifest;
+      return { ...w, manifest: saved.length ? { ...manifest, maps: saved } : manifest };
+    });
+    return saved;
+  };
   const openEntry = (id: string) => transition(() => { setSelectedId(id); setView('editor'); });
+  /** Open an entry on one of its looks (the Timeline's look marks): the editor shows that look once it is there. */
+  const openLook = (id: string, look: string): void => {
+    openEntry(id);
+    let tries = 0;
+    const show = (): void => {
+      const panel = document.querySelector('.looks');
+      if (!panel && tries++ < 60) { requestAnimationFrame(show); return; }
+      window.dispatchEvent(new CustomEvent(SHOW_LOOK, { detail: look }));
+      panel?.scrollIntoView({ block: 'start' });
+    };
+    requestAnimationFrame(show);
+  };
   const goView = (v: View, mode?: RelationMode) => transition(() => { if (mode) setRelMode(mode); setReveal(undefined); setView(v); });
 
   const selected = world.entries.find((e) => e.id === selectedId);
   const goHome = (to: 'timeline' | 'tree' | 'web' | 'codex' | 'book') => (to === 'codex' || to === 'book' ? setPreview(to) : to === 'timeline' ? goView('timeline') : goView('relations', to));
-  const tabs: [View, IconName, string][] = [['home', 'house', t('Home')], ['editor', 'quill-ink', t('Editor')], ['timeline', 'hourglass', t('Timeline')], ['relations', 'spider-web', t('Relationships')], ['story', 'feather', t('Story')]];
+  const tabs: [View, IconName, string][] = [['home', 'house', t('Home')], ['editor', 'quill-ink', t('Editor')], ['timeline', 'hourglass', t('Timeline')], ['relations', 'spider-web', t('Relationships')], ['story', 'feather', t('Story')], ['map', 'treasure-map', t('Map')]];
   // The overlays sit second in both returns (library and world), so the tour keeps its place when a world opens.
   return (
     <Fragment key={lang}>
@@ -3304,29 +3404,61 @@ export function App() {
         <ChapterList chapters={story} current={chapterFile} warnings={warnings} onCreate={createChapter} onMove={moveChapter} onDelete={(f) => setDoomed({ kind: 'chapter', file: f })}
           onSelect={(f) => transition(() => { setChapterFile(f); setReveal(undefined); })} />
       ) : (
-      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onSelect={(id) => transition(() => { setSelectedId(id); if (view === 'timeline' || view === 'home') setView('editor'); })} onCreate={createEntry} creating={creating} onCreating={setCreating} />
+      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onCreate={createEntry} creating={creating} onCreating={setCreating}
+        onSelect={(id) => transition(() => {
+          setSelectedId(id);
+          // On the Map a place stays on the map (it is shown there when pinned); anything else opens in the editor.
+          if (view === 'timeline' || view === 'home' || (view === 'map' && world.entries.find((e) => e.id === id)?.type !== 'place')) setView('editor');
+        })} />
       )}
       <PaneResizer width={sidebarW} onWidth={setSidebarW} />
-      <main class={`main${view === 'story' ? ' main-story' : view === 'timeline' ? ' main-fill' : ''}`} id="main">
+      <main class={`main${view === 'story' ? ' main-story' : view === 'timeline' || view === 'map' ? ' main-fill' : ''}`} id="main">
         {view === 'editor' &&
           (selected ? (
-            <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={editEntry} onDelete={() => setDoomed({ kind: 'entry', entry: selected })} onOpen={openEntry} />
+            <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={editEntry} onDelete={() => setDoomed({ kind: 'entry', entry: selected })} onHistory={() => setHistoryFor({ entryId: selected.id })} onAsk={() => askAboutThis({ kind: 'entry', id: selected.id, name: selected.name || selected.id })} onOpen={openEntry} />
           ) : (
             <div class="empty-state">
               <Icon class="empty-icon" name={world.entries.length ? 'pointing' : 'world'} />
               <p>{world.entries.length ? t('Pick an entry on the left to edit it.') : t('This world is empty. Start with a character, a place or an event: use “+ New” on the left.')}</p>
             </div>
           ))}
-        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onChange={editEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onAppSettings={() => setAppSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} onDuplicate={() => void flush().then(() => setCopying(true))} sample={dir === bundled} />}
-        {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} />}
+        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onWarnings={showWarnings} onHistory={() => setHistoryFor({ entryId: null })} onChange={editEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onAppSettings={() => setAppSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} onDuplicate={() => void flush().then(() => setCopying(true))} onShare={() => void shareBook()} sharing={sharing} sample={dir === bundled} />}
+        {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} onOpenLook={openLook} />}
+        {view === 'map' && <MapView dir={dir} world={world} selectedId={selectedId} onOpen={openEntry} onPins={writeEntries} onSaveMaps={saveMaps} />}
         {view === 'story' && (() => {
           const chapter = story.find((c) => c.file === chapterFile) ?? story[0];
           const empty: StoryAnalysis = { proposals: [], ignored: [], links: [], extraction: { proposals: [], appearances: [] }, warnings: [] };
-          return <StoryView key={chapter?.file ?? 'none'} world={world} chapter={chapter} analysis={analysis ?? empty} warnings={warnings} reveal={reveal} actions={storyActions} onCreate={createChapter} />;
+          return <StoryView key={chapter?.file ?? 'none'} world={world} chapter={chapter} analysis={analysis ?? empty} warnings={warnings} reveal={reveal} actions={storyActions} onCreate={createChapter}
+            onAsk={(quote) => { if (chapter) askAboutThis({ kind: 'chapter', file: chapter.file, title: chapter.title.trim() || chapter.file, ...(quote?.trim() ? { quote } : {}) }); }} />;
         })()}
         {view === 'relations' && <RelationsView world={world} entry={selected} mode={relMode} onMode={setRelMode} onOpen={(id) => setSelectedId(id)} onWrite={writeEntries} />}
       </main>
-      <WarningsPanel warnings={warnings} selectedId={selectedId} actions={actions} />
+      <div class="side-pane">
+        <div class="side-tabs" role="tablist" aria-label={t('Side panel')}>
+          <button type="button" role="tab" id="side-tab-warnings" class="side-tab" aria-selected={side === 'warnings'} aria-controls="side-warnings" onClick={() => setSide('warnings')} title={`${t('Warnings')} (Ctrl+Shift+W)`}>
+            <Icon name="hazard-sign" /> {t('Warnings')}
+            {(() => {
+              const open = warnings.filter((w) => !w.intended && w.severity !== 'info');
+              return open.length > 0 && <span class={`side-count${open.some((w) => w.severity === 'error') ? ' is-error' : ''}`}>{open.length}</span>;
+            })()}
+          </button>
+          <button type="button" role="tab" id="side-tab-ask" class="side-tab" aria-selected={side === 'ask'} aria-controls="side-ask" onClick={() => setSide('ask')} title={`${t('Ask AI')} (Ctrl+J)`}>
+            <Icon name="magic-lamp" /> {t('Ask AI')}
+            {asking && <span class="side-busy" role="img" aria-label={t('An AI is working')} />}
+          </button>
+        </div>
+        <div id="side-warnings" role="tabpanel" aria-labelledby="side-tab-warnings" hidden={side !== 'warnings'}>
+          <WarningsPanel warnings={warnings} selectedId={selectedId} actions={actions} />
+        </div>
+        <div id="side-ask" role="tabpanel" aria-labelledby="side-tab-ask" hidden={side !== 'ask'}>
+          <AskAiPanel dir={dir} world={world} shown={side === 'ask'} focusKey={askFocus} onRunning={setAsking} onOpen={openEntry}
+            beforeChange={() => flush()} onRestored={(files) => { if (files.length) void open(dir, files); }} about={askAbout} onAbout={setAskAbout}
+            onOpenChapter={(title) => {
+              const ch = story.find((c) => c.title.trim().toLowerCase() === title.trim().toLowerCase());
+              if (ch) transition(() => { setChapterFile(ch.file); setReveal(undefined); setView('story'); });
+            }} />
+        </div>
+      </div>
       <p class="sr-only undo-status" role="status">{undone}</p>
       {preview && <PreviewDialog dir={dir} world={world} kind={preview} onClose={() => setPreview(null)} onSave={savePdf} onSaveDocx={saveDocx} onSaveBook={saveBook} />}
       {doomed?.kind === 'entry' && (
@@ -3346,6 +3478,10 @@ export function App() {
       })()}
       {settings && <WorldSettings world={world} onSave={saveCalendar} onClose={() => setSettings(false)} />}
       {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}
+      {historyFor && (
+        <HistoryDialog dir={dir} world={world} entryId={historyFor.entryId} busy={asking} onClose={() => setHistoryFor(null)} onOpen={openEntry}
+          beforeChange={() => flush()} onRestored={(files) => { if (files.length) void open(dir, files); }} />
+      )}
       {copying && <DuplicateBook dir={dir} name={world.manifest.name} onClose={() => setCopying(false)} onDone={(copy) => { setCopying(false); setFresh(copy); void closeWorld(); }} />}
       <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>

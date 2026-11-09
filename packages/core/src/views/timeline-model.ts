@@ -1,11 +1,23 @@
 import { monthsOf, type ParsedDate } from '../dates.ts';
 import { msg } from '../i18n.ts';
 import { isEnded } from '../lifecycle.ts';
+import { lookSpan, lookWhen } from '../looks.ts';
 import type { Calendar, Entry, EntryType, Severity, Warning, World } from '../types.ts';
 import { WorldIndex } from '../world-index.ts';
 
+/** A look on an entry's lane: the days it applies (within the lane), and when, in words. */
+export interface TimelineLook {
+  id: string;
+  name: string;
+  from: number;
+  to: number;
+  when: string;
+}
+
 export interface TimelineLane {
   entry: Entry;
+  /** The entry's looks that have a time, clipped to its lane (none for a moment). */
+  looks: TimelineLook[];
   /** Absolute days on the world axis. */
   from: number;
   to: number;
@@ -78,7 +90,15 @@ export function timelineModel(world: World, warnings: readonly Warning[]): Timel
         const startText = r.start ? ix.fmt(r.start) : '?';
         const endText = r.end ? ix.fmt(r.end) : type === 'event' ? '' : '?';
         const dates = point ? ix.fmt(r.start!) : endText ? msg`${startText} – ${endText}` : msg`${startText} –`;
-        return { entry: r.entry, from, to: Math.max(to, from), openStart: !r.start, openEnd: !point && !r.end, point, dates, ended: isEnded(r.entry), warnings: ws, ...(worst ? { worst } : {}) };
+        const end = Math.max(to, from);
+        const looks = point ? [] : (r.entry.looks ?? []).flatMap((l): TimelineLook[] => {
+          const span = lookSpan(l, ix);
+          if (!span) return [];
+          const a = Math.max(span.lo ?? from, from);
+          const b = Math.min(span.hi ?? end, end);
+          return a <= b ? [{ id: l.id, name: l.name.trim() || l.id, from: a, to: b, when: lookWhen(l, ix) }] : [];
+        });
+        return { entry: r.entry, looks, from, to: end, openStart: !r.start, openEnd: !point && !r.end, point, dates, ended: isEnded(r.entry), warnings: ws, ...(worst ? { worst } : {}) };
       })
       .sort((a, b) => a.from - b.from || a.entry.name.localeCompare(b.entry.name)),
   })).filter((g) => g.lanes.length);

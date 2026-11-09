@@ -47,10 +47,10 @@ test('the server offers the tools, the guide and the write_story prompt', async 
   try {
     const { client, call } = await connect({ dataDir: h.dataDir, defaultWorldsDir: h.worlds, sampleDir: null });
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(tools, ['add_image', 'check_book', 'create_book', 'create_image', 'delete_entry', 'duplicate_book', 'export_book', 'get_book', 'get_entry', 'link_entries', 'list_books', 'look_at', 'lore_forge_guide', 'mark_intended', 'read_story', 'save_entries', 'story_proposals', 'update_book', 'write_chapter']);
+    assert.deepEqual(tools, ['add_image', 'check_book', 'create_book', 'create_image', 'delete_entry', 'duplicate_book', 'export_book', 'get_book', 'get_entry', 'get_map', 'link_entries', 'list_books', 'look_at', 'lore_forge_guide', 'mark_intended', 'read_story', 'save_entries', 'save_map', 'story_proposals', 'update_book', 'write_chapter']);
     assert.match(client.getInstructions() ?? '', /lore_forge_guide/);
     const guide = (await call('lore_forge_guide')).text;
-    for (const s of ['create_book', 'save_entries', 'write_chapter', 'check_book', 'create_image', 'three-quarter', 'parent-of', 'after-death', 'personality', 'look_at', 'look-overlap']) assert.ok(guide.includes(s), `the guide mentions ${s}`);
+    for (const s of ['create_book', 'save_entries', 'write_chapter', 'check_book', 'create_image', 'three-quarter', 'parent-of', 'after-death', 'personality', 'look_at', 'look-overlap', 'save_map', 'get_map', 'map-pin']) assert.ok(guide.includes(s), `the guide mentions ${s}`);
     const prompt = await client.getPrompt({ name: 'write_story', arguments: { idea: 'a story about camels' } });
     assert.match((prompt.messages[0]!.content as { text: string }).text, /a story about camels[\s\S]*lore_forge_guide/);
     assert.deepEqual((await call('list_books')).json().books, []);
@@ -368,6 +368,86 @@ test('looks: an assistant adds, changes and removes looks, asks how entries look
     assert.ok(lost.warnings.some((w: any) => w.rule === 'look-time' && /The Sinking/.test(w.message)));
     const overview = (await call('get_book', { book: book.id })).json();
     assert.deepEqual(overview.entries.find((e: any) => e.id === 'char-hadi').looks, ['Old age', 'Coronation robes', 'Lost at sea']);
+  } finally {
+    await rm(h.root, { recursive: true, force: true });
+  }
+});
+
+test('maps: an assistant adds a map, looks at it, pins places by map, and removes a map with its pins', async () => {
+  const h = await home();
+  const land = join(h.root, 'land.png');
+  mkdirSync(h.root, { recursive: true });
+  writeFileSync(land, Buffer.from(PNG_B64, 'base64'));
+  try {
+    const { client, call } = await connect({ dataDir: h.dataDir, defaultWorldsDir: h.worlds, sampleDir: null });
+    const book = (await call('create_book', { name: 'Map Test', calendar: { eras: [{ id: 'SR', name: 'Salt Reckoning', start: 1 }], defaultEra: 'SR' } })).json().book;
+    await call('save_entries', { book: book.id, entries: [{ type: 'place', name: 'Qarim' }, { type: 'place', name: 'Saltmere', partOf: 'Qarim' }, { type: 'character', name: 'Hadi', home: 'Qarim' }] });
+
+    const none = await call('get_map', { book: book.id });
+    assert.ok(none.error && /no maps yet/.test(none.text), none.text);
+    const bare = await call('save_map', { book: book.id, map: 'The Salt Coast' });
+    assert.ok(bare.error && /needs a picture/.test(bare.text), bare.text);
+    const made = await call('save_map', { book: book.id, map: 'The Salt Coast', picture: land });
+    assert.ok(!made.error, made.text);
+    assert.deepEqual(made.json().map, { id: 'the-salt-coast', name: 'The Salt Coast', picture: 'maps/the-salt-coast.png' });
+    assert.ok(existsSync(join(book.dir, 'maps', 'the-salt-coast.png')));
+    // A city's own map, from a picture the book already has (its path inside the book).
+    mkdirSync(join(book.dir, 'images', 'place-qarim'), { recursive: true });
+    writeFileSync(join(book.dir, 'images', 'place-qarim', 'map.png'), Buffer.from(PNG_B64, 'base64'));
+    const city = await call('save_map', { book: book.id, map: 'Qarim', picture: 'images/place-qarim/map.png', place: 'Qarim' });
+    assert.deepEqual(city.json().map, { id: 'qarim', name: 'Qarim', picture: 'maps/qarim.png', shows: 'Qarim' });
+
+    // Pins name their map by name or id; one off the picture is moved onto its edge, one on a missing map is left out.
+    const pinned = await call('save_entries', { book: book.id, entries: [
+      { type: 'place', name: 'Qarim', pins: [{ map: 'The Salt Coast', x: 40, y: '62.5' }] },
+      { type: 'place', name: 'Saltmere', pins: [{ map: 'qarim', x: 120, y: 5 }, { map: 'Atlantis', x: 1, y: 1 }] },
+      { type: 'character', name: 'Hadi', pins: [{ map: 'qarim', x: 1, y: 1 }] },
+    ] });
+    assert.ok(!pinned.error, pinned.text);
+    const notes = pinned.json().notes.join(' ');
+    assert.match(notes, /Saltmere: the pin on "Qarim" was off the picture and was moved onto its edge\./);
+    assert.match(notes, /Saltmere: there is no map "Atlantis" \(maps: The Salt Coast, Qarim\); that pin was left out\./);
+    assert.match(notes, /Hadi: only places can be pinned on a map; "pins" was left out\./);
+    let world = await loadWorld(book.dir);
+    const pinsOf = (id: string) => (world.entries.find((e) => e.id === id) as { pins?: unknown }).pins;
+    assert.deepEqual(pinsOf('place-qarim'), [{ map: 'the-salt-coast', x: 40, y: 62.5 }]);
+    assert.deepEqual(pinsOf('place-saltmere'), [{ map: 'qarim', x: 100, y: 5 }]);
+    assert.equal(pinsOf('char-hadi'), undefined);
+    for (const { body: _b, ...front } of world.entries) valid('entry.schema.json', front);
+    valid('world-manifest.schema.json', JSON.parse(readFileSync(join(book.dir, 'world.json'), 'utf8')));
+
+    // Matched by map: a pin on another map is added beside it, and one can be taken off alone.
+    await call('save_entries', { book: book.id, entries: [{ type: 'place', name: 'Saltmere', pins: [{ map: 'The Salt Coast', x: 41, y: 63 }] }] });
+    world = await loadWorld(book.dir);
+    assert.deepEqual(pinsOf('place-saltmere'), [{ map: 'qarim', x: 100, y: 5 }, { map: 'the-salt-coast', x: 41, y: 63 }]);
+    await call('save_entries', { book: book.id, entries: [{ type: 'place', name: 'Saltmere', pins: [{ map: 'The Salt Coast', remove: true }] }] });
+    world = await loadWorld(book.dir);
+    assert.deepEqual(pinsOf('place-saltmere'), [{ map: 'qarim', x: 100, y: 5 }]);
+
+    // get_map: the pins as text, and the picture to look at.
+    const r = await client.callTool({ name: 'get_map', arguments: { book: book.id, map: 'the salt coast' } });
+    const content = r.content as { type: string; text?: string; mimeType?: string; data?: string }[];
+    const info = JSON.parse(content[0]!.text!);
+    assert.deepEqual(info.pins, [{ place: 'Qarim', id: 'place-qarim', x: 40, y: 62.5 }]);
+    assert.deepEqual(info.notOnThisMap, ['Saltmere']);
+    assert.deepEqual(info.otherMaps, ['Qarim']);
+    assert.equal(content[1]!.type, 'image');
+    assert.equal(content[1]!.mimeType, 'image/png');
+    assert.equal(content[1]!.data, PNG_B64);
+    assert.deepEqual((await call('get_book', { book: book.id })).json().maps, [{ id: 'the-salt-coast', name: 'The Salt Coast', pinned: 1 }, { id: 'qarim', name: 'Qarim', shows: 'Qarim', pinned: 1 }]);
+    assert.deepEqual(check(world).filter((w) => w.ruleId === 'map-pin'), []);
+
+    // Renamed (the id stays), then the city map removed: its picture and the pins on it go.
+    const renamed = await call('save_map', { book: book.id, map: 'qarim', name: 'Old Qarim', place: null });
+    assert.deepEqual(renamed.json().map, { id: 'qarim', name: 'Old Qarim', picture: 'maps/qarim.png' });
+    const gone = await call('save_map', { book: book.id, map: 'Old Qarim', remove: true });
+    assert.deepEqual(gone.json(), { removed: 'Old Qarim', unpinned: ['Saltmere'] });
+    assert.ok(!existsSync(join(book.dir, 'maps', 'qarim.png')));
+    world = await loadWorld(book.dir);
+    assert.equal(pinsOf('place-saltmere'), undefined);
+    assert.deepEqual(world.manifest.maps?.map((m) => m.id), ['the-salt-coast']);
+    const missing = await call('save_map', { book: book.id, map: 'Old Qarim', remove: true });
+    assert.ok(missing.error && /no map "Old Qarim"[\s\S]*"The Salt Coast"/.test(missing.text), missing.text);
   } finally {
     await rm(h.root, { recursive: true, force: true });
   }

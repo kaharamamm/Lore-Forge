@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, screen, session, shell } from 'electron';
 import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -6,13 +6,19 @@ import { basename, extname, isAbsolute, join, normalize, relative, resolve } fro
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { strFromU8, unzipSync } from 'fflate';
 import { createWorld, deleteModel, duplicateWorld, importModel, listModels, loadWorld, MODEL_EXTS, moveModels, readModel, readWorldFiles, renameModel, worldSlug } from '@lore-forge/core/node';
-import { calendarProblems, cleanCoverSettings, DEFAULT_TRIM, localize, localizeDoc, recordMessages, storyBook, TRIMS, viewLabel, worldCodex, type BookSettings, type Calendar, type Doc, type ImageView, type TrimSize, type WorldCoverSettings } from '@lore-forge/core';
+import { calendarProblems, cleanCoverSettings, DEFAULT_TRIM, localize, localizeDoc, recordMessages, storyBook, TRIMS, viewLabel, worldCodex, type BookSettings, type Calendar, type Doc, type ImageView, type TrimSize, type WorldCoverSettings, type WorldMap } from '@lore-forge/core';
 import { defaultFontDir, systemFontFamilies, writeDocx, writePublication } from '@lore-forge/pdf';
-import type { CoverImage, CreateWorldOptions, PdfKind, PublishOptions, Settings, SmokeMouse } from '../shared/api.ts';
+import type { CoverImage, CreateWorldOptions, MapPicture, PdfKind, PublishOptions, Settings, SmokeMouse } from '../shared/api.ts';
 import { checkForUpdates, downloadUpdate, installUpdate, setupUpdater, updateState } from './updater.ts';
 import { cleanOrder, orderShelf, placeAfter, planShelf } from '../shared/library.ts';
 import { FolderWatch, isOwnText, libraryFiles, ownTouch, ownWrite, worldFiles } from './watch.ts';
 import { registerAi } from './ai.ts';
+import { registerAsk } from './ask.ts';
+import { bookOpened, historyOf, registerHistory } from './book-history.ts';
+import { registerPictures } from './pictures.ts';
+import { BOOK_FILE_EXT, packBook, unpackBook } from './share.ts';
+import { applySpelling, attachSpelling, forgetBookWords, registerSpelling } from './spelling.ts';
+import { defaultSpelling, SPELL_LANGUAGES } from '../shared/spelling.ts';
 import { cleanDisplay, storedDisplay, type DisplaySettings } from '../shared/display.ts';
 import { attachDisplay, windowSize, type WindowDisplay } from './display.ts';
 import { isLang, langFor, language, lower, setLanguage, t, type Lang } from '../shared/i18n.ts';
@@ -103,6 +109,8 @@ async function readSettings(): Promise<Settings> {
   }
 }
 const worldsDir = async (): Promise<string> => (await readSettings()).worldsDir || defaultWorldsDir();
+/** The languages spell checking checks: as chosen in Settings, else the app's language. */
+const spellingLanguages = async (): Promise<string[]> => (await readSettings()).spelling ?? defaultSpelling(language(), app.getLocale());
 
 // Live view: the open world and the worlds folder are watched, so changes made outside the app (an AI assistant
 // through `lore mcp`, an editor, git) show at once. Off in the smoke run, which must only see its own steps.
@@ -143,6 +151,7 @@ async function writeSettings(next: Settings): Promise<void> {
     ...(cleanOrder(all.shelfOrder) ? { shelfOrder: cleanOrder(all.shelfOrder) } : {}),
     ...(stored ? { display: stored } : {}),
     ...(isLang(all.language) ? { language: all.language } : {}),
+    ...(Array.isArray(all.spelling) ? { spelling: all.spelling.filter((l) => (SPELL_LANGUAGES as readonly string[]).includes(l)) } : {}),
   };
   await mkdir(dataDir(), { recursive: true });
   await writeFile(settingsFile(), JSON.stringify(clean, null, 2));
@@ -417,6 +426,19 @@ function registerIpc(): void {
     if (isLang(next.language)) useLang(next.language);
     await saveSettings(next);
     await watchLibrary();
+    // Spelling that was never chosen follows the app's language.
+    if (isLang(next.language) && !SMOKE) applySpelling(await spellingLanguages());
+  });
+  ipcMain.handle('spelling', async () => ({
+    languages: await spellingLanguages(),
+    offered: SPELL_LANGUAGES.filter((l) => process.platform === 'darwin' || session.defaultSession.availableSpellCheckerLanguages.includes(l)),
+    choose: process.platform !== 'darwin',
+  }));
+  ipcMain.handle('setSpelling', async (_e, languages: unknown) => {
+    const next = SPELL_LANGUAGES.filter((l) => Array.isArray(languages) && languages.includes(l));
+    await saveSettings({ spelling: next });
+    if (!SMOKE) applySpelling(next);
+    return next;
   });
   // Settings, Display: null in the smoke test, which has no display settings.
   ipcMain.handle('displayState', () => display?.state() ?? null);
@@ -500,6 +522,7 @@ function registerIpc(): void {
     const files = await readWorldFiles(dir);
     await remember(dir); // in the smoke run this is the throwaway smoke home
     watchWorld(dir);
+    bookOpened(dir);
     return files;
   });
   ipcMain.handle('peekWorld', async (_e, dir: string) => (existsSync(join(dir, 'world.json')) ? readWorldFiles(dir).catch(() => null) : null));
@@ -620,6 +643,69 @@ function registerIpc(): void {
     else delete raw['cover'];
     await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
     return clean;
+  });
+  // A book as one file to send or keep, and opening one onto the shelf (share.ts).
+  ipcMain.handle('shareBook', async (_e, dir: string) => {
+    const raw = JSON.parse(await readFile(join(dir, 'world.json'), 'utf8')) as { name?: unknown };
+    const name = (typeof raw.name === 'string' ? raw.name : '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'book';
+    const r = await dialog.showSaveDialog(win!, {
+      title: t('Share this book as one file'),
+      defaultPath: join(app.getPath('documents'), `${name}.${BOOK_FILE_EXT}`),
+      filters: [{ name: t('Lore-Forge book'), extensions: [BOOK_FILE_EXT] }],
+    });
+    if (r.canceled || !r.filePath) return null;
+    return { file: r.filePath, ...(await packBook(dir, r.filePath)) };
+  });
+  ipcMain.handle('openBookFile', async () => {
+    const r = await dialog.showOpenDialog(win!, { title: t('Open a book file'), properties: ['openFile'], filters: [{ name: t('Lore-Forge book'), extensions: [BOOK_FILE_EXT, 'zip'] }] });
+    const file = r.filePaths[0];
+    if (r.canceled || !file) return null;
+    const book = await unpackBook(file, await worldsDir());
+    await remember(book.dir);
+    return book;
+  });
+  ipcMain.handle('saveMaps', async (_e, dir: string, maps: WorldMap[], picture?: MapPicture & { map: string }) => {
+    const path = join(dir, 'world.json');
+    const raw = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    const before = Array.isArray(raw['maps']) ? (raw['maps'] as Partial<WorldMap>[]) : [];
+    const next: WorldMap[] = maps.map(({ place, ...m }) => {
+      if (typeof m.id !== 'string' || !m.id.trim() || typeof m.name !== 'string' || !m.name.trim()) throw new Error(t('A map needs a name.'));
+      return { ...m, id: m.id.trim(), name: m.name.trim(), image: String(m.image ?? '').trim(), ...(place?.trim() ? { place: place.trim() } : {}) };
+    });
+    // Everything is checked before a file is touched.
+    const target = picture ? next.find((m) => m.id === picture.map) : undefined;
+    if (picture && !target) throw new Error(t('That map is not in this book any more.'));
+    let source: string | undefined;
+    if (picture && 'picked' in picture) {
+      // As with the cover: only a picture the user chose in this session.
+      if (!picked.has(picture.picked)) throw new Error(t('That picture can no longer be used. Choose it again.'));
+      source = picture.picked;
+    } else if (picture) source = inside(dir, picture.from);
+    const ext = source ? extname(source).toLowerCase().replace('.jpeg', '.jpg') : '';
+    if (source && !['.png', '.jpg', '.webp', '.gif'].includes(ext)) throw new Error(t('A map can be a PNG, JPEG, WebP or GIF picture.'));
+    if (source && !existsSync(source)) throw new Error(t('The picture is not there any more: {file}', { file: source }));
+    const file = target ? `maps/${target.id.replace(/[^\w-]+/g, '-')}${ext}` : undefined;
+    if (target && file) target.image = file;
+    if (next.some((m) => !m.image)) throw new Error(t('A map needs a picture.'));
+    const used = new Set(next.map((m) => m.image));
+    const gone = [...new Set(before.map((m) => m.image).filter((p): p is string => typeof p === 'string' && p.startsWith('maps/') && !used.has(p)))];
+    // The book's own picture already in its place (chosen again) needs no copy.
+    const copy = source && file && resolve(source) !== resolve(inside(dir, file)) ? { from: source, to: inside(dir, file) } : null;
+    // A picture about to be replaced or removed is kept in the book history first (no snapshot when nothing changed).
+    if (gone.length || (copy && existsSync(copy.to))) await historyOf(dir).snapshot('auto').catch(() => null);
+    if (copy) {
+      await mkdir(join(dir, 'maps'), { recursive: true });
+      ownTouch(copy.to);
+      await copyFile(copy.from, copy.to);
+    }
+    for (const g of gone) {
+      ownTouch(inside(dir, g));
+      await rm(inside(dir, g), { force: true });
+    }
+    if (next.length) raw['maps'] = next;
+    else delete raw['maps'];
+    await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
+    return next;
   });
   ipcMain.handle('smokeResize', (_e, width: number, height: number) => {
     if (SMOKE) win?.setContentSize(width, height);
@@ -791,6 +877,8 @@ async function createWindow(): Promise<void> {
     ipcMain.on('flushed', onFlushed);
     w.webContents.send('flush-before-close');
   });
+  // Right-click in a text field: spelling suggestions, Cut, Copy and Paste.
+  attachSpelling(win);
   // Links in lore text open in the system browser, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url);
@@ -846,6 +934,17 @@ app.whenReady().then(async () => {
   }
   registerIpc();
   registerAi(defaultWorldsDir);
+  registerHistory(dataDir);
+  registerPictures(() => app.getPath('userData'));
+  registerAsk(defaultWorldsDir, dataDir);
+  // The smoke run leaves the spell checker's dictionary of this computer alone.
+  if (SMOKE) {
+    ipcMain.handle('spellingWords', () => {});
+    ipcMain.handle('addToDictionary', () => {});
+  } else {
+    await registerSpelling(dataDir(), spellingLanguages);
+    app.on('before-quit', forgetBookWords);
+  }
   await createWindow();
   void watchLibrary();
   setupUpdater({ smoke: SMOKE, window: () => win, autoCheck: async () => (await readSettings()).autoUpdate !== false });

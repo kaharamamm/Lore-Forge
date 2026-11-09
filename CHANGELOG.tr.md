@@ -2,7 +2,7 @@
 
 Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) kurallarına, sürüm numaraları da [Anlamsal Sürümleme](https://semver.org/) kurallarına uyar.
 
-## [Unreleased]
+## [1.1.0] - 2026-11-09
 
 ### Eklenenler
 
@@ -12,8 +12,28 @@ Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a C
 - **Düzenleyicide geri alma ve yineleme.** Ctrl+Z, açık kaydın son değişikliğini ne olursa olsun geri alıyor: bir durum (hayatta → ölü), bir listeden seçim, bir görsel ya da simge, eklenen ya da silinen bir satır, ya da yazılan metin (her duraklama bir adım). Ctrl+Y veya Ctrl+Shift+Z yineliyor. İlgili alan görünür hale gelip kısa bir süre parlıyor. Uygulama dışında (bir yapay zekâ asistanı ya da bir düzenleyici tarafından) sonradan yapılan bir değişiklik asla yanlışlıkla geri alınmıyor.
 - **GIF görseller.** Hareketli GIF'ler, görselin göründüğü her yerde oynuyor. Dünya Kodeksi ve Hikâye Kitabı (PDF ve Word), GIF'i dışarıda bırakmak yerine ilk karesini basıyor.
 - Örnek dünyada Mr Camel'ın portresi artık hareketli bir GIF (çaydanlığından buhar yükseliyor) ve bir 3B modeli var.
+- **Yapay zekâya sor.** Uyarılar'ın yanındaki sekme, açık kitap üzerinde Claude Code ya da Codex'i çalıştırıyor. Bir görev yazın (*“Sonraki bölümü yaz”*, *“Açık uyarıları düzelt”*), yanıtlarını, adımlarını ve yaptığı her değişikliği olurken izleyin; adımlarındaki adlar kayıtlara bağlantı veriyor.
+  - Kendi Claude ya da ChatGPT planınızla çalışıyor, Claude kullanım sınırınıza yaklaştığınızda söylüyor ve istediğiniz an durdurulabiliyor.
+  - Yalnızca Lore-Forge'un kendi araçlarını kullanabiliyor: komut çalıştıramıyor, başka dosyalara dokunamıyor, web'e çıkamıyor.
+  - Her kitap kendi sohbetini saklıyor; böylece ardından sorulan sorular da yanıtlanıyor, uygulama yeniden başlasa bile. Ctrl+J ile açılıyor.
+  - **Bu konuda yapay zekâya sor:** her kayıtta ve Hikâye görünümünde (seçtiğiniz metin için de, sağ tık menüsünde de) bulunan **Yapay zekâya sor** düğmesi, neyi kastettiğinizi yapay zekâya bildiriyor ve uygun öneriler sunuyor.
+- **Kitap geçmişi.** Lore-Forge her kitabın anlık görüntülerini bu bilgisayarda saklıyor: kitap açıldığında, kitap değiştikçe 20 dakikada bir, her yapay zekâ görevinden ve her geri yüklemeden önce.
+  - Ana sayfadaki **Geçmiş**, herhangi bir anlık görüntüden beri nelerin değiştiğini gösteriyor ve bir kaydı, bölümü ya da görseli, istenirse kitabın tamamını geri yüklüyor.
+  - Bir kaydın başlığındaki **Geçmiş**, o kaydın önceki sürümlerini alan alan gösteriyor; **Bu sürümü geri yükle** ile geri getiriyor.
+  - Her geri yükleme de geri alınabiliyor.
+- **Yapay zekâ görevini geri alma.** “Yapay zekâya sor” kitabı değiştirdiğinde panel nelerin değiştiğini **Geri al** düğmesiyle listeliyor. O sırada sizin yaptığınız düzenlemelere dokunulmuyor; değişen bir şey sonradan yeniden düzenlendiyse önce soruyor.
+- **Uygulamanın içinden resim yapma.** Bir kaydın resimlerinin altındaki **Resim yap…** (ve her resimdeki, yenisini yapan düğme), Yapay zekâ bağla'da kurulan resim servisiyle bir resim çiziyor. İstem, görsel tanımdan ve kitabın resim üslubundan oluşturuluyor ve önce değiştirilebiliyor; resim, bulunduğunuz görünüş için kendi görünüm kutusuna yerleşiyor. Yapay zekâ araçları ve uygulama aynı istemi oluşturuyor.
+- **İngilizce ve Türkçe yazım denetimi.** **Ayarlar → Yazım**, denetlenecek dilleri seçiyor: English (US), English (UK), Türkçe ya da hiçbiri. Altı dalgalı çizili bir sözcüğe sağ tıklayınca öneriler ve sözlüğe ekleme çıkıyor; Hikâye'de bunlar metnin kendi menüsünün en üstünde. Açık kitaptaki adlar, kitap açıkken doğru yazılmış sayılıyor. Metin alanlarında sağ tık artık Kes, Kopyala, Yapıştır ve Tümünü seç de sunuyor.
+- **Kitabı tek dosya olarak paylaşma.** Ana sayfadaki **Paylaş…**, kitabın tamamını (kayıtlar, bölümler, resimler, haritalar, 3B modeller ve ayarlar) tek bir `.loreforge` dosyası olarak kaydediyor; birine gönderebilir ya da yedek olarak saklayabilirsiniz. Kitaplıktaki **Kitap dosyası aç…**, paylaşılan bir kitabı kendi kopyası olarak rafa ekliyor ve açıyor.
+- **Dünya haritaları.** Yeni **Harita** görünümü (Ctrl+5), dünyanın haritalarını ve üzerlerinde işaretli yerleri gösteriyor.
+  - **Harita ekle…** bir harita resmi alıyor. Bir kitabın birden çok haritası olabilir (dünya, bir bölge, bir şehir); tek bir yerin haritası, o yerin öteki haritalardaki işaretinden açılıyor.
+  - Her işaret yerin resmini ve adını gösteriyor. Üzerine gelince orada kimin yaşadığı, neler olduğu ve içindeki yerler görünüyor; tıklayınca yer açılıyor.
+  - **İşaretleri düzenle**: yerleri haritaya, işaretleri haritanın üzerinde sürükleyin, bir işareti ok tuşlarıyla kaydırın, Ctrl+Z ile geri alın.
+  - Yapay zekâ asistanları harita ekleyebiliyor (`save_map`), bir haritaya işaretleriyle bakabiliyor (`get_map`) ve yerleri `save_entries` ile işaretleyebiliyor. Yeni `map-pin` denetimi, kitapta olmayan bir haritadaki işaret için uyarıyor.
+  - Örnek dünyada bir Sunsea haritası var; üzerinde Camelamamm, The Glass Dunes ve The Hollow of Echoes işaretli.
 - **Görünüşler.** Bir kayıt zamanla farklı görünebilir: bir savaştan sonra, taç giyme kıyafetiyle, yaşlılıkta. Düzenleyicinin Görünüş bölümünde **+ Yeni görünüş**, **Varsayılan** görünüşün yanına yenisini ekliyor: adı, neden farklı göründüğü ve ne zaman geçerli olduğu (her zaman, bir olaydan sonra ya da önce, iki tarih arasında ya da bir çağda). Her görünüşün kendi görsel tanımı (yalnızca değişenler; gerisi Varsayılan görünüşten geliyor), kendi görselleri ve kendi 3B modelleri var.
   - Denetimler; olmayan bir çağa ya da olaya bağlı görünüşler, doğumdan önce ya da ölümden sonra başlayan görünüşler ve aynı anda geçerli iki görünüş için uyarıyor.
+  - Zaman çizelgesinde, bir kaydın kartının altındaki altın rengi çizgi her görünüşün ne zaman geçerli olduğunu gösteriyor; tıklayınca kayıt o görünüşüyle açılıyor.
   - Dünya Kodeksi her görünüşü görselleri ve kendi sanatçı özetiyle gösteriyor; bir olayın sanatçı özeti de her katılımcıyı o tarihteki görünüşüyle anlatıyor.
   - Yapay zekâ asistanları görünüş ekleyip değiştirebiliyor ve silebiliyor, kayıtların bir tarihte nasıl göründüğünü sorabiliyor (yeni `look_at` aracı), tarihli bir bölümde adı geçenlerin görünüşlerini görüyor ve bir görünüşün görselini yapıp ekleyebiliyor.
   - Örnek dünyada Mr Camel'ın “Caravan days” görünüşü bir örnek.
@@ -30,6 +50,8 @@ Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a C
 - Cinsiyet önerileri artık non-binary yerine kadın (♀), erkek (♂) ve cinsiyetsiz (⚲).
 - 3B modeller açılınca kendiliğinden dönüyor (Otomatik döndür açık başlıyor); sistem azaltılmış hareket istiyorsa dönmüyor.
 - Bir 3B modeli silmek gibi sorular, diğerleri gibi tüm pencereyi karartıyor.
+- Uyarılar paneli artık daha geniş; yanındaki “Yapay zekâya sor” kadar.
+- Bir resmin düğmeleri artık daha rahat: Ayrıntılar ve Kaldır resmin üst köşelerinde; Yeni resim yap, Değiştir ve Kopyasını kaydet alttaki tek bir şeritte.
 - Dünyanın ana sayfasında **Dünya ayarları**'nın yanında artık **Ayarlar** da var; dili değiştirmek Ayarlar penceresini kapatmıyor.
 - **Kütüphane ayarları**'nın adı artık **Ayarlar**. Görüntü ayarları her satırın altında kendini açıklamıyor; çözünürlüklerde de HD, Full HD, 2K ve 4K etiketleri yok.
 - **Hikâye önerileri çok daha fazlasını, çok daha az yanlışla buluyor.**
@@ -162,5 +184,5 @@ Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a C
 
 7 Kasım 2026'dan önce indirilen kopyalarda güncelleyici yok. Güncel sürümü README dosyasındaki bağlantılardan bir kez indirin; bundan sonra Lore-Forge kendi kendini güncelleyecek.
 
-[Unreleased]: https://github.com/kaharamamm/Lore-Forge/compare/v1.0.0...HEAD
+[1.1.0]: https://github.com/kaharamamm/Lore-Forge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kaharamamm/Lore-Forge/releases/tag/v1.0.0

@@ -16,19 +16,24 @@ import { IMAGE_PROVIDERS, listImageModels, pickImageModel, PROVIDER_INFO, readIm
 import type { AiClient, AiPictures, AiState, PictureCheck, PictureProvider } from '../shared/api.ts';
 import { t } from '../shared/i18n.ts';
 
-/** How AI apps start the server: this app's own Electron in Node mode, running the bundled `lore mcp`. */
+/** How the server starts: this app's own Electron in Node mode, running the bundled `lore mcp`. */
+export function serverLaunch(defaultWorldsDir: string): McpLaunch {
+  const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1', LORE_FORGE_DATA: app.getPath('userData') };
+  // From source, new books go to the repository's worlds/ folder, as in the app.
+  if (!app.isPackaged) env['LORE_FORGE_WORLDS'] = defaultWorldsDir;
+  return { command: process.execPath, args: [join(app.getAppPath(), 'dist', 'cli.cjs'), 'mcp'], env };
+}
+
+/** How AI apps start the server; none from an AppImage, whose path changes every time it starts. */
 function mcpLaunch(defaultWorldsDir: string): { launch: McpLaunch | null; unavailable?: string } {
   if (process.env['APPIMAGE']) {
     return { launch: null, unavailable: t('The AppImage unpacks itself to a new place every time it starts, so an AI app could not find it again. Install the .deb, or run Lore-Forge from source, to connect an AI app.') };
   }
-  const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1', LORE_FORGE_DATA: app.getPath('userData') };
-  // From source, new books go to the repository's worlds/ folder, as in the app.
-  if (!app.isPackaged) env['LORE_FORGE_WORLDS'] = defaultWorldsDir;
-  return { launch: { command: process.execPath, args: [join(app.getAppPath(), 'dist', 'cli.cjs'), 'mcp'], env } };
+  return { launch: serverLaunch(defaultWorldsDir) };
 }
 
 /** The `claude` command of Claude Code, if installed (GUI apps on macOS do not see the shell's PATH: known places too). */
-function findClaude(): string | null {
+export function findClaude(): string | null {
   try {
     const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', ['claude'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
     const found = out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && existsSync(s));

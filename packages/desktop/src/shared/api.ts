@@ -2,9 +2,12 @@ import type { ModelFile } from '@lore-forge/core/node';
 import type { UpdateState } from './update-state.ts';
 import type { DisplaySettings, DisplayState } from './display.ts';
 import type { Lang } from './i18n.ts';
-import type { CodexOptions, BookOptions, BookSettings, Calendar, ImageView, WorldCoverSettings, WorldFile } from '@lore-forge/core';
+import type { CodexOptions, BookOptions, BookSettings, Calendar, ImageView, WorldCoverSettings, WorldFile, WorldMap } from '@lore-forge/core';
 
 export type PdfKind = 'codex' | 'book';
+
+/** A picture for a map: one picked with pickImageFile in this session, or one of the book's own (a path inside it). */
+export type MapPicture = { picked: string } | { from: string };
 export interface PdfExport { pdf: string; md: string; pages: number; notes: string[] }
 /** A picture a cover can use: one in the world folder (path relative to it) or a recent upload (absolute path). */
 export interface CoverImage { kind: 'world' | 'upload'; path: string; name: string; thumb: string | null }
@@ -26,7 +29,12 @@ export interface Settings {
   display?: Partial<DisplaySettings>;
   /** The app's language, once picked in Settings; until then the system's (Turkish on a Turkish system, else English). */
   language?: Lang;
+  /** The languages spell checking checks (en-US, en-GB, tr), once chosen in Settings; [] is off. Until then the app's language. */
+  spelling?: string[];
 }
+
+/** Spelling of the word the Story's own right-click menu is for: up to five suggestions. */
+export interface Spelling { word: string; suggestions: string[] }
 export interface CreateWorldOptions {
   name: string;
   /** Folder to create the world in; default the worlds folder. */
@@ -74,6 +82,90 @@ export interface AiState {
 export type PictureCheck = { ok: true; model: string; models: string[] } | { ok: false; error: string };
 
 /** What the preload script exposes to the renderer as window.lore. */
+/** Ask AI: the AI command-line tools the app can run inside a book, on the user's own plan. */
+export type AskAgentId = 'claude-code' | 'codex';
+
+export interface AskAgent {
+  id: AskAgentId;
+  name: string;
+  /** Its command was found on this computer. */
+  installed: boolean;
+  /** Signed in (true), signed out (false), or it could not say (null). */
+  signedIn: boolean | null;
+  /** Signed in with an API key or account rather than a plan: every message is billed to it. */
+  billed?: boolean;
+  /** Installed, but too old for Ask AI (it lacks an option Ask AI needs). */
+  outdated?: boolean;
+}
+
+/** Something the panel says about a run. The window words it, so it follows the app's language. */
+export type AskNote =
+  | { code: 'stopped' }
+  | { code: 'switched'; agent: AskAgentId }
+  | { code: 'failed'; agent: AskAgentId; text: string; signIn?: boolean }
+  | { code: 'usage'; agent: AskAgentId; percent: number; window: string; resets?: number }
+  | { code: 'limit'; agent: AskAgentId; resets?: number }
+  | { code: 'no-tools'; text: string };
+
+/** What a message to the AI is about: an entry, or a chapter (and the part of it chosen). */
+export type AskAbout =
+  | { kind: 'entry'; id: string; name: string }
+  | { kind: 'chapter'; file: string; title: string; quote?: string };
+
+export type AskItem =
+  /** `about`: what the message was about, in words ("Mr Camel", "The Storm: “the well sang…”"). */
+  | { kind: 'you'; text: string; at: number; about?: string }
+  | { kind: 'ai'; id: string; text: string }
+  | { kind: 'tool'; id: string; tool: string; input?: Record<string, unknown>; state: 'running' | 'done' | 'failed' | 'stopped'; error?: string }
+  | { kind: 'note'; note: AskNote }
+  /** The files a task changed (relative paths), kept in the book history so the task can be undone. */
+  | { kind: 'changes'; task: string; files: string[]; names?: Record<string, string>; undone?: boolean };
+
+export interface AskChat {
+  dir: string;
+  /** The AI that answered last. */
+  agent: AskAgentId | null;
+  items: AskItem[];
+  /** An AI is working on this book now, since `started` (ms). */
+  running: boolean;
+  started?: number;
+  /** The installed sample: the AI can read it but not change it. */
+  readOnly: boolean;
+}
+
+/** The picture service set in Connect AI → Pictures: which one draws, and with which model (when known yet). */
+export interface PictureService {
+  service: string;
+  model?: string;
+}
+/** A picture made: its path in the world folder, and how it was made (for its provenance). */
+export interface PictureMade {
+  file: string;
+  tool: string;
+  model: string;
+}
+
+/** Book history: a snapshot of a book, kept by the app. */
+export interface HistorySnapshot {
+  id: string;
+  at: number;
+  /** When it was kept: the book opened, every 20 minutes while it changed, before an Ask AI task, a restore or an undo, or asked for. */
+  reason: 'open' | 'auto' | 'ask' | 'restore' | 'undo' | 'manual';
+  label?: string;
+  count: number;
+}
+/** A version of one file: a snapshot in which it differs from the one before (or is gone). */
+export interface HistoryVersion extends HistorySnapshot {
+  exists: boolean;
+}
+/** How the book now differs from a snapshot, per file. */
+export interface HistoryChange {
+  path: string;
+  state: 'changed' | 'added' | 'removed';
+  /** An entry's name or a chapter's title. */
+  name?: string;
+}
+
 export interface LoreApi {
   /** World folder to open at startup (from the command line or LORE_FORGE_OPEN), if any. */
   initialWorld(): Promise<string | null>;
@@ -158,6 +250,26 @@ export interface LoreApi {
    * images/ and becomes the cover picture. Returns what was saved.
    */
   saveCover(dir: string, cover: WorldCoverSettings, picked?: string): Promise<WorldCoverSettings>;
+  /**
+   * Replace world.json's "maps" with this list. With `picture`, that picture is first copied in as maps/<id>.<ext> and
+   * becomes the picture of the map it names. Pictures in maps/ that no map uses any more are removed, once the book
+   * history has a copy of them. Returns what was saved.
+   */
+  saveMaps(dir: string, maps: WorldMap[], picture?: MapPicture & { map: string }): Promise<WorldMap[]>;
+  /** Spell checking: the languages checked ([] when off), the ones Settings offers, and whether they can be chosen (not on macOS). */
+  spelling(): Promise<{ languages: string[]; offered: string[]; choose: boolean }>;
+  /** Check spelling in these languages ([] turns it off); saved for the next start. Returns what is checked now. */
+  setSpelling(languages: string[]): Promise<string[]>;
+  /** The open book's words count as spelled right while it is open; [] when it closes. */
+  spellingWords(words: string[]): Promise<void>;
+  /** Add a word to the spell checker's dictionary, for good. */
+  addToDictionary(word: string): Promise<void>;
+  /** The spelling of the word under a right-click in the Story's text (null: spelled right), for its own menu. */
+  onSpelling(cb: (spelling: Spelling | null) => void): () => void;
+  /** Save the whole book as one .loreforge file, where the user chooses; null when cancelled. */
+  shareBook(dir: string): Promise<{ file: string; files: number; bytes: number } | null>;
+  /** Choose a .loreforge file and put its book on the shelf (in the worlds folder); null when cancelled. */
+  openBookFile(): Promise<{ dir: string; name: string } | null>;
   /** Reveal a saved file in the system file manager. */
   showInFolder(path: string): Promise<void>;
   /** Save a copy of a file of the world (a picture, a 3D model) where the user picks; its new path, or null when cancelled. */
@@ -186,6 +298,39 @@ export interface LoreApi {
   /** Delete a saved picture service key. */
   aiForgetKey(provider: PictureProvider): Promise<AiPictures>;
   copyText(text: string): Promise<void>;
+  /** Ask AI: Claude Code and Codex, whether each is installed and signed in (checked again with `refresh`). */
+  askAgents(refresh?: boolean): Promise<AskAgent[]>;
+  /** A book's Ask AI conversation (empty when there is none). */
+  askChat(dir: string): Promise<AskChat>;
+  /** Send a message: the AI starts working on the book. Rejects when one already is. */
+  askSend(dir: string, agent: AskAgentId, text: string, bookName: string, about?: AskAbout | null): Promise<AskChat>;
+  /** Stop the AI working on a book. */
+  askStop(dir: string): Promise<void>;
+  /** Start a new conversation: the AI forgets this one (the book keeps every change it made). */
+  askClear(dir: string): Promise<AskChat>;
+  /** A conversation changed (a reply came in, a step finished). Returns a function that stops listening. */
+  onAskChanged(cb: (chat: AskChat) => void): () => void;
+  /**
+   * Undo an Ask AI task: the files it changed go back as they were. Files changed again since come back as
+   * conflicts and nothing changes, unless `force`. Returns the files that changed.
+   */
+  askUndo(dir: string, task: string, force?: boolean): Promise<{ conflicts: string[]; changed: string[] }>;
+  /** The picture service that would draw (null: none is set up). */
+  pictureService(): Promise<PictureService | null>;
+  /** Draw a picture of an entry (one of its looks) in a view, with this prompt; saved into the world folder. */
+  pictureMake(dir: string, entryId: string, type: string, view: string, look: string | null, prompt: string): Promise<PictureMade>;
+  /** Book history: the snapshots of a book, newest first. */
+  historyList(dir: string): Promise<HistorySnapshot[]>;
+  /** The versions of one file of a book (an entry), newest first. */
+  historyVersions(dir: string, path: string): Promise<HistoryVersion[]>;
+  /** How the book now differs from a snapshot. */
+  historyChanges(dir: string, id: string): Promise<HistoryChange[]>;
+  /** A text file as a snapshot has it (null: it did not have it). */
+  historyRead(dir: string, id: string, path: string): Promise<string | null>;
+  /** Keep a snapshot of the book now. */
+  historyKeep(dir: string, label?: string): Promise<HistorySnapshot | null>;
+  /** Put the book (or some files) back as a snapshot has it; the book as it is now is kept first. Returns the files that changed. */
+  historyRestore(dir: string, id: string, paths: string[] | null, label: string): Promise<string[]>;
   /** Used by the headless smoke test only. */
   smokeReport(summary: Record<string, unknown>): void;
   /** Smoke test only: set the window's content size. */

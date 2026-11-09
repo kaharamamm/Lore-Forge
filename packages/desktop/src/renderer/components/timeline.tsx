@@ -30,7 +30,7 @@ const clampN = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, 
  * d3-zoom on the time axis: drag or Shift+scroll to pan, Ctrl+scroll or −/+ to zoom; it never pans past the
  * first or last year. Lanes scroll up and down natively.
  */
-export function TimelineView({ world, warnings, selectedId, onOpen }: { world: World; warnings: Warning[]; selectedId: string | null; onOpen: (id: string) => void }) {
+export function TimelineView({ world, warnings, selectedId, onOpen, onOpenLook }: { world: World; warnings: Warning[]; selectedId: string | null; onOpen: (id: string) => void; onOpenLook: (id: string, look: string) => void }) {
   const model = useMemo(() => timelineModel(world, warnings), [world, warnings]);
   const cal = world.manifest.calendar;
   const scroller = useRef<HTMLDivElement>(null);
@@ -224,7 +224,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen }: { world: W
                   </div>
                   {(() => {
                     const items = g.lanes.map((lane): Placed => ({ lane, left: xOf(lane.from), w: lane.point ? 0 : Math.max(8, (lane.to - lane.from) * ppd) }));
-                    const mark = { trackW: width, inset, onOpen, show, hide: () => setHover.current(null) };
+                    const mark = { trackW: width, inset, onOpen, onOpenLook, show, hide: () => setHover.current(null) };
                     if (layout === 'lanes') return items.map((it) => <Lane key={it.lane.entry.id} it={it} selected={it.lane.entry.id === selectedId} mark={mark} />);
                     // Stacked: pack by what each mark takes on screen (its bar, or its diamond and side label).
                     const rows = packRows(items.map((it) => ({ from: it.left - (it.lane.point ? 20 : 0), to: it.left + footprint(it) })), STACK_GAP);
@@ -268,7 +268,7 @@ function finerYears(model: TimelineModel, major: number, ppy: number, fromDay: n
 }
 
 interface Placed { lane: TimelineLane; left: number; w: number }
-interface MarkProps { trackW: number; inset: (left: number, w: number, keep: number) => number; onOpen: (id: string) => void; show: (lane: TimelineLane, ev: MouseEvent | FocusEvent) => void; hide: () => void }
+interface MarkProps { trackW: number; inset: (left: number, w: number, keep: number) => number; onOpen: (id: string) => void; onOpenLook: (id: string, look: string) => void; show: (lane: TimelineLane, ev: MouseEvent | FocusEvent) => void; hide: () => void }
 
 /** What fits inside the visible part of a bar. */
 function fits(it: Placed, trackW: number): 'none' | 'icon' | 'title' | 'dates' {
@@ -316,7 +316,7 @@ function Lane({ it, selected, mark }: { it: Placed; selected: boolean; mark: Mar
  * when it has one), or a diamond (a round picture) for a moment; warnings and a side label after it.
  * In the Stacked layout the marks are the keyboard stops, since rows have no names on the left.
  */
-function Mark({ it, focusable, trackW, inset, onOpen, show, hide }: MarkProps & { it: Placed; focusable?: boolean }) {
+function Mark({ it, focusable, trackW, inset, onOpen, onOpenLook, show, hide }: MarkProps & { it: Placed; focusable?: boolean }) {
   const { lane, left, w } = it;
   const e = lane.entry;
   const dir = useContext(WorldDir);
@@ -341,6 +341,19 @@ function Mark({ it, focusable, trackW, inset, onOpen, show, hide }: MarkProps & 
           </span>
         )}
       </button>
+      {/* Its looks: a gold line along the bottom of the bar while each applies, under the icon and text. */}
+      {!lane.point && lane.looks.length > 0 && (
+        <span class={`tl-looks${src ? ' has-image' : ''}`} style={{ left: `${left}px`, width: `${w}px` }}>
+          {lane.looks.map((lk) => {
+            const perDay = lane.to > lane.from ? w / (lane.to - lane.from) : 0;
+            const x = (lk.from - lane.from) * perDay;
+            const title = lk.when ? `${t('Look: {name}', { name: lk.name })} · ${tm(lk.when)}` : t('Look: {name}', { name: lk.name });
+            return (
+              <button key={lk.id} type="button" tabIndex={-1} class="tl-look" style={{ left: `${x}px`, width: `${Math.max(6, (lk.to - lk.from) * perDay)}px` }} title={title} aria-label={title} onClick={() => onOpenLook(e.id, lk.id)} />
+            );
+          })}
+        </span>
+      )}
       {(lane.worst || inside === 'none' || inside === 'icon') && left <= trackW && left + w >= 0 && (
         <span class={`tl-after${flip ? ' is-before' : ''}`} style={flip ? { right: `${trackW - left + half + 8}px` } : { left: `${end}px` }}>
           {lane.worst && (

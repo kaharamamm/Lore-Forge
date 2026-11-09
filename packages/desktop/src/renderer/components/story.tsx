@@ -9,6 +9,7 @@ import { Select } from './select.tsx';
 import { kindOf } from './severity.tsx';
 import { EntryLabel, TypeBadge } from './type.tsx';
 import { ProseEditor, type SpanMark, type TextPick } from './prose.tsx';
+import type { Spelling } from '../../shared/api.ts';
 import { lower, num, t, tj, tm, tx } from '../i18n.tsx';
 
 export interface StoryActions {
@@ -78,7 +79,15 @@ export function ChapterList({ chapters, current, warnings, onSelect, onCreate, o
 
 // ------------------------------------------------------------------------------------------- the view
 
-export function StoryView({ world, chapter, analysis, warnings, reveal, actions, onCreate }: {
+/** The text chosen in the chapter, whole (the pick chip keeps one short line of it). */
+function chosenText(): string | undefined {
+  const el = document.getElementById('story-text') as HTMLTextAreaElement | null;
+  return el && el.selectionEnd > el.selectionStart ? el.value.slice(el.selectionStart, el.selectionEnd) : undefined;
+}
+
+export function StoryView({ world, chapter, analysis, warnings, reveal, actions, onCreate, onAsk }: {
+  /** Ask AI about this chapter, or the part of it chosen. */
+  onAsk: (quote?: string) => void;
   world: World;
   chapter: StoryChapter | undefined;
   analysis: StoryAnalysis;
@@ -90,12 +99,19 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
 }) {
   const [pick, setPick] = useState<TextPick | null>(null);
   const [manual, setManual] = useState<{ p: Proposal; mode: 'edit' | 'merge' } | null>(null);
+  // The spelling of the word under a right-click, for the menu (main/spelling.ts sends it just after the menu opens):
+  // only an answer that came after this menu opened is for it.
+  const [spelt, setSpelt] = useState<{ s: Spelling | null; at: number } | null>(null);
+  const pickedAt = useRef(0);
+  useEffect(() => window.lore.onSpelling((s) => setSpelt({ s, at: performance.now() })), []);
+  const spelling = pick?.how === 'menu' && spelt && spelt.at >= pickedAt.current ? spelt.s : null;
   const guess = useMemo(() => {
     if (!pick || !chapter) return undefined;
     const s = sentences(chapter.body).find((x) => x.start <= pick.start && x.start + x.text.length >= pick.end);
     return guessEntry(world, pick.text, s?.text ?? pick.text);
   }, [pick?.start, pick?.end, pick?.text, world]);
   const onPick = (pk: TextPick | null) => {
+    if (pk?.how === 'menu') pickedAt.current = performance.now();
     if (!pk || pk.how !== 'quick' || !chapter) return setPick(pk);
     // Ctrl+Shift+A: add the selection straight away with the guessed type, or offer to open what is already there.
     const s = sentences(chapter.body).find((x) => x.start <= pk.start && x.start + x.text.length >= pk.end);
@@ -122,6 +138,19 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
     }
   }
   const words = wordsOf(chapter);
+  /** A spelling suggestion takes the place of the misspelled word in the picked text, and the caret goes after it. */
+  const fixSpelling = (pk: TextPick, word: string, to: string): void => {
+    const body = chapter.body;
+    const i = body.indexOf(word, pk.start);
+    setPick(null);
+    if (i < 0 || i + word.length > pk.end) return;
+    actions.onChange({ ...chapter, body: body.slice(0, i) + to + body.slice(i + word.length) });
+    requestAnimationFrame(() => {
+      const box = document.getElementById('story-text') as HTMLTextAreaElement | null;
+      box?.focus();
+      box?.setSelectionRange(i + to.length, i + to.length);
+    });
+  };
   const pickProposal = (pk: TextPick, g: Guess, type: EntryType): Proposal => {
     const s = sentences(chapter.body).find((x) => x.start <= pk.start && x.start + x.text.length >= pk.end);
     const span: SourceSpan = s ? { chapter: chapter.file, start: s.start, end: s.start + s.text.length, quote: s.text } : { chapter: chapter.file, start: pk.start, end: pk.end, quote: pk.text };
@@ -138,15 +167,20 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
             <input value={chapter.date ?? ''} placeholder={chapterDate(chapter) ?? t('e.g. 1872 OK')} onInput={(e) => { const v = e.currentTarget.value; const { date: _d, ...rest } = chapter; actions.onChange(v.trim() ? { ...rest, date: v } : rest); }} />
           </label>
           <span class="muted small story-count" role="status">{words === 1 ? t('{n} word', { n: num(words) }) : t('{n} words', { n: num(words) })}</span>
+          <button type="button" class="ghost small story-ask" onClick={() => onAsk(chosenText())} title={t('Ask AI about this chapter, or about the text you chose in it')}><Icon name="magic-lamp" /> {t('Ask AI')}</button>
         </div>
         <ProseEditor id="story-text" world={world} value={chapter.body} fill marks={marks} reveal={reveal} label={chapter.title ? t('Text of {title}', { title: chapter.title }) : t('Text of this chapter')}
           onInput={(body) => actions.onChange({ ...chapter, body })} onOpen={actions.onOpen} onPick={onPick} />
         {pick && guess && (
           <PickMenu pick={pick} guess={guess} onClose={() => setPick(null)}
+            spelling={pick.how === 'menu' && spelling && pick.text.includes(spelling.word) ? spelling : null}
+            onSpell={(to) => { if (spelling) fixSpelling(pick, spelling.word, to); }}
+            onDictionary={() => { if (spelling) void window.lore.addToDictionary(spelling.word); setPick(null); }}
             onOpen={(id) => { setPick(null); actions.onOpen(id); }}
             onAdd={(type) => { setManual({ p: pickProposal(pick, guess, type), mode: 'edit' }); setPick(null); }}
             onLink={() => { setManual({ p: pickProposal(pick, guess, guess.type), mode: 'merge' }); setPick(null); }}
-            onSearch={() => { setPick(null); actions.onSearch(pick.text); }} />
+            onSearch={() => { setPick(null); actions.onSearch(pick.text); }}
+            onAsk={() => { const text = chosenText() ?? pick.text; setPick(null); onAsk(text); }} />
         )}
       </section>
       <ProposalsPanel world={world} chapter={chapter} analysis={analysis} actions={actions} manual={manual} onManualDone={() => setManual(null)} />
@@ -161,7 +195,12 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
  * Place", or "Open Saltmere" when it exists) and a More button; right-click shows the whole menu.
  * Arrow keys move, Esc closes, and the menu stays inside the window.
  */
-function PickMenu({ pick, guess, onClose, onOpen, onAdd, onLink, onSearch }: {
+function PickMenu({ pick, guess, spelling, onSpell, onDictionary, onClose, onOpen, onAdd, onLink, onSearch, onAsk }: {
+  onAsk: () => void;
+  /** The picked word is misspelled: its suggestions, and adding it to the dictionary. */
+  spelling: Spelling | null;
+  onSpell: (to: string) => void;
+  onDictionary: () => void;
   pick: TextPick;
   guess: Guess;
   onClose: () => void;
@@ -183,7 +222,7 @@ function PickMenu({ pick, guess, onClose, onOpen, onAdd, onLink, onSearch }: {
     const y = pick.y + r.height + 8 > innerHeight ? Math.max(8, pick.y - r.height - 8) : pick.y;
     setAt({ x: Math.max(8, Math.min(pick.x, innerWidth - r.width - 8)), y: Math.max(8, Math.min(y, innerHeight - r.height - 8)) });
   }, [pick, full, size]);
-  useEffect(() => { if (full) box.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus(); }, [pick, full]);
+  useEffect(() => { if (full) box.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus(); }, [pick, full, !!spelling]);
   useEffect(() => {
     // A smaller window keeps the menu on screen.
     const onResize = () => { setSize(`${innerWidth}x${innerHeight}`); requestAnimationFrame(() => setSize(`${innerWidth}x${innerHeight}.`)); };
@@ -223,6 +262,16 @@ function PickMenu({ pick, guess, onClose, onOpen, onAdd, onLink, onSearch }: {
       {full && (
         <>
           <p class="pick-title" aria-hidden="true">“{short}”</p>
+          {spelling && (
+            <div class="pick-spelling" role="group" aria-label={t('Spelling of “{word}”', { word: spelling.word })}>
+              {spelling.suggestions.map((s) => (
+                <button key={s} type="button" role="menuitem" class="pick-item pick-spell" onClick={() => onSpell(s)}><Icon name="quill" /> {s}</button>
+              ))}
+              {!spelling.suggestions.length && <p class="pick-note muted">{t('No suggestions')}</p>}
+              <button type="button" role="menuitem" class="pick-item pick-dictionary" onClick={onDictionary}><Icon name="spell-book" /> {t('Add “{word}” to the dictionary', { word: spelling.word })}</button>
+              <hr />
+            </div>
+          )}
           {guess.existing && <button type="button" role="menuitem" class="pick-item pick-open" onClick={() => onOpen(guess.existing!.id)}><Icon name={TYPE_ICON[guess.type]} /> {t('Open {name}', { name: guess.existing.name })}</button>}
           {ENTRY_TYPES.map((type) => (
             <button key={type} type="button" role="menuitem" class={`pick-item t-${type}${!guess.existing && type === guess.type ? ' is-guess' : ''}`} data-type={type} onClick={() => onAdd(type)}>
@@ -232,6 +281,7 @@ function PickMenu({ pick, guess, onClose, onOpen, onAdd, onLink, onSearch }: {
           <hr />
           <button type="button" role="menuitem" class="pick-item pick-link" onClick={onLink}><Icon name="linked-rings" /> {t('Link to existing…')}</button>
           <button type="button" role="menuitem" class="pick-item pick-search" onClick={onSearch}><Icon name="magnifying-glass" /> {t('Search the world for “{text}”', { text: short })}</button>
+          <button type="button" role="menuitem" class="pick-item pick-ask" onClick={onAsk}><Icon name="magic-lamp" /> {t('Ask AI about “{text}”', { text: short })}</button>
         </>
       )}
     </div>

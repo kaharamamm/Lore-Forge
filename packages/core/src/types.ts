@@ -105,6 +105,29 @@ export interface WorldManifest {
   book?: BookSettings;
   /** How the world's book looks on the library shelf. */
   cover?: WorldCoverSettings;
+  /** Maps of the world: pictures with places pinned on them (each place's `pins`). */
+  maps?: WorldMap[];
+}
+
+/**
+ * A map of the world: a picture with places pinned on it. The id is made from the first name and stays when the
+ * map is renamed, since the places' pins use it.
+ */
+export interface WorldMap {
+  id: string;
+  name: string;
+  /** The picture, relative to the world folder. The app keeps it in maps/. */
+  image: string;
+  /** The place the map shows (a city on a map of the land), by id or name. Its pin on other maps opens this map. */
+  place?: string;
+}
+
+/** A place's spot on one of the world's maps: x and y in percent of the picture, from its left and top edges. */
+export interface MapPin {
+  /** The map's id. */
+  map: string;
+  x: number;
+  y: number;
 }
 
 /**
@@ -400,6 +423,8 @@ export interface Place extends EntryBase {
   destroyed?: DateText;
   /** Id of the larger place/region this one is inside. */
   partOf?: string;
+  /** Where it is on the world's maps. */
+  pins?: MapPin[];
 }
 export interface Faction extends EntryBase {
   type: 'faction';

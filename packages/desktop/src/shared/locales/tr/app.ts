@@ -50,6 +50,8 @@ export const APP: Readonly<Record<string, string>> = {
   'Could not save the book details: {error}': 'Kitap bilgileri kaydedilemedi: {error}',
   'Calendar saved': 'Takvim kaydedildi',
   'Could not save the calendar: {error}': 'Takvim kaydedilemedi: {error}',
+  'Saved {file} ({size}). Anyone with Lore-Forge can open it with Open a book file in the library.': '{file} kaydedildi ({size}). Lore-Forge kullanan herkes onu kitaplıktaki “Kitap dosyası aç” ile açabilir.',
+  'Could not share the book: {error}': 'Kitap paylaşılamadı: {error}',
   'Cover saved': 'Kapak kaydedildi',
 
   // app.tsx: the world's top bar

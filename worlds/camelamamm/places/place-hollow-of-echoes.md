@@ -8,6 +8,10 @@ features: The old sluice gate of the Well Wardens; every sound comes back seven 
 status: standing
 founded: "~300 BW"
 partOf: place-glass-dunes
+pins:
+  - map: the-sunsea
+    x: 60
+    y: 78
 visual:
   architecture: A natural cavern of blue-green glass with a carved bronze sluice gate at its far end.
   climate: Cool, damp, always dripping.
