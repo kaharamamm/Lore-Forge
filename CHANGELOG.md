@@ -2,7 +2,7 @@
 
 All notable changes to Lore-Forge are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] - 2026-11-09
 
 ### Added
 
@@ -209,6 +209,6 @@ First public release. The downloads of 4 November were replaced on 7 November by
 
 Copies downloaded before 7 November 2026 have no updater. Download the current version once from the links in the README; from then on Lore-Forge updates itself.
 
-[Unreleased]: https://github.com/kaharamamm/Lore-Forge/compare/v1.1.0...HEAD
+[1.2.0]: https://github.com/kaharamamm/Lore-Forge/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/kaharamamm/Lore-Forge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kaharamamm/Lore-Forge/releases/tag/v1.0.0

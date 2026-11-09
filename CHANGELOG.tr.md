@@ -2,7 +2,7 @@
 
 Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) kurallarına, sürüm numaraları da [Anlamsal Sürümleme](https://semver.org/) kurallarına uyar.
 
-## [Unreleased]
+## [1.2.0] - 2026-11-09
 
 ### Eklenenler
 
@@ -209,6 +209,6 @@ Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a C
 
 7 Kasım 2026'dan önce indirilen kopyalarda güncelleyici yok. Güncel sürümü README dosyasındaki bağlantılardan bir kez indirin; bundan sonra Lore-Forge kendi kendini güncelleyecek.
 
-[Unreleased]: https://github.com/kaharamamm/Lore-Forge/compare/v1.1.0...HEAD
+[1.2.0]: https://github.com/kaharamamm/Lore-Forge/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/kaharamamm/Lore-Forge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kaharamamm/Lore-Forge/releases/tag/v1.0.0
