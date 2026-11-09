@@ -47,10 +47,10 @@ test('the server offers the tools, the guide and the write_story prompt', async 
   try {
     const { client, call } = await connect({ dataDir: h.dataDir, defaultWorldsDir: h.worlds, sampleDir: null });
     const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(tools, ['add_image', 'check_book', 'create_book', 'create_image', 'delete_entry', 'duplicate_book', 'export_book', 'get_book', 'get_entry', 'get_map', 'link_entries', 'list_books', 'look_at', 'lore_forge_guide', 'mark_intended', 'read_story', 'save_entries', 'save_map', 'story_proposals', 'update_book', 'write_chapter']);
+    assert.deepEqual(tools, ['add_image', 'chapter_brief', 'check_book', 'create_book', 'create_image', 'delete_entry', 'duplicate_book', 'edit_chapter', 'export_book', 'get_book', 'get_entry', 'get_map', 'link_entries', 'list_books', 'look_at', 'lore_forge_guide', 'mark_intended', 'read_story', 'save_entries', 'save_map', 'story_proposals', 'update_book', 'write_chapter']);
     assert.match(client.getInstructions() ?? '', /lore_forge_guide/);
     const guide = (await call('lore_forge_guide')).text;
-    for (const s of ['create_book', 'save_entries', 'write_chapter', 'check_book', 'create_image', 'three-quarter', 'parent-of', 'after-death', 'personality', 'look_at', 'look-overlap', 'save_map', 'get_map', 'map-pin']) assert.ok(guide.includes(s), `the guide mentions ${s}`);
+    for (const s of ['create_book', 'save_entries', 'write_chapter', 'check_book', 'create_image', 'three-quarter', 'parent-of', 'after-death', 'personality', 'look_at', 'look-overlap', 'save_map', 'get_map', 'map-pin', 'chapter_brief', 'edit_chapter', 'writingStyle', 'Writing well', 'ai-phrasing']) assert.ok(guide.includes(s), `the guide mentions ${s}`);
     const prompt = await client.getPrompt({ name: 'write_story', arguments: { idea: 'a story about camels' } });
     assert.match((prompt.messages[0]!.content as { text: string }).text, /a story about camels[\s\S]*lore_forge_guide/);
     assert.deepEqual((await call('list_books')).json().books, []);
@@ -448,6 +448,45 @@ test('maps: an assistant adds a map, looks at it, pins places by map, and remove
     assert.deepEqual(world.manifest.maps?.map((m) => m.id), ['the-salt-coast']);
     const missing = await call('save_map', { book: book.id, map: 'Old Qarim', remove: true });
     assert.ok(missing.error && /no map "Old Qarim"[\s\S]*"The Salt Coast"/.test(missing.text), missing.text);
+  } finally {
+    await rm(h.root, { recursive: true, force: true });
+  }
+});
+
+test('writing: the writing style of a book, a chapter brief before writing, and changing part of a chapter', async () => {
+  const h = await home();
+  try {
+    const { call } = await connect({ dataDir: h.dataDir, defaultWorldsDir: h.worlds, sampleDir: null });
+    const book = (await call('create_book', { name: 'Salt Roads', writingStyle: 'Third person, past tense. Dry humour.' })).json().book.dir as string;
+    assert.equal((await call('get_book', { book })).json().writingStyle, 'Third person, past tense. Dry humour.');
+    await call('save_entries', { book, entries: [{ type: 'character', name: 'Nur', born: '480' }, { type: 'character', name: 'Ilsa', died: '500' }, { type: 'event', name: 'The Toll', date: '505' }] });
+    const one = await call('write_chapter', { book, title: 'The Gate', date: '502', text: 'Nur waited at the gate.\n\nThe caravan came at dusk. It was a testament to her patience.' });
+    // The answer notes the AI-sounding phrase right away.
+    assert.ok(JSON.stringify(one.json().storyWarnings).includes('a testament to'), one.text);
+    // The brief for the next chapter: the voice, the story so far, who is alive on its date, what is still to come.
+    const brief = (await call('chapter_brief', { book, chapter: 'The Toll Road', date: '504' })).text;
+    assert.match(brief, /^# Brief for a new chapter, "The Toll Road", set in 504/);
+    assert.match(brief, /## The book's voice\nThird person, past tense\. Dry humour\./);
+    assert.match(brief, /1\. \*\*The Gate\*\* \(502\)/);
+    assert.match(brief, /## Where the chapter before ends\nNur waited at the gate\.\n\nThe caravan came at dusk\./);
+    assert.match(brief, /- Nur \(24 years old\)/);
+    assert.match(brief, /Dead by then: Ilsa \(died 500\)/);
+    assert.match(brief, /## Still to come[^\n]*\n- The Toll \(505\)/);
+    // Part of a chapter changes; the rest stays word for word.
+    const edited = await call('edit_chapter', { book, chapter: 1, edits: [{ find: 'It was a testament to her patience.', replace: 'She had waited three days.' }] });
+    assert.equal(edited.error, false, edited.text);
+    assert.equal((await call('read_story', { book, chapter: 'The Gate' })).json().text.trimEnd(), 'Nur waited at the gate.\n\nThe caravan came at dusk. She had waited three days.');
+    assert.ok(!JSON.stringify(edited.json().storyWarnings).includes('testament'));
+    // A find that is not there, or there twice, changes nothing.
+    const missing = await call('edit_chapter', { book, chapter: 'The Gate', edits: [{ find: 'nowhere', replace: 'x' }] });
+    assert.ok(missing.error && /not in the chapter/.test(missing.text), missing.text);
+    await call('edit_chapter', { book, chapter: 'The Gate', edits: [{ find: 'Nur waited', replace: 'Nur waited and waited' }] });
+    const twice = await call('edit_chapter', { book, chapter: 'The Gate', edits: [{ find: 'waited', replace: 'stood' }] });
+    assert.ok(twice.error && /3 times/.test(twice.text), twice.text);
+    // Taking the writing style away; the file stays valid with one.
+    await call('update_book', { book, writingStyle: null });
+    assert.equal((await call('get_book', { book })).json().writingStyle, undefined);
+    valid('world-manifest.schema.json', { ...JSON.parse(readFileSync(join(book, 'world.json'), 'utf8')), writingStyle: 'Any text.' });
   } finally {
     await rm(h.root, { recursive: true, force: true });
   }

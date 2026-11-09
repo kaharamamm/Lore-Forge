@@ -15,6 +15,13 @@ publish:
 files:
   - dist/**/*
   - package.json
+# .loreforge book files (Share this book) open in Lore-Forge: double-click, Open with, the file's icon.
+fileAssociations:
+  - ext: loreforge
+    name: Lore-Forge book
+    description: Lore-Forge book
+    mimeType: application/x-loreforge
+    role: Editor
 extraResources:
   # Only the sample world Camelamamm ships; the other folders in worlds/ are private.
   - from: ../../worlds/camelamamm

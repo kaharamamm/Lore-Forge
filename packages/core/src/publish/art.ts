@@ -1,5 +1,5 @@
 import { lookAt, lookVisual } from '../looks.ts';
-import { VISUAL_FIELDS, type Entry, type EntryType, type Look } from '../types.ts';
+import { VISUAL_FIELDS, type Entry, type EntryType, type Look, type Place } from '../types.ts';
 import type { WorldIndex } from '../world-index.ts';
 import { showDate } from './doc.ts';
 
@@ -32,6 +32,48 @@ export function picturePrompt(entry: Entry, ix: WorldIndex, view: string, look?:
   const base = brief?.prompt ?? `${entry.type === 'faction' ? `Emblem and banner design for ${entry.name}` : `Illustration of ${entry.name}`}.${entry.summary ? ` ${entry.summary}` : ''}${lookLine}${visual.length ? ` ${visual.join(' ')}` : ''} Setting: the world of ${ix.world.manifest.name}.`;
   const viewHint = view === 'a-pose' ? ' Full body, neutral A-pose, plain background.' : view === 'front' && entry.type === 'character' ? ' Full body, front view.' : '';
   return `${base}${viewHint} No text, no captions, no watermark.`;
+}
+
+/** The first sentence of a text, at most about `max` characters (cut at a word). */
+function firstSentence(text: string | undefined, max = 90): string {
+  const s = (text ?? '').trim().split(/(?<=[.!?])\s/)[0] ?? '';
+  if (s.length <= max) return s.replace(/[.!?]$/, '');
+  return `${s.slice(0, s.lastIndexOf(' ', max)).replace(/[,;:]$/, '')}…`;
+}
+
+/**
+ * A ready text-to-image prompt for a map picture: what it covers (one place, or the whole world), the places to show
+ * with a few words on each, and where each lies: the places in it and the places in those, nearest first. No text
+ * on the picture: image models spell names badly, and the app puts the names on the map with its pins.
+ */
+export function mapPrompt(ix: WorldIndex, place?: string): string {
+  const places = ix.entries.filter((e): e is Place => e.type === 'place');
+  const centre = place ? places.find((p) => p.id === ix.resolve(place)?.id) : undefined;
+  const parentOf = (p: Place): Place | undefined => (p.partOf ? places.find((x) => x.id === ix.resolve(p.partOf!)?.id) : undefined);
+  /** How many steps down from the centre (or from the top, for the whole world); undefined when outside it. */
+  const depth = (p: Place): number | undefined => {
+    let d = 0;
+    for (let at: Place | undefined = p, seen = 0; at && seen < 20; at = parentOf(at), seen++) {
+      if (centre && at.id === centre.id) return d;
+      d++;
+    }
+    return centre ? undefined : d - 1;
+  };
+  const shown = places
+    .map((p) => ({ p, d: depth(p) }))
+    .filter((x): x is { p: Place; d: number } => x.d !== undefined && x.d <= 2 && (!centre || x.d > 0))
+    .sort((a, b) => a.d - b.d || a.p.name.localeCompare(b.p.name))
+    .slice(0, 14)
+    .map(({ p }) => {
+      const about = firstSentence(p.summary);
+      const parent = parentOf(p);
+      const where = parent && parent.id !== centre?.id ? `, in ${parent.name}` : '';
+      return `${p.name}${about ? ` (${about})` : ''}${where}`;
+    });
+  const world = ix.world.manifest.name;
+  const what = centre ? `A map of ${centre.name}${firstSentence(centre.summary) ? ` (${firstSentence(centre.summary)})` : ''}, in the world of ${world}` : `A map of the world of ${world}`;
+  const list = shown.length ? ` Show these places, each where it would lie: ${shown.join('; ')}.` : '';
+  return `${what}, seen from above.${list} Hand-drawn fantasy map with terrain, coasts, rivers and roads. No text, no labels, no names, no captions, no watermark.`;
 }
 
 /** A prompt with the book's art style added (when it does not say it already). */

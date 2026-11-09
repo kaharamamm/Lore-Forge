@@ -28,6 +28,7 @@ my-world/
 | --- | --- |
 | `schemaVersion`, `id`, `name`, `description` | identity |
 | `artStyle` | one line describing the look of the book's pictures, added to every picture an AI assistant makes (optional) |
+| `writingStyle` | how the book is written (point of view, tense, tone, audience, what to avoid), which AI assistants follow when they write in it (optional) |
 | `calendar` | `eras` (id, name, start, optional end and colour), `defaultEra`, `months` (name, days), `approxYears` |
 | `rules` | per-rule severity overrides, e.g. `{ "duplicate-name": "info", "two-places-at-once": "off" }` |
 | `book` | Story Book details: `title`, `author`, `publisher`, `dedication`, `epigraph`, `epigraphSource`, `copyright`, `trim`, `rightHandChapters`, `chapterYears` |
@@ -172,5 +173,6 @@ The older `1920-03-12` form still works. Each date field shows how it was unders
 | `look-overlap` | warning | two looks of one entry apply at the same time: they start together, or one runs on by its own end into a later one (a look without an end just gives way to the next) |
 | `map-pin` | warning | a place is pinned on a map the book does not have, or a map is set to show something that is not a place |
 | `story-contradiction` | warning | a story chapter says something different from an entry |
+| `ai-phrasing` | info | a chapter, or an entry's summary, longer details or text, uses stock AI phrasing, an aside between two dashes, or an "It wasn't just X. It was Y." turn (English text) |
 
 Story sentences are also checked with the timeline rules, as if their proposals were already added. A rule's severity can be changed or the rule turned off in `world.json` under `rules`. The rule library and custom rules are described in [docs/INTEGRATION.md](INTEGRATION.md#custom-rules-library).

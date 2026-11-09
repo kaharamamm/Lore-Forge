@@ -2,6 +2,31 @@
 
 All notable changes to Lore-Forge are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **The book's writing style.** World settings has a writing style (point of view, tense, tone, audience, what to avoid) next to the picture style, which you can now set in the app too. Ask AI and the AI apps connected to Lore-Forge follow both. Ready styles to start from: Cozy, Funny, Adventure, Epic, Mystery, Creepy, Horror, Dark and gritty and Fairy tale for the writing, and eight picture styles from Painterly fantasy to Pixel art. The sample world has both set.
+- **A chapter brief for the AI.** Before an AI writes or changes a chapter, Lore-Forge gives it the story so far with the end of the chapter before, and on the chapter's date who is alive, how old they are, where they live and how they look, which places stand, and which events are done or still to come. The story it writes fits the book.
+- **AI-sounding phrasing is noted.** The check marks stock AI phrases ("a testament to", "a tapestry of", "little did they know"), asides between two dashes, and "It wasn't just X. It was Y." turns, whoever wrote them: underlined in the chapters, and listed for the entries' summaries, details and text. An AI writing in Lore-Forge fixes them before it finishes. English text only; **Mark intended** keeps one.
+- **Ask AI changes only the part you chose.** Rewrite, Continue and Check on chosen text keep the rest of the chapter word for word.
+- **Time on the map.** When a book has dated events at its places, a bar under the map shows them. The year slider puts that year's events beside their places and fades the places that did not stand then. The journey list draws someone's way across the map, through the places they lived in and the events they were part of, in order.
+- **Draw a map with AI.** **Add a map…** has **Draw one with AI…**: the picture service set up in Connect AI draws the map from a prompt built from the book's places, which you can change first. The pins add the names.
+- **Maps in the World Codex.** Each map is in the PDF, the preview and the Markdown copy, with its places numbered on it and listed by number.
+- **Share… as a website or as game data.** Next to the book file, **Website** writes pages that open in any browser, even offline: every entry, the maps with places to click, the timeline and the story, with names linked to their entries. **Game data** writes `world-snapshot.json` with the pictures and 3D models next to it, for a game engine or your own tools.
+- **Book files open with a double-click** once Lore-Forge is installed, or when dropped on its window. The same file opened again opens the copy already on the shelf instead of making another.
+- **Search finds chapters and maps.** Ctrl+F lists the chapters (by title, then text) and maps that match, under the entries. A chapter opens at the words found.
+
+### Changed
+
+- The patch notes of a new version get its number and date when it is released, in the app and on the release page.
+
+### Fixed
+
+- About, and the credit lines of the World Codex and the Story Book, name the version that runs. In 1.1.0 they still said 1.0.0.
+- Search results in the sidebar no longer show stray dots, and a long name stays on one line beside its picture.
+- Choosing a longer part of a chapter (more than a line, or paragraphs) shows **Ask AI about this part**, by the selection and on right-click. Before, nothing showed for a part longer than a name.
+
 ## [1.1.0] - 2026-11-09
 
 ### Added
@@ -184,5 +209,6 @@ First public release. The downloads of 4 November were replaced on 7 November by
 
 Copies downloaded before 7 November 2026 have no updater. Download the current version once from the links in the README; from then on Lore-Forge updates itself.
 
+[Unreleased]: https://github.com/kaharamamm/Lore-Forge/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/kaharamamm/Lore-Forge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kaharamamm/Lore-Forge/releases/tag/v1.0.0

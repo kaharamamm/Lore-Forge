@@ -88,13 +88,14 @@ The server gives the assistant these tools. Most apps show them under **lore-for
 
 | Tool | Does |
 | --- | --- |
-| `lore_forge_guide` | The playbook for writing a whole book, and every field name of the format |
+| `lore_forge_guide` | The playbook for writing a whole book, how to write well (and what AI-sounding phrasing to leave out), and every field name of the format |
 | `list_books`, `get_book` | The books on your shelf; one book at a glance (entries, chapters, warning counts) |
-| `create_book`, `update_book`, `duplicate_book` | A new book with its calendar, cover and Story Book details; change them; copy a book (such as the read-only sample) |
+| `create_book`, `update_book`, `duplicate_book` | A new book with its calendar, cover, Story Book details, picture style and writing style; change them; copy a book (such as the read-only sample) |
 | `get_entry`, `save_entries`, `delete_entry` | Read, create and update up to 40 entries at once (by name; entries can refer to each other in the same call), delete one. Looks are added, changed or removed one at a time, by id or name |
 | `look_at` | How entries look on an in-world date: the look in effect (or the Default look), why, and the full visual description. Without an entry, everyone who is not in their Default look then |
 | `link_entries` | Relationships: family, friends and enemies, rulers, owners, places, who killed whom |
-| `write_chapter`, `read_story` | Write or replace a chapter; read the chapter list or one chapter. For a dated chapter, the answer also lists the looks of the entries it names |
+| `chapter_brief` | Before writing or changing a chapter: the book's writing style, the story so far with the end of the chapter before, and on the chapter's date who is alive and where, their age and look, the places gone or not there yet, and the events done, happening and still to come |
+| `write_chapter`, `edit_chapter`, `read_story` | Write or replace a chapter; change part of one and keep the rest word for word; read the chapter list or one chapter. For a dated chapter, the answer also lists the looks of the entries it names, and notes AI-sounding phrasing (`ai-phrasing`) |
 | `story_proposals` | What the chapters mention that the book does not have yet: add it or ignore it |
 | `check_book`, `mark_intended` | The consistency rules the app runs; keep a contradiction on purpose with a note |
 | `create_image`, `add_image` | Make a picture with your service, or attach one, for an entry, one of its looks, or the cover |

@@ -40,9 +40,12 @@ export function toMarkdown(doc: Doc, imageHref: (file: string) => string = (f) =
         out.push('');
         break;
       case 'image':
-        out.push(`![${b.caption}](${imageHref(b.file).replace(/ /g, '%20')})`, '', `*${b.caption}*`, '');
+        // A map's heading names it already: no caption line.
+        out.push(`![${b.caption}](${imageHref(b.file).replace(/ /g, '%20')})`, '', ...(b.pins ? [] : [`*${b.caption}*`, '']));
         for (const d of b.details) out.push(`- ${d}`);
         if (b.details.length) out.push('');
+        for (const p of b.pins ?? []) out.push(`${p.n}. ${p.name}`);
+        if (b.pins?.length) out.push('');
         break;
       case 'prompt':
         out.push(`**${b.label}:**`, '', '```text', b.text, '```', '');

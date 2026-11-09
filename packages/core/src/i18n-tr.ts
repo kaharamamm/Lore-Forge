@@ -396,6 +396,12 @@ const RULES: Record<string, string> = {
   'A known relationship type is used between entry types it does not fit, such as an item that is "parent-of" someone. Custom relationship types are not checked.':
     'Bilinen bir ilişki türü, uymadığı kayıt türleri arasında kullanılmış; ör. bir eşya birine “parent-of” ilişkisiyle bağlanmış. Özel ilişki türleri denetlenmez.',
   'Story disagrees with an entry': 'Hikâye bir kayıtla çelişiyor',
+  // ai-phrasing (prose-check.ts)
+  'Sounds like AI writing': 'Yapay zekâ yazısı gibi',
+  'A stock phrase that AI writing leans on, two dashes around an aside, or the "It wasn\'t X. It was Y." turn.': 'Yapay zekâ yazısının sık başvurduğu kalıp bir söz, iki tire arasına alınmış bir ara söz ya da "X değildi. Y idi." kalıbı.',
+  '"{0}" sounds like AI writing. Say it plainly, or with a detail only this book has.': '"{0}" yapay zekâ yazısı gibi duruyor. Düz söyleyin ya da yalnızca bu kitaba ait bir ayrıntıyla anlatın.',
+  'Two dashes around an aside: AI writing leans on them. Commas, brackets or a sentence of its own read better.': 'İki tire arasında bir ara söz: yapay zekâ yazısı bunlara çok yaslanır. Virgüller, ayraçlar ya da ayrı bir cümle daha iyi okunur.',
+  '"It wasn\'t X. It was Y." is a turn AI writing overuses. Say what it is.': '"X değildi. Y idi." yapay zekâ yazısının fazla kullandığı bir kalıp. Ne olduğunu doğrudan söyleyin.',
   'A sentence in the story gives a different date, place, status or title than the entry has.':
     'Hikâyedeki bir cümle, kayıttakinden farklı bir tarih, yer, durum ya da unvan veriyor.',
 };
@@ -669,6 +675,9 @@ const DOCUMENTS: Record<string, string> = {
   '{0}: {1} {2} ({3})': '{0}, {1}: {2} ({3})',
   '{0} (missing)': '{0} (eksik)',
   'Glossary of names': 'Ad dizini',
+  'Maps': 'Haritalar',
+  'A map of {0}.': '{0} haritası.',
+  'No places are pinned on this map yet.': 'Bu haritaya henüz hiçbir yer iğnelenmedi.',
   '{0}: alias of {1}': '{0}: {1} için diğer ad',
   'Appendix: consistency warnings': 'Ek: tutarlılık uyarıları',
   'No open warnings.': 'Açık uyarı yok.',

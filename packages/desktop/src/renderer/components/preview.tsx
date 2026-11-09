@@ -129,6 +129,16 @@ function BlockView({ b, dir, doc, i }: { b: Block; dir: string; doc: Doc; i: num
       );
     case 'list': return <ul class="doc-list">{b.items.map((t, j) => <li key={j}><Inline text={t} /></li>)}</ul>;
     case 'image':
+      // A map: its places numbered on the picture, and listed by number under it.
+      if (b.pins) return (
+        <figure class="doc-figure doc-map">
+          <div class="doc-map-frame">
+            <DocImage dir={dir} file={b.file} caption={b.caption} />
+            {b.pins.map((p) => <span key={p.n} class="doc-pin" style={{ left: `${p.x}%`, top: `${p.y}%` }} title={p.name}>{p.n}</span>)}
+          </div>
+          {b.pins.length > 0 && <ol class="doc-map-legend">{b.pins.map((p) => <li key={p.n}><span class="doc-pin">{p.n}</span> {p.name}</li>)}</ol>}
+        </figure>
+      );
       return (
         <figure class="doc-figure">
           <DocImage dir={dir} file={b.file} caption={b.caption} />

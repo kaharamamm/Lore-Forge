@@ -1,7 +1,7 @@
 import { Fragment } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
-  analyzeStory, applyFields, builtinRules, imageLook, chapterPath, check, checkWorld, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, isStoryFact, newEntryId, normalizeName, parseWorld,
+  aiPhrasingRule, analyzeStory, applyFields, builtinRules, imageLook, chapterPath, check, checkWorld, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, isStoryFact, newEntryId, normalizeName, parseWorld,
   proposalEntry, relationWeb, searchEntries, eraUsage, worldCoverArt, serializeChapter, serializeEntry, serializeIntended, serializeStoryIgnored, sortChapters, sortWarnings, STORY_IGNORED_FILE, storyFact, timelineModel, TYPE_SINGULAR, WorldIndex,
   type BookSettings, type Calendar, type Entry, type EntryType, type FactRef, type IconName, type Proposal, type ProposalFields, type StoryAnalysis, type StoryChapter, type StoryIgnore, type Warning, type World, type WorldCoverSettings, type WorldMap,
 } from '@lore-forge/core';
@@ -14,15 +14,16 @@ import { Tour, type TourStep } from './components/tour.tsx';
 import { UpdateToast } from './components/updates.tsx';
 import { size as fileSize, viewers } from './components/models.tsx';
 import { TimelineView } from './components/timeline.tsx';
-import { MapView } from './components/map.tsx';
+import { MapView, rememberMap } from './components/map.tsx';
 import { PreviewDialog, previewDoc, sheetsOf } from './components/preview.tsx';
 import { ToastStack, useToasts } from './components/toasts.tsx';
 import { involves, WarningsPanel, type WarningActions } from './components/warnings.tsx';
 import { AskAiPanel } from './components/ask-ai.tsx';
 import { HistoryDialog } from './components/history.tsx';
+import { ShareDialog, type ShareKind } from './components/share.tsx';
 import { Icon } from './components/icon.tsx';
 import { Aura } from './components/aura.tsx';
-import { ErasLink, WorldSettings } from './components/world-settings.tsx';
+import { ErasLink, WorldSettings, type BookStyle } from './components/world-settings.tsx';
 import { AppSettings } from './components/settings.tsx';
 import { lower, t, tm, useLanguage } from './i18n.tsx';
 import { transition } from './motion.ts';
@@ -49,6 +50,8 @@ const STORY_DELAY_MS = 300;
 const CHECK_DELAY_MS = 250;
 /** A rule check that takes longer than this (a very big world) waits for a pause in typing instead of following every key. */
 const RULES_INSTANT_MS = 8;
+/** The rules on the entries' facts, which follow every keystroke while they are quick; ai-phrasing reads the text after a pause. */
+const FACT_RULES = builtinRules.filter((r) => r.id !== aiPhrasingRule.id);
 
 const SMOKE = new URLSearchParams(location.search).has('smoke');
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
@@ -228,6 +231,8 @@ export function App() {
     setAskFocus((n) => n + 1);
   };
   const [reveal, setReveal] = useState<{ start: number; end: number; n: number } | undefined>(undefined);
+  /** Bumped to open the Map again on the map a search result asked for. */
+  const [mapTurn, setMapTurn] = useState(0);
   const history = useHistory({ dir: world ? dir : null, view, id: selectedId, preview, relMode, chapter: chapterFile }, (loc) => {
     const apply = () => transition(() => {
       setView(loc.view);
@@ -696,11 +701,14 @@ export function App() {
         }
         $<HTMLButtonElement>('.topbar .top-settings')!.click();
         {
-          // World settings: the default era comes first, before the list of eras; About lives in the library only.
+          // World settings: how the book is written and drawn first, then the calendar with the default era before the
+          // list of eras; About lives in the library only.
           expect(await until(() => !!$('.world-settings')), 'the top-bar gear opens World settings');
           const body = $('.world-settings .dialog-body')!;
-          expect(!$('.world-settings .ws-about') && body.firstElementChild?.classList.contains('ws-default-row') === true && !!body.querySelector('.ws-default-row #ws-default'),
-            'World settings starts with the default era and has no About button');
+          const order = [...body.children].map((el) => el.id || el.className);
+          expect(!$('.world-settings .ws-about') && body.firstElementChild?.id === 'ws-style' && !!body.querySelector('.ws-style .ws-writing') && !!body.querySelector('.ws-style .ws-art')
+            && order.indexOf('ws-calendar') < order.indexOf('ws-default-row') && order.indexOf('ws-default-row') < order.indexOf('ws-eras') && !!body.querySelector('.ws-default-row #ws-default'),
+            `World settings starts with the writing and picture style, then the calendar from its default era, and has no About button (${order.join(', ')})`);
           key(window, 'Escape');
           expect(await until(() => !$('.world-settings')), 'Escape closes World settings');
         }
@@ -1439,7 +1447,7 @@ export function App() {
           expect(await until(() => !!row.querySelector('.color-button')), 'an era can get a colour');
           await tick();
           save().click();
-          expect(await until(() => !$('.world-settings')), 'Save calendar closes World settings');
+          expect(await until(() => !$('.world-settings')), 'Save closes World settings');
           const disk = (await fromDisk()).manifest.calendar;
           const saved = disk.eras.find((e) => e.id === firstEra.id);
           expect(!!saved?.color && (next ? saved.end === next.start - 1 : true) && JSON.stringify(disk.months) === JSON.stringify(w.manifest.calendar.months) && disk.approxYears === w.manifest.calendar.approxYears && disk.defaultEra === w.manifest.calendar.defaultEra,
@@ -2194,7 +2202,7 @@ export function App() {
           {
             // The credits are folded away but still there (the licences require them); the head stays put while the body scrolls.
             const box = $<HTMLDetailsElement>('.about .credits-box')!;
-            expect(!!box && !box.open && /Credits and licences/.test(box.querySelector('summary')?.textContent ?? '') && count('.about .credits-box .credit') === 11, 'About folds the eleven credits into a closed "Credits and licences" section');
+            expect(!!box && !box.open && /Credits and licences/.test(box.querySelector('summary')?.textContent ?? '') && count('.about .credits-box .credit') === 12, 'About folds the twelve credits into a closed "Credits and licences" section');
             const firstInBody = $('.about .dialog-body')!.firstElementChild;
             expect(!!firstInBody?.classList.contains('updates') && !!$('.about .about-tour') && ($('.about .about-tour')!.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, 'Updates and the tour come first in About, the credits after');
             box.open = true;
@@ -2648,12 +2656,17 @@ export function App() {
   const ruleWarnings = useMemo(() => {
     if (!ruleWorld) return [];
     const t0 = performance.now();
-    const found = checkWorld(ruleWorld, builtinRules);
+    const found = checkWorld(ruleWorld, FACT_RULES);
     slowRules.current = performance.now() - t0 > RULES_INSTANT_MS;
     return found;
   }, [ruleWorld?.entries, ruleWorld?.manifest, ruleWorld?.intended, ruleWorld?.issues, ruleWorld?.files, storyDates]);
+  // How the entries' text reads (ai-phrasing) after a pause, like the story check: it reads every text, not facts.
+  const proseWarnings = useMemo(() => (checked ? checkWorld(checked, [aiPhrasingRule]) : []), [checked?.entries, checked?.manifest, checked?.intended]);
   const warnings = useSame(
-    useMemo(() => (analysis?.warnings.length ? sortWarnings([...ruleWarnings, ...analysis.warnings]) : ruleWarnings), [ruleWarnings, analysis]),
+    useMemo(() => {
+      const story = analysis?.warnings ?? [];
+      return story.length || proseWarnings.length ? sortWarnings([...ruleWarnings, ...proseWarnings, ...story]) : ruleWarnings;
+    }, [ruleWarnings, proseWarnings, analysis]),
     sameWarnings,
   );
 
@@ -3223,12 +3236,53 @@ export function App() {
   const [sample, setSample] = useState<string | null>(null);
   const [bundled, setBundled] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
+  /**
+   * Book files opened from the file manager (double-click, Open with) or dropped on the window: each goes on the shelf
+   * (the same file again gives the same book) and the last one opens, once the open book is saved.
+   */
+  const openBookFiles = useEvent(async (files: readonly string[]) => {
+    let last: string | null = null;
+    for (const file of files) {
+      try {
+        last = (await window.lore.openBookFile(file))?.dir ?? last;
+      } catch (e) {
+        toasts.push({ tone: 'error', text: t('{file} could not be opened: {error}', { file: file.split(/[\\/]/).pop() ?? file, error: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }) });
+      }
+    }
+    if (!last || (dirRef.current && dirRef.current !== last && !(await closeWorld()))) return;
+    await open(last);
+  });
   useEffect(() => {
-    void Promise.all([window.lore.sampleWorld(), window.lore.bundledWorld(), window.lore.settings(), window.lore.initialWorld()]).then(([s, b, set, first]) => {
+    void Promise.all([window.lore.sampleWorld(), window.lore.bundledWorld(), window.lore.settings(), window.lore.initialWorld(), window.lore.takeBookFiles()]).then(([s, b, set, first, files]) => {
       setSample(s);
       setBundled(b);
-      if (!SMOKE && s && !set.tourDone && !first) startTour();
+      if (!SMOKE && s && !set.tourDone && !first && !files.length) startTour();
+      if (files.length) void openBookFiles(files);
     });
+    return window.lore.onBookFiles(() => void window.lore.takeBookFiles().then((files) => openBookFiles(files)));
+  }, []);
+  // A .loreforge file dropped anywhere on the window. Drops the page handles itself (a pin on the map) come first;
+  // pictures and other known kinds of file are not taken, so the pointer only offers a drop for what may be a book.
+  useEffect(() => {
+    const maybeBook = (e: DragEvent): boolean => [...(e.dataTransfer?.items ?? [])].some((i) => i.kind === 'file' && !/^(image|audio|video|text)\/|officedocument|pdf/.test(i.type));
+    const over = (e: DragEvent): void => {
+      if (e.defaultPrevented || !maybeBook(e)) return;
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'copy';
+    };
+    const drop = (e: DragEvent): void => {
+      if (e.defaultPrevented) return;
+      const files = [...(e.dataTransfer?.files ?? [])].map((f) => window.lore.pathOfFile(f)).filter((p) => /\.loreforge$/i.test(p));
+      if (!files.length) return;
+      e.preventDefault();
+      void openBookFiles(files);
+    };
+    window.addEventListener('dragover', over);
+    window.addEventListener('drop', drop);
+    return () => {
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('drop', drop);
+    };
   }, []);
   const endTour = () => {
     setTouring(false);
@@ -3275,6 +3329,28 @@ export function App() {
   };
   /** The whole book as one file (after saving what is still waiting), to send or keep. */
   const [sharing, setSharing] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  /** Share… chose how: the book file, a website or game data. */
+  const shareAs = async (kind: ShareKind): Promise<void> => {
+    setShareOpen(false);
+    if (kind === 'file') return shareBook();
+    setSharing(true);
+    const folderName = (path: string): string => path.split(/[\\/]/).pop() ?? path;
+    try {
+      await flush();
+      if (kind === 'site') {
+        const r = await window.lore.exportSite(dir);
+        if (r) toasts.push({ tone: 'ok', text: t('Saved the website in “{folder}”. Open index.html in any browser, or send the whole folder.', { folder: folderName(r.folder) }), action: { label: t('Show in folder'), run: () => void window.lore.showInFolder(r.index) } });
+      } else {
+        const r = await window.lore.exportGameData(dir);
+        if (r) toasts.push({ tone: 'ok', text: t('Saved the game data in “{folder}”: world-snapshot.json, with the pictures and 3D models at the paths it names.', { folder: folderName(r.folder) }), action: { label: t('Show in folder'), run: () => void window.lore.showInFolder(r.file) } });
+      }
+    } catch (e) {
+      toasts.push({ tone: 'error', text: t('Could not share the book: {error}', { error: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }) });
+    } finally {
+      setSharing(false);
+    }
+  };
   const shareBook = async (): Promise<void> => {
     setSharing(true);
     try {
@@ -3313,14 +3389,20 @@ export function App() {
       toasts.push({ tone: 'error', text: t('Could not save the book details: {error}', { error: (e as Error).message }) });
     }
   };
-  const saveCalendar = async (calendar: Calendar): Promise<boolean> => {
+  /** World settings: the calendar, then the writing and picture style. */
+  const saveWorldSettings = async (calendar: Calendar, style: BookStyle): Promise<boolean> => {
     try {
       const saved = await window.lore.saveCalendar(dir, calendar);
-      setWorld((w) => (w ? { ...w, manifest: { ...w.manifest, calendar: saved } } : w));
-      toasts.push({ tone: 'ok', text: t('Calendar saved') });
+      const styles = await window.lore.saveStyle(dir, style);
+      setWorld((w) => {
+        if (!w) return w;
+        const { writingStyle: _w, artStyle: _a, ...manifest } = w.manifest;
+        return { ...w, manifest: { ...manifest, ...styles, calendar: saved } };
+      });
+      toasts.push({ tone: 'ok', text: t('World settings saved') });
       return true;
     } catch (e) {
-      toasts.push({ tone: 'error', text: t('Could not save the calendar: {error}', { error: (e as Error).message }) });
+      toasts.push({ tone: 'error', text: t('Could not save the world settings: {error}', { error: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }) });
       return false;
     }
   };
@@ -3404,7 +3486,9 @@ export function App() {
         <ChapterList chapters={story} current={chapterFile} warnings={warnings} onCreate={createChapter} onMove={moveChapter} onDelete={(f) => setDoomed({ kind: 'chapter', file: f })}
           onSelect={(f) => transition(() => { setChapterFile(f); setReveal(undefined); })} />
       ) : (
-      <Sidebar entries={world.entries} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onCreate={createEntry} creating={creating} onCreating={setCreating}
+      <Sidebar entries={world.entries} story={world.story} maps={world.manifest.maps} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onCreate={createEntry} creating={creating} onCreating={setCreating}
+        onChapter={(file, span) => transition(() => { setChapterFile(file); setView('story'); setReveal(span ? { start: span[0], end: span[1], n: performance.now() } : undefined); })}
+        onMap={(id) => transition(() => { rememberMap(dir, id); setMapTurn((n) => n + 1); setView('map'); })}
         onSelect={(id) => transition(() => {
           setSelectedId(id);
           // On the Map a place stays on the map (it is shown there when pinned); anything else opens in the editor.
@@ -3422,9 +3506,9 @@ export function App() {
               <p>{world.entries.length ? t('Pick an entry on the left to edit it.') : t('This world is empty. Start with a character, a place or an event: use “+ New” on the left.')}</p>
             </div>
           ))}
-        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onWarnings={showWarnings} onHistory={() => setHistoryFor({ entryId: null })} onChange={editEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onAppSettings={() => setAppSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} onDuplicate={() => void flush().then(() => setCopying(true))} onShare={() => void shareBook()} sharing={sharing} sample={dir === bundled} />}
+        {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onWarnings={showWarnings} onHistory={() => setHistoryFor({ entryId: null })} onChange={editEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onAppSettings={() => setAppSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} onDuplicate={() => void flush().then(() => setCopying(true))} onShare={() => setShareOpen(true)} sharing={sharing} sample={dir === bundled} />}
         {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} onOpenLook={openLook} />}
-        {view === 'map' && <MapView dir={dir} world={world} selectedId={selectedId} onOpen={openEntry} onPins={writeEntries} onSaveMaps={saveMaps} />}
+        {view === 'map' && <MapView key={mapTurn} dir={dir} world={world} selectedId={selectedId} onOpen={openEntry} onPins={writeEntries} onSaveMaps={saveMaps} />}
         {view === 'story' && (() => {
           const chapter = story.find((c) => c.file === chapterFile) ?? story[0];
           const empty: StoryAnalysis = { proposals: [], ignored: [], links: [], extraction: { proposals: [], appearances: [] }, warnings: [] };
@@ -3476,12 +3560,13 @@ export function App() {
           </ConfirmDialog>
         );
       })()}
-      {settings && <WorldSettings world={world} onSave={saveCalendar} onClose={() => setSettings(false)} />}
+      {settings && <WorldSettings world={world} onSave={saveWorldSettings} onClose={() => setSettings(false)} />}
       {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}
       {historyFor && (
         <HistoryDialog dir={dir} world={world} entryId={historyFor.entryId} busy={asking} onClose={() => setHistoryFor(null)} onOpen={openEntry}
           beforeChange={() => flush()} onRestored={(files) => { if (files.length) void open(dir, files); }} />
       )}
+      {shareOpen && <ShareDialog onChoose={(kind) => void shareAs(kind)} onClose={() => setShareOpen(false)} />}
       {copying && <DuplicateBook dir={dir} name={world.manifest.name} onClose={() => setCopying(false)} onDone={(copy) => { setCopying(false); setFresh(copy); void closeWorld(); }} />}
       <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>

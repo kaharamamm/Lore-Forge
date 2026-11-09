@@ -7,10 +7,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ZoomTransform } from 'd3-zoom';
 import {
-  ENTRY_TYPES, LIFECYCLE, mapModel, newMapId, TYPE_LABELS, TYPE_SINGULAR, withoutPin, withPin, WorldIndex,
-  type Entry, type EntryType, type MapPin, type MapPlace, type Place, type World, type WorldMap,
+  ENTRY_TYPES, inYear, journeyAt, LIFECYCLE, mapModel, mapPrompt, mapTime, newMapId, TYPE_LABELS, TYPE_SINGULAR, withArtStyle, withoutPin, withPin, WorldIndex, yearLabel,
+  type Calendar, type Entry, type EntryType, type JourneyStop, type MapPin, type MapPlace, type MapTime, type Place, type World, type WorldMap,
 } from '@lore-forge/core';
-import type { MapPicture } from '../../shared/api.ts';
+import type { MapPicture, PictureService } from '../../shared/api.ts';
 import { usePanZoom, zoomIdentity } from '../zoom.ts';
 import { t, tm } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
@@ -38,7 +38,8 @@ const lastMapKey = (dir: string): string => `lore-forge.map:${dir}`;
 function lastMap(dir: string): string | null {
   try { return localStorage.getItem(lastMapKey(dir)); } catch { return null; }
 }
-function rememberMap(dir: string, id: string): void {
+/** The map the Map shows next time it opens in this book. */
+export function rememberMap(dir: string, id: string): void {
   try { localStorage.setItem(lastMapKey(dir), id); } catch { /* the map is simply not remembered */ }
 }
 
@@ -75,6 +76,8 @@ export function MapView({ dir, world, selectedId, onOpen, onPins, onSaveMaps }: 
   const [dialog, setDialog] = useState<{ map?: WorldMap } | null>(null);
   const [doomed, setDoomed] = useState<WorldMap | null>(null);
   const model = useMemo(() => (current ? mapModel(world, current.id) : undefined), [world, current]);
+  // Its events, journeys and the years they span (none when nothing on it is dated).
+  const time = useMemo(() => (model ? mapTime(world, model) : undefined), [world, model]);
 
   // Pin changes, to undo and redo.
   const undo = useRef<Step[]>([]);
@@ -176,7 +179,7 @@ export function MapView({ dir, world, selectedId, onOpen, onPins, onSaveMaps }: 
           <button type="button" class="primary map-add-first" onClick={() => setDialog({})}><Icon name="treasure-map" /> {t('Add a map…')}</button>
         </div>
       ) : model && (
-        <MapCanvas key={current.id} dir={dir} model={model} editing={editing} selectedId={selectedId}
+        <MapCanvas key={current.id} dir={dir} model={model} time={time} cal={world.manifest.calendar} editing={editing} selectedId={selectedId}
           onOpen={onOpen} onShowMap={show} onChange={change} onStopEditing={() => setEditing(false)} />
       )}
       {dialog && (
@@ -199,9 +202,12 @@ export function MapView({ dir, world, selectedId, onOpen, onPins, onSaveMaps }: 
   );
 }
 
-function MapCanvas({ dir, model, editing, selectedId, onOpen, onShowMap, onChange, onStopEditing }: {
+function MapCanvas({ dir, model, time, cal, editing, selectedId, onOpen, onShowMap, onChange, onStopEditing }: {
   dir: string;
   model: NonNullable<ReturnType<typeof mapModel>>;
+  /** Events, journeys and years on this map; the bar for them shows only when there is something to show. */
+  time: MapTime | undefined;
+  cal: Calendar;
   editing: boolean;
   selectedId: string | null;
   onOpen: (id: string) => void;
@@ -211,6 +217,17 @@ function MapCanvas({ dir, model, editing, selectedId, onOpen, onShowMap, onChang
 }) {
   const { map } = model;
   const src = useImageState(dir, map.image);
+  // A year on the map (its first day; null: all of time) and the journey drawn on it.
+  const [year, setYear] = useState<number | null>(null);
+  const [follow, setFollow] = useState('');
+  const span = time?.span;
+  const per = span?.daysPerYear ?? 365;
+  const when = year !== null && span ? Math.min(Math.max(year, span.min), span.max) : null;
+  const journey = time?.journeys.find((j) => j.entry.id === follow);
+  const here = journey && when !== null ? journeyAt(journey, when, per) : undefined;
+  const yearEvents = when !== null && time ? time.events.filter((e) => inYear(e, when, per)) : [];
+  const absent = (id: string): boolean => when !== null && !!time?.lives[id] && !inYear(time.lives[id]!, when, per);
+  const timeBar = !!time && !editing && (!!span || time.journeys.length > 0);
   const [size, setSize] = useState<Size | null>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const sizeRef = useRef(size);
@@ -231,13 +248,13 @@ function MapCanvas({ dir, model, editing, selectedId, onOpen, onShowMap, onChang
   };
   const [limits, setLimits] = useState({ min: 0.05, max: 4 });
   const pz = usePanZoom(canvas, { min: limits.min, max: limits.max, anyWheel: true, ignore: '.map-pin', clamp });
-  /** The whole picture in view, below the zoom buttons. */
+  /** The whole picture in view, below the zoom buttons (and above the time bar, when there is one). */
   const fit = (): void => {
     const el = canvas.current;
     if (!el || !size) return;
-    const top = 52, edge = 16;
-    const k = Math.min((el.clientWidth - edge * 2) / size.w, (el.clientHeight - top - edge) / size.h);
-    pz.set(zoomIdentity.translate((el.clientWidth - size.w * k) / 2, top + (el.clientHeight - top - edge - size.h * k) / 2).scale(k));
+    const top = 52, edge = 16, bottom = timeBar ? 68 : edge;
+    const k = Math.min((el.clientWidth - edge * 2) / size.w, (el.clientHeight - top - bottom) / size.h);
+    pz.set(zoomIdentity.translate((el.clientWidth - size.w * k) / 2, top + (el.clientHeight - top - bottom - size.h * k) / 2).scale(k));
   };
   useLayoutEffect(() => {
     if (!size) return;
@@ -412,12 +429,13 @@ function MapCanvas({ dir, model, editing, selectedId, onOpen, onShowMap, onChang
               style={size ? { width: `${size.w}px`, height: `${size.h}px`, transform: `translate(${t2.x}px, ${t2.y}px) scale(${t2.k})` } : { visibility: 'hidden' }}
               onLoad={(e) => { const img = e.currentTarget; if (!size || size.w !== img.naturalWidth || size.h !== img.naturalHeight) setSize({ w: img.naturalWidth, h: img.naturalHeight }); }} />
           )}
+          {src && size && journey && !editing && <Route stops={journey.stops} here={here} at={at} />}
           {src && size && model.pins.map((p) => {
             const moving = drag?.id === p.entry.id ? drag : null;
             const pos = at(moving?.x ?? p.x, moving?.y ?? p.y);
             const name = p.entry.name || p.entry.id;
             return (
-              <div key={p.entry.id} class={`map-pin t-place${p.ended ? ' is-ended' : ''}${p.entry.id === selectedId ? ' is-selected' : ''}${moving ? ' is-moving' : ''}`} style={{ left: `${pos.left}px`, top: `${pos.top}px` }}>
+              <div key={p.entry.id} class={`map-pin t-place${p.ended ? ' is-ended' : ''}${absent(p.entry.id) ? ' is-absent' : ''}${p.entry.id === selectedId ? ' is-selected' : ''}${moving ? ' is-moving' : ''}`} style={{ left: `${pos.left}px`, top: `${pos.top}px` }}>
                 <button type="button" class="map-pin-dot" data-id={p.entry.id}
                   aria-label={editing ? t('{name}: arrow keys move it, Delete takes it off', { name }) : t('Open {name}', { name })}
                   onClick={() => { if (!editing) onOpen(p.entry.id); }}
@@ -435,6 +453,28 @@ function MapCanvas({ dir, model, editing, selectedId, onOpen, onShowMap, onChang
               </div>
             );
           })}
+          {src && size && !editing && journey && here !== undefined && (() => {
+            const stop = journey.stops[here]!;
+            const pos = at(stop.spot.pin.x, stop.spot.pin.y);
+            return (
+              <button type="button" class="map-traveller" style={{ left: `${pos.left}px`, top: `${pos.top}px` }} onClick={() => onOpen(journey.entry.id)}
+                title={t('{name}, at {place}', { name: journey.entry.name, place: stop.spot.place.name })} aria-label={t('{name}, at {place}', { name: journey.entry.name, place: stop.spot.place.name })}>
+                <Portrait entry={journey.entry} size="sm" />
+              </button>
+            );
+          })()}
+          {src && size && !editing && yearEvents.map((ev) => {
+            const pos = at(ev.spot.pin.x, ev.spot.pin.y);
+            // Events at one pin stack upwards beside it.
+            const nth = yearEvents.filter((x) => x.spot.pin === ev.spot.pin).indexOf(ev);
+            const where = ev.spot.place.id !== ev.spot.pin.entry.id ? `, ${ev.spot.place.name}` : '';
+            return (
+              <button key={ev.entry.id} type="button" class="map-event t-event" style={{ left: `${pos.left}px`, top: `${pos.top}px`, '--nth': nth }} onClick={() => onOpen(ev.entry.id)}
+                title={`${ev.entry.name} (${ev.when}${where})`}>
+                <Portrait entry={ev.entry} size="xs" /><span class="map-event-name">{ev.entry.name}</span>
+              </button>
+            );
+          })}
           {src === undefined && <p class="map-note" role="status"><Icon name="cycle" class="ask-spin" /> {t('Loading the map…')}</p>}
           {src === null && (
             <div class="map-note is-missing" role="alert">
@@ -444,12 +484,67 @@ function MapCanvas({ dir, model, editing, selectedId, onOpen, onShowMap, onChang
           )}
         </div>
         {src && size && <ZoomControls pz={pz} onFit={fit} />}
+        {src && size && timeBar && time && (
+          <div class="map-time" role="group" aria-label={t('Time on the map')}>
+            {time.journeys.length > 0 && (
+              <Select id="map-follow" class="map-follow" value={follow} onChange={setFollow} aria-label={t('Whose journey to draw')}
+                options={[{ value: '', label: t('No journey'), icon: 'direction-signs' as const }, ...time.journeys.map((j) => ({ value: j.entry.id, label: j.entry.name || j.entry.id, icon: 'person' as const, tone: 't-character' }))]} />
+            )}
+            {span && (
+              <div class="map-year">
+                <Icon name="hourglass" />
+                <input type="range" class="map-year-slider" min={span.min / per} max={span.max / per} step={1} list="map-year-marks"
+                  value={(when ?? span.max) / per} onInput={(e) => setYear(Number(e.currentTarget.value) * per)}
+                  aria-label={t('Year on the map')} aria-valuetext={when === null ? t('All time') : yearLabel(when, cal)} />
+                <datalist id="map-year-marks">
+                  {[...new Set(time.events.map((e) => Math.floor(e.from / per)))].map((y) => <option key={y} value={y} />)}
+                </datalist>
+                <output class="map-year-label">{when === null ? t('All time') : yearLabel(when, cal)}</output>
+                {when !== null && (
+                  <button type="button" class="ghost small icon-only map-year-reset" onClick={() => setYear(null)} aria-label={t('All time')} title={t('All time: every place, no year')}><Icon name="cancel" /></button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {src && size && !model.pins.length && !editing && (
           <p class="map-hint muted"><Icon name="position-marker" /> {t('No places on this map yet. Use Edit pins to put them on it.')}</p>
         )}
       </div>
       {hover && <PinCard p={hover.p} at={hover.at} />}
     </div>
+  );
+}
+
+/**
+ * Someone's journey under the pins: a dashed line from stop to stop with each stop numbered beside its pin (a stop
+ * visited again gets its number next to the first). With a year, the way still ahead of them is faint.
+ */
+function Route({ stops, here, at }: { stops: JourneyStop[]; here: number | undefined; at: (x: number, y: number) => { left: number; top: number } }) {
+  const pts = stops.map((s) => at(s.spot.pin.x, s.spot.pin.y));
+  const line = (list: { left: number; top: number }[]): string => list.map((p) => `${p.left},${p.top}`).join(' ');
+  const done = here === undefined ? pts.length : here + 1;
+  const tip = (s: JourneyStop, i: number): string => [
+    `${i + 1}. ${s.spot.place.name}`,
+    ...s.why.map((w) => (w.kind === 'lived' ? (w.when ? t('Lived in {place} ({when})', { place: w.place.name, when: w.when }) : t('Lived in {place}', { place: w.place.name })) : `${w.event.name} (${w.when})`)),
+  ].join('\n');
+  return (
+    <svg class="map-route" aria-hidden="true">
+      {done < pts.length && <><polyline class="map-route-case is-ahead" points={line(pts.slice(done - 1))} /><polyline class="map-route-line is-ahead" points={line(pts.slice(done - 1))} /></>}
+      <polyline class="map-route-case" points={line(pts.slice(0, done))} />
+      <polyline class="map-route-line" points={line(pts.slice(0, done))} />
+      {pts.map((p, i) => {
+        const again = stops.slice(0, i).filter((s) => s.spot.pin === stops[i]!.spot.pin).length;
+        const x = p.left - 31 - again * 20, y = p.top;
+        return (
+          <g key={i} class={`map-route-stop${i >= done ? ' is-ahead' : ''}`}>
+            <title>{tip(stops[i]!, i)}</title>
+            <circle cx={x} cy={y} r={9} />
+            <text x={x} y={y}>{i + 1}</text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -507,6 +602,31 @@ function MapDialog({ dir, world, map, onSave, onDelete, onClose }: {
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // Drawing the picture with AI: the prompt follows the place it shows until it is changed by hand.
+  const [drawOpen, setDrawOpen] = useState(false);
+  const [ownPrompt, setOwnPrompt] = useState<string | null>(null);
+  const [service, setService] = useState<PictureService | null | undefined>(undefined);
+  const [drawing, setDrawing] = useState(false);
+  const builtPrompt = useMemo(() => withArtStyle(mapPrompt(ix, place || undefined), world.manifest.artStyle), [ix, place, world]);
+  const prompt = ownPrompt ?? builtPrompt;
+  const openDraw = (): void => {
+    setDrawOpen((o) => !o);
+    if (service === undefined) void window.lore.pictureService().then(setService, () => setService(null));
+  };
+  const draw = async (): Promise<void> => {
+    setDrawing(true);
+    setProblem(null);
+    try {
+      const made = await window.lore.mapPictureMake(prompt);
+      setPicture({ picked: made.path });
+      setPicked(await window.lore.readPickedImage(made.path));
+      setDrawOpen(false);
+    } catch (e) {
+      setProblem(message(e));
+    } finally {
+      setDrawing(false);
+    }
+  };
   const places = useMemo(() => world.entries.filter((e) => e.type === 'place').sort((a, b) => a.name.localeCompare(b.name)), [world]);
   // Pictures the book already has that are maps (a place's or an event's map view).
   const bookMaps = useMemo(() => world.entries.flatMap((e) => (e.images ?? []).filter((i) => i.view === 'map').map((i) => ({ entry: e, file: i.file }))), [world]);
@@ -519,7 +639,7 @@ function MapDialog({ dir, world, map, onSave, onDelete, onClose }: {
     setPicture({ picked: p });
     setPicked(await window.lore.readPickedImage(p));
   };
-  const ready = !!name.trim() && (!!map || !!picture) && !busy;
+  const ready = !!name.trim() && (!!map || !!picture) && !busy && !drawing;
   const save = async (): Promise<void> => {
     if (!ready) return;
     setBusy(true);
@@ -553,10 +673,30 @@ function MapDialog({ dir, world, map, onSave, onDelete, onClose }: {
               {preview ? <img src={preview} alt="" /> : <span class="muted"><Icon name="treasure-map" /> {preview === null && map && !picture ? t('The picture is missing') : t('No picture yet')}</span>}
             </div>
             <div class="map-picture-actions">
-              <button type="button" id="map-choose" class="map-choose" onClick={() => void choose()}><Icon name="treasure-map" /> {map || picture ? t('Choose another picture…') : t('Choose a picture…')}</button>
+              <button type="button" id="map-choose" class="map-choose" onClick={() => void choose()} disabled={drawing}><Icon name="treasure-map" /> {map || picture ? t('Choose another picture…') : t('Choose a picture…')}</button>
+              <button type="button" class="map-draw" aria-expanded={drawOpen} aria-controls="map-draw-panel" onClick={openDraw} disabled={drawing}><Icon name="magic-swirl" /> {t('Draw one with AI…')}</button>
               <span class="hint">{t('PNG, JPEG, WebP or GIF. It is copied into the book.')}</span>
             </div>
           </div>
+          {drawOpen && (
+            <div class="map-draw-panel" id="map-draw-panel">
+              <label for="map-draw-prompt">{t('What it shows')}</label>
+              <textarea id="map-draw-prompt" rows={5} value={prompt} disabled={drawing} onInput={(e) => setOwnPrompt(e.currentTarget.value)} />
+              <span class="hint">
+                {t("Built from the book's places (the ones in the place it shows) and its art style. Change it as you like.")}{' '}
+                {ownPrompt !== null && <button type="button" class="link" onClick={() => setOwnPrompt(null)}>{t('Build it again')}</button>}
+              </span>
+              {service === undefined ? null : service ? (
+                <p class="muted make-picture-service"><Icon name="info" /> {service.model ? t('{service} draws it with {model}, billed to your key.', { service: service.service, model: service.model }) : t('{service} draws it, billed to your key.', { service: service.service })}</p>
+              ) : (
+                <p class="make-picture-service is-off"><Icon name="hazard-sign" /> {t('No picture service is set up. In the library, open Connect AI and add a key under Pictures.')}</p>
+              )}
+              <div class="map-draw-actions">
+                <button type="button" class="primary small map-draw-go" disabled={drawing || !service || !prompt.trim()} onClick={() => void draw()}><Icon name="magic-swirl" /> {drawing ? t('Drawing…') : t('Draw the map')}</button>
+                {drawing && <span class="make-picture-busy" role="status"><Icon name="cycle" class="ask-spin" /> {t('Drawing. This usually takes 10 to 60 seconds.')}</span>}
+              </div>
+            </div>
+          )}
           {bookMaps.length > 0 && (
             <div class="map-book-pictures">
               <span class="hint">{t('Or use a map picture the book already has:')}</span>

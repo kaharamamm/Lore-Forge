@@ -20,6 +20,16 @@ import {
   shimScript, signInProblem, Turn, type ClaudeCaps, type CodexCaps,
 } from './ask-stream.ts';
 
+/** The book's writing style from its world.json, for what the AI is told (none when it has none, or the file cannot be read). */
+async function writingStyleOf(dir: string): Promise<{ writingStyle?: string }> {
+  try {
+    const raw = JSON.parse(await readFile(join(dir, 'world.json'), 'utf8')) as { writingStyle?: unknown };
+    return typeof raw.writingStyle === 'string' && raw.writingStyle.trim() ? { writingStyle: raw.writingStyle.trim() } : {};
+  } catch {
+    return {};
+  }
+}
+
 /** How to start a tool: a program, what comes before its own arguments (a script, for Node), and extra environment. */
 interface Launcher {
   command: string;
@@ -323,7 +333,7 @@ async function send(dir: string, agentId: AskAgentId, text: string, bookName: st
   let input = about ? `${aboutText(about)}\n\n${message}` : message;
   try {
     pending = await beginTask(c.dir);
-    const context = bookContext({ name: bookName || 'Untitled', dir: c.dir, readOnly: c.readOnly });
+    const context = bookContext({ name: bookName || 'Untitled', dir: c.dir, readOnly: c.readOnly, ...(await writingStyleOf(c.dir)) });
     const server = serverLaunch(worldsDir);
     let args: string[];
     if (agentId === 'claude-code') {

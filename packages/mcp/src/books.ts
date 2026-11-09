@@ -32,6 +32,8 @@ export interface BookPatch {
   description?: string | null;
   /** One style line used for every picture of this book, e.g. "painterly fantasy concept art, warm desert light". */
   artStyle?: string | null;
+  /** How the book is written (point of view, tense, tone, audience, what to avoid); every chapter follows it. */
+  writingStyle?: string | null;
   calendar?: Calendar;
   /** Story Book details (title, author, dedication, epigraph, ...). null removes a field. */
   book?: Obj;
@@ -70,7 +72,7 @@ function cleanCalendar(c: Calendar): Calendar {
 export async function patchBook(dir: string, patch: BookPatch): Promise<void> {
   const raw = await readManifestRaw(dir);
   if (patch.name?.trim()) raw['name'] = patch.name.trim();
-  for (const k of ['description', 'artStyle'] as const) {
+  for (const k of ['description', 'artStyle', 'writingStyle'] as const) {
     const v = patch[k];
     if (v === undefined) continue;
     if (v === null || !v.trim()) delete raw[k];
@@ -131,6 +133,7 @@ export async function bookOverview(lib: Library, dir: string): Promise<Obj> {
     readOnly: lib.isReadOnly(dir) || undefined,
     description: m.description,
     artStyle: typeof raw['artStyle'] === 'string' ? raw['artStyle'] : undefined,
+    writingStyle: typeof raw['writingStyle'] === 'string' ? raw['writingStyle'] : undefined,
     calendar: { defaultEra: m.calendar.defaultEra, eras: m.calendar.eras.map((e) => `${e.id} = ${e.name} (starts at absolute year ${e.start}${e.end !== undefined ? `, ends ${e.end}` : ''})`), months: m.calendar.months?.map((x) => `${x.name} (${x.days} days)`) },
     book: m.book,
     cover: m.cover,
@@ -564,6 +567,8 @@ export interface ChapterInput {
 
 function findChapter(chapters: StoryChapter[], ref: string | number): StoryChapter | undefined {
   const sorted = sortChapters(chapters);
+  const byFile = typeof ref === 'string' ? sorted.find((c) => c.file === ref.trim().replace(/\\/g, '/')) : undefined;
+  if (byFile) return byFile;
   if (typeof ref === 'number' || /^\d+$/.test(String(ref).trim())) return sorted[Number(ref) - 1];
   const want = normalizeName(String(ref));
   return sorted.find((c) => normalizeName(c.title) === want || c.file === ref);
@@ -625,6 +630,35 @@ function chapterLooks(world: World, chapter: StoryChapter): Obj[] {
       ...(look.visual && Object.keys(look.visual).length ? { changes: look.visual } : {}),
     }];
   });
+}
+
+/** One change to a chapter: `find` (text that is in it exactly once) becomes `replace`. */
+export interface ChapterEdit {
+  find: string;
+  replace: string;
+}
+
+/**
+ * Changes part of a chapter: each edit's `find` must be in the text exactly once (as written, line breaks too), and
+ * `replace` takes its place, so the rest stays word for word. Answers like write_chapter.
+ */
+export async function editChapter(dir: string, ref: string | number, edits: ChapterEdit[]): Promise<Obj> {
+  const world = await loadWorld(dir);
+  const sorted = sortChapters(world.story ?? []);
+  const c = findChapter(sorted, ref);
+  if (!c) throw new Error(`No chapter "${ref}". Chapters: ${sorted.map((x, i) => `${i + 1}. ${x.title}`).join('; ') || 'none yet'}.`);
+  if (!edits.length) throw new Error('Give at least one edit: {find, replace}.');
+  let text = c.body;
+  edits.forEach((e, i) => {
+    const n = e.find ? text.split(e.find).length - 1 : 0;
+    if (n !== 1) {
+      throw new Error(n === 0
+        ? `Edit ${i + 1}: its find text is not in the chapter (as it is after the edits before it). Copy it exactly from read_story; nothing was changed.`
+        : `Edit ${i + 1}: its find text is in the chapter ${n} times. Give more of the text around it, so it is there once; nothing was changed.`);
+    }
+    text = text.replace(e.find, () => e.replace);
+  });
+  return writeChapter(dir, { title: c.title, text, replace: c.file });
 }
 
 export async function readStory(dir: string, ref?: string | number): Promise<Obj> {

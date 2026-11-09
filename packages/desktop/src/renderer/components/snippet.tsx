@@ -2,7 +2,7 @@ import type { SearchHit } from '@lore-forge/core';
 import { tm } from '../i18n.tsx';
 
 /** Where a search hit matched: the field, then the text around it with the match marked. */
-export function Snippet({ hit }: { hit: SearchHit }) {
+export function Snippet({ hit }: { hit: Pick<SearchHit, 'field' | 'snippet' | 'start' | 'end'> }) {
   const s = hit.snippet;
   return (
     <span class="search-snippet">

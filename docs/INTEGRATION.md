@@ -7,7 +7,9 @@ There are four ways to consume a world. The most stable comes first:
 
 1. **Snapshot (recommended):** `lore export <worldDir> --out world.snapshot.json` writes one JSON file with
    the manifest, every entry, the parsed dates, and the full check report. It is validated by
-   `world-snapshot.schema.json`.
+   `world-snapshot.schema.json`. In the app, **Share… → Game data** writes the same file as
+   `world-snapshot.json`, with the book's `images/`, `maps/` and `models/` folders next to it, so every
+   picture, map and 3D model path in it resolves from that folder.
 2. **Check report:** `lore check <worldDir> --json` gives only the warnings
    (`check-report.schema.json`). The exit code is 0 when there are no errors, 1 when there are errors, and 2
    for bad usage or an unreadable world.
@@ -141,7 +143,9 @@ Kadir leads caravans between [[place-qarim|Qarim]] and Saltmere.
   colours are `#rrggbb` or `#rrggbbaa`, `image` is a world-relative path or `"none"`, `icon` a game-icons name or
   `"none"`, `titleStyle` is `display`, `serif` or `sans`) for the book cover on the shelf, Home and the PDFs.
   `"artStyle"` (optional string) describes the look of the world's pictures; the MCP server adds it to every
-  picture prompt. Image tools of your own can use it the same way. `"maps"` (optional) lists the world's maps as
+  picture prompt. Image tools of your own can use it the same way. `"writingStyle"` (optional string) says how
+  the book is written (point of view, tense, tone, audience, what to avoid); the MCP server's chapter brief gives
+  it to assistants before they write. `"maps"` (optional) lists the world's maps as
   `{id, name, image, place?}`: `image` is the picture (in `maps/`), `place` the place a map shows (see
   [Maps](FORMAT.md#maps)).
 - Unknown front-matter keys are preserved when Lore-Forge saves. Lore-Forge writes keys in a fixed order so
@@ -258,7 +262,8 @@ The caravan left Qarim before dawn. ...
   facts on story sentences have `entryId: "story:<file>"`, `source: "Story/<title>"`, `chapter` (the file)
   and `span: [start, end]` (UTF-16 offsets into the chapter body).
 - `lore check` includes story warnings: the timeline rules run on what the story says (as if its proposals
-  were added), plus `story-contradiction` when the story disagrees with an entry. `lore book` prints the
+  were added), plus `story-contradiction` when the story disagrees with an entry, and `ai-phrasing` (info) for
+  stock AI phrasing in a chapter (the same rule notes it in entries' text). `lore book` prints the
   chapters as the book, with the chronicle as *Appendix: Chronicle* (`storyBook(world, {appendix: false})`
   drops it).
 

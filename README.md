@@ -57,7 +57,7 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 ## Why Lore-Forge
 
 - **Canon you can trust.** Consistency rules run while you type: a character acting after their death, a parent born after their child, a city visited before it was founded. Each warning points at the exact field and the fact it breaks; **Go to** jumps there, **Mark intended** keeps a contradiction on purpose.
-- **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. **Share…** packs a whole book into one file to send to a friend. Nothing you write leaves your machine unless you connect an AI app or picture service yourself.
+- **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. **Share…** packs a whole book into one file to send to a friend (a double-click opens it), or makes a website of it that opens in any browser, or game data for your engine. Nothing you write leaves your machine unless you connect an AI app or picture service yourself.
 - **Works with your AI.** Ask Claude, Codex, Cursor or another MCP app for a story and it writes the whole book in Lore-Forge: entries, relationships, chapters and pictures, checked for contradictions. Or ask from inside a book: the **Ask AI** tab runs Claude Code or Codex on your own plan and shows each change as it happens.
 - **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, maps with your places pinned on them, art briefs and reference images for artists and 3D tools. An entry can change its look over time (after a war, in old age), each look with its own pictures and 3D models.
 - **From notes to a book.** Write the story chapter by chapter; Lore-Forge proposes entries from your prose and exports a typeset Story Book (PDF, Word or Markdown), with A4 among the trim sizes and Word matching the PDF including the cover.
@@ -81,11 +81,15 @@ The builds are not code-signed (signing needs paid certificates), so the first s
     <td width="50%" valign="top"><img src="docs/media/story.png" alt="The Story space with a chapter and proposals" width="100%"><br><b>Story.</b> A chapter-by-chapter manuscript that proposes entries from your text.</td>
     <td width="50%" valign="top"><img src="docs/media/story-book-pdf.png" alt="Cover and first pages of the exported Story Book PDF" width="100%"><br><b>Story Book and World Codex.</b> PDF, Word and Markdown. A4 among the sizes; copyright page and drop-cap options; Word matches the PDF, cover included.</td>
   </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/media/map.png" alt="The map of the Sunsea with Camelamamm, the Glass Dunes and the Hollow of Echoes pinned on it, and the card for Camelamamm" width="100%"><br><b>Maps.</b> Your places pinned on your own map pictures, or on one the AI draws from your places. Point at a pin to see who lives there and what happened there; move through the years to see events at their places, and draw someone's journey.</td>
+    <td width="50%" valign="top"><img src="docs/media/ask-ai.png" alt="Ask AI adding a rival tea merchant for Mr Camel, with each step and an Undo button, beside the new entry" width="100%"><br><b>Ask AI.</b> Claude Code or Codex works on the open book with Lore-Forge's own tools. Each step shows as it happens, and <b>Undo</b> takes a task back.</td>
+  </tr>
 </table>
 
 The warning in these screenshots was added on purpose to a copy of the sample world; the sample world itself has none.
 
-The app speaks English and Turkish (**Settings → Language**, with the flags), and every change to an entry can be undone with Ctrl+Z.
+The app speaks English and Turkish (**Settings → Language**, with the flags) and checks your spelling in both. Every change to an entry can be undone with Ctrl+Z, and **History** keeps earlier versions of the whole book, ready to put back.
 
 More in the [user guide](docs/USER-GUIDE.md).
 
@@ -100,7 +104,7 @@ Pictures for the entries and the cover use your own key for OpenAI, Google Gemin
 ## Quick start
 
 1. [Download](#download) and install Lore-Forge, then start it.
-2. The library opens with the sample world **Camelamamm**: a six-chapter story about Mr Camel and the Singing Well, with 23 entries and pictures. On the first start a short tour walks you through it (**Take the tour** in the library brings it back). The installed sample is read-only: **Duplicate** puts an editable copy on the shelf next to it (same cover colours; it does not open by itself).
+2. The library opens with the sample world **Camelamamm**: a six-chapter story about Mr Camel and the Singing Well, with 23 entries, pictures and a map. On the first start a short tour walks you through it (**Take the tour** in the library brings it back). The installed sample is read-only: **Duplicate** puts an editable copy on the shelf next to it (same cover colours; it does not open by itself).
 3. Click **New book** (always first on the top shelf), give your world a name, colour and emblem.
 4. In the sidebar, choose **+ New** next to *Characters*, type a name and a birth date. The entry is saved as `characters/<id>.md` a moment after you stop typing.
 5. Set their status to *Dead* with a death date before the birth date, and watch the warnings panel flag it (`date-order`).
@@ -117,6 +121,7 @@ my-world/
   places/  factions/  items/  events/  notes/
   story/01-the-first-chapter.md   story chapters
   images/<entry-id>/<view>.png    reference images
+  maps/<map-id>.jpg               map pictures (the places say where they are on them)
   models/<entry-id>/<name>.glb    3D models (.glb, .gltf, .obj, .fbx)
 ```
 
@@ -192,6 +197,6 @@ Lore-Forge is released under the [MIT License](LICENSE). Copyright (c) 2026 Ahme
 - Heading font: Cinzel by Natanael Gama and the Cinzel Project Authors, SIL Open Font License 1.1.
 - Cover fonts: the Fontsource packages listed in `packages/pdf/package.json` and Liberation Sans and Serif, SIL Open Font License 1.1.
 - PDF fonts: DejaVu Sans, Serif and Mono, Bitstream Vera / DejaVu licence.
-- React Flow (MIT), d3 (ISC), Preact (MIT), PDFKit (MIT), auto-animate (MIT), three.js (MIT, the 3D model viewer), electron-updater (MIT), the MCP TypeScript SDK and zod (MIT, the server for AI apps).
+- React Flow (MIT), d3 (ISC), Preact (MIT), PDFKit (MIT), auto-animate (MIT), three.js (MIT, the 3D model viewer), electron-updater (MIT), the MCP TypeScript SDK and zod (MIT, the server for AI apps), fflate (MIT, Word files and shared book files).
 
 The app lists the same credits under **About** in the library.

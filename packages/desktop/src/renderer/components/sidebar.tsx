@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { memo } from 'preact/compat';
-import { ENTRY_TYPES, isEnded, LIFECYCLE, raceLabel, racesOf, searchEntries, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, type Entry, type EntryType, type Warning } from '@lore-forge/core';
+import { ENTRY_TYPES, isEnded, LIFECYCLE, raceLabel, racesOf, searchChapters, searchEntries, searchMaps, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, type Entry, type EntryType, type StoryChapter, type Warning, type WorldMap } from '@lore-forge/core';
 import { lower, t, tm } from '../i18n.tsx';
 import { CountBadge } from './severity.tsx';
 import { ENTRY_DRAG } from './link-edit.tsx';
@@ -14,21 +14,31 @@ const NO_WARNINGS: Warning[] = [];
 
 interface Props {
   entries: Entry[];
+  /** The chapters and maps, which a search finds too. */
+  story: StoryChapter[] | undefined;
+  maps: WorldMap[] | undefined;
   warnings: Warning[];
   selectedId: string | null;
   query: string;
   onQuery: (q: string) => void;
   onSelect: (id: string) => void;
+  /** Open a chapter in the Story (at the match in its text), or a map in the Map. */
+  onChapter: (file: string, span?: [number, number]) => void;
+  onMap: (id: string) => void;
   onCreate: (type: EntryType, name: string) => void;
   /** Which type's "new entry" form is open; lifted so the app can open and reset it. */
   creating: EntryType | null;
   onCreating: (type: EntryType | null) => void;
 }
 
-export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelect, onCreate, creating, onCreating: setCreating }: Props) {
+export function Sidebar({ entries, story, maps, warnings, selectedId, query, onQuery, onSelect, onChapter, onMap, onCreate, creating, onCreating: setCreating }: Props) {
   const [name, setName] = useState('');
   // A query searches names first, then basic facts, summary, appearance and details, then the body text.
   const hits = useMemo(() => (query.trim() ? searchEntries({ entries }, query) : null), [entries, query]);
+  // Chapters (titles, then text) and maps (names) that match, listed after the entries.
+  const chapterHits = useMemo(() => (query.trim() ? searchChapters({ story }, query) : []), [story, query]);
+  const mapHits = useMemo(() => (query.trim() ? searchMaps({ maps }, query) : []), [maps, query]);
+  const others = chapterHits.length + mapHits.length;
   // Each row's warnings and race names, worked out once per change instead of per row on every render.
   const warned = useMemo(() => {
     const by = new Map<string, Warning[]>();
@@ -47,13 +57,44 @@ export function Sidebar({ entries, warnings, selectedId, query, onQuery, onSelec
         <label for="search" class="sr-only">{t('Search entries')}</label>
         <input id="search" type="search" placeholder={t('Search...')} value={query} onInput={(e) => onQuery(e.currentTarget.value)} />
       </div>
-      {hits && (
+      {hits && (hits.length > 0 || !others) && (
         <section class="search-results" aria-labelledby="search-results-title">
           <div class="type-head"><h2 id="search-results-title"><Icon name="magnifying-glass" /> {t('Results')} <span class="muted">({hits.length})</span></h2></div>
           <p class="sr-only" aria-live="polite">{hits.length === 1 ? t('{n} entry matches', { n: hits.length }) : t('{n} entries match', { n: hits.length })}</p>
           {hits.length === 0 && <p class="muted empty-hint">{t('No entry mentions “{query}”.', { query: query.trim() })}</p>}
           <ul ref={animated}>
             {hits.map((h) => <li key={h.entry.id}>{link(h.entry, h.field === 'Name' ? undefined : <Snippet hit={h} />)}</li>)}
+          </ul>
+        </section>
+      )}
+      {hits && chapterHits.length > 0 && (
+        <section class="search-also search-chapters" aria-labelledby="search-chapters-title">
+          <div class="type-head"><h2 id="search-chapters-title"><Icon name="feather" /> {t('Chapters')} <span class="muted">({chapterHits.length})</span></h2></div>
+          <ul>
+            {chapterHits.map((h) => (
+              <li key={h.file}>
+                <button type="button" class={`entry-link search-link${h.field === 'Text' ? ' has-snippet' : ''}`} data-chapter={h.file} onClick={() => onChapter(h.file, h.span)}>
+                  <span class="search-link-icon" aria-hidden="true"><Icon name="feather" /></span>
+                  <span class="entry-name" title={h.title}>{h.title || t('Untitled')}</span>
+                  {h.field === 'Text' && <Snippet hit={h} />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {hits && mapHits.length > 0 && (
+        <section class="search-also search-maps" aria-labelledby="search-maps-title">
+          <div class="type-head"><h2 id="search-maps-title"><Icon name="treasure-map" /> {t('Maps')} <span class="muted">({mapHits.length})</span></h2></div>
+          <ul>
+            {mapHits.map((m) => (
+              <li key={m.id}>
+                <button type="button" class="entry-link search-link" data-map={m.id} onClick={() => onMap(m.id)}>
+                  <span class="search-link-icon" aria-hidden="true"><Icon name="treasure-map" /></span>
+                  <span class="entry-name" title={m.name}>{m.name}</span>
+                </button>
+              </li>
+            ))}
           </ul>
         </section>
       )}

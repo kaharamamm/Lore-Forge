@@ -98,6 +98,11 @@ export interface WorldManifest {
   description?: string;
   /** One line describing the look of every picture made for this world, used by image tools (the MCP server's create_image). */
   artStyle?: string;
+  /**
+   * How the book is written (point of view, tense, tone, audience, what to avoid, maybe a sample paragraph): every AI
+   * writing in the book follows it (the chapter brief, Ask AI).
+   */
+  writingStyle?: string;
   calendar: Calendar;
   /** Per-rule severity overrides, e.g. { "duplicate-name": "off" }. */
   rules?: Record<string, RuleSetting>;

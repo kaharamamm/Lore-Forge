@@ -7,10 +7,10 @@ import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { check, DETAIL_FIELDS, ENTRY_TYPES } from '@lore-forge/core';
+import { chapterBrief, check, DETAIL_FIELDS, ENTRY_TYPES } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 import {
-  attachPicture, bookOverview, checkBook, createBook, deleteEntry, duplicateBook, entryJson, exportBook, findEntry, formatWarning, linkEntries,
+  attachPicture, bookOverview, checkBook, createBook, deleteEntry, duplicateBook, editChapter, entryJson, exportBook, findEntry, formatWarning, linkEntries,
   loadPictureSource, looksOn, mapView, markIntended, patchBook, pictureBrief, readStory, saveEntries, saveMap, storyProposals, writeChapter, type BookPatch,
   type EntryInput,
 } from './books.ts';
@@ -21,7 +21,7 @@ import {
 } from './images.ts';
 import { bundledResources, Library, readManifestInfo, type LibraryOptions } from './library.ts';
 
-export const SERVER_VERSION = '1.3.0';
+export const SERVER_VERSION = '1.4.0';
 
 export interface ServerOptions extends LibraryOptions {
   /** fetch for the image services (tests replace it). */
@@ -143,15 +143,17 @@ const coverSchema = z.object({
 const bookFields = {
   description: opt(z.string()).describe('One line about the world.'),
   artStyle: opt(z.string()).describe('One style line used for every picture of this book.'),
+  writingStyle: opt(z.string()).describe('How the book is written: point of view, tense, tone, audience, what to avoid, maybe a short sample. Every chapter follows it.'),
   calendar: calendarSchema.optional(),
   details: detailsSchema.optional(),
   cover: coverSchema.optional(),
 };
 
-const toPatch = (a: { name?: string; description?: string | null; artStyle?: string | null; calendar?: z.infer<typeof calendarSchema>; details?: Record<string, unknown>; cover?: Record<string, unknown> }): BookPatch => ({
+const toPatch = (a: { name?: string; description?: string | null; artStyle?: string | null; writingStyle?: string | null; calendar?: z.infer<typeof calendarSchema>; details?: Record<string, unknown>; cover?: Record<string, unknown> }): BookPatch => ({
   ...(a.name ? { name: a.name } : {}),
   ...(a.description !== undefined ? { description: a.description } : {}),
   ...(a.artStyle !== undefined ? { artStyle: a.artStyle } : {}),
+  ...(a.writingStyle !== undefined ? { writingStyle: a.writingStyle } : {}),
   ...(a.calendar ? { calendar: a.calendar } : {}),
   ...(a.details ? { book: a.details } : {}),
   ...(a.cover ? { cover: a.cover } : {}),
@@ -210,14 +212,14 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('get_book', {
     title: 'Read a book',
-    description: 'A book at a glance: description, art style, calendar, Story Book details, cover, every entry in short (id, type, name, status, dates, summary, looks), the chapters, and the warning counts.',
+    description: 'A book at a glance: description, art style, writing style, calendar, Story Book details, cover, every entry in short (id, type, name, status, dates, summary, looks), the chapters, and the warning counts.',
     inputSchema: { book: bookRef },
     annotations: { readOnlyHint: true },
   }, async (a) => attempt(() => bookOverview(lib, lib.resolveBook(a.book))));
 
   server.registerTool('update_book', {
     title: 'Change a book',
-    description: 'Change a book\'s name, description, art style, calendar, Story Book details or cover look. Only the fields given change; null removes one.',
+    description: 'Change a book\'s name, description, art style, writing style, calendar, Story Book details or cover look. Only the fields given change; null removes one.',
     inputSchema: { book: bookRef, name: z.string().optional().describe('New name (the id and folder stay).'), ...bookFields },
   }, async (a) => attempt(async () => {
     const dir = writable(a.book);
@@ -302,6 +304,27 @@ export function createServer(opts: ServerOptions = {}): McpServer {
       replace: z.union([z.string(), z.number()]).optional().describe('Replace this chapter (its number or title), e.g. to rename it.'),
     },
   }, async (a) => attempt(() => writeChapter(writable(a.book), { title: a.title, text: a.text, ...(a.date !== undefined ? { date: a.date } : {}), ...(a.number ? { number: a.number } : {}), ...(a.replace !== undefined ? { replace: a.replace } : {}) })));
+
+  server.registerTool('edit_chapter', {
+    title: 'Change part of a chapter',
+    description: 'Change part of a chapter and keep the rest word for word: each edit\'s find (copied exactly from read_story, and in the chapter once) becomes its replace. To add text after a passage, find the passage and replace it with the passage plus the new text; an empty replace deletes. Answers like write_chapter.',
+    inputSchema: {
+      book: bookRef,
+      chapter: z.union([z.string(), z.number()]).describe('The chapter: its number, title or file.'),
+      edits: z.array(z.object({ find: z.string(), replace: z.string() })).min(1),
+    },
+  }, async (a) => attempt(() => editChapter(writable(a.book), a.chapter, a.edits)));
+
+  server.registerTool('chapter_brief', {
+    title: 'Brief for a chapter',
+    description: 'What to know before writing or changing a chapter: the book\'s writing style, the story so far (each chapter\'s opening and ending, and the end of the chapter before in full), and on the chapter\'s date who is alive and where, their age and look, the places gone or not there yet, and the events done, happening and still to come. Without chapter: a new chapter after the last (give date for when it is set).',
+    inputSchema: {
+      book: bookRef,
+      chapter: z.union([z.string(), z.number()]).optional().describe('The chapter: its number, title or file; a title the book does not have yet means a new chapter.'),
+      date: z.string().optional().describe('For a new chapter: when it is set.'),
+    },
+    annotations: { readOnlyHint: true },
+  }, async (a) => attempt(async () => chapterBrief(await loadWorld(lib.resolveBook(a.book)), { ...(a.chapter !== undefined ? { chapter: a.chapter } : {}), ...(a.date ? { date: a.date } : {}) })));
 
   server.registerTool('read_story', {
     title: 'Read the story',

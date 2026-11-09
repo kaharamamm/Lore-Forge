@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { LoreApi } from '../shared/api.ts';
 
 const api: LoreApi = {
@@ -46,9 +46,12 @@ const api: LoreApi = {
   exportDocx: (dir, options) => ipcRenderer.invoke('exportDocx', dir, options ?? {}),
   saveBook: (dir, book) => ipcRenderer.invoke('saveBook', dir, book),
   saveCalendar: (dir, calendar) => ipcRenderer.invoke('saveCalendar', dir, calendar),
+  saveStyle: (dir, style) => ipcRenderer.invoke('saveStyle', dir, style),
   saveCover: (dir, cover, picked) => ipcRenderer.invoke('saveCover', dir, cover, picked),
   saveMaps: (dir, maps, picture) => ipcRenderer.invoke('saveMaps', dir, maps, picture),
   shareBook: (dir) => ipcRenderer.invoke('shareBook', dir),
+  exportSite: (dir) => ipcRenderer.invoke('exportSite', dir),
+  exportGameData: (dir) => ipcRenderer.invoke('exportGameData', dir),
   spelling: () => ipcRenderer.invoke('spelling'),
   setSpelling: (languages) => ipcRenderer.invoke('setSpelling', languages),
   spellingWords: (words) => ipcRenderer.invoke('spellingWords', words),
@@ -58,7 +61,15 @@ const api: LoreApi = {
     ipcRenderer.on('spelling', listener);
     return () => void ipcRenderer.removeListener('spelling', listener);
   },
-  openBookFile: () => ipcRenderer.invoke('openBookFile'),
+  openBookFile: (file) => ipcRenderer.invoke('openBookFile', file),
+  takeBookFiles: () => ipcRenderer.invoke('takeBookFiles'),
+  mapPictureMake: (prompt) => ipcRenderer.invoke('mapPictureMake', prompt),
+  onBookFiles: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('book-files', listener);
+    return () => void ipcRenderer.removeListener('book-files', listener);
+  },
+  pathOfFile: (file) => webUtils.getPathForFile(file),
   showInFolder: (path) => ipcRenderer.invoke('showInFolder', path),
   saveCopy: (dir, path) => ipcRenderer.invoke('saveCopy', dir, path),
   onNavigate: (cb) => void ipcRenderer.on('navigate', (_e, direction: 'back' | 'forward') => cb(direction)),

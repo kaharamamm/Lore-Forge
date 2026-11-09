@@ -8,7 +8,12 @@ import { SCHEMA_VERSION, type Entry, type StoryChapter, type WorldManifest, type
 import { WorldIndex } from './world-index.ts';
 
 export const SNAPSHOT_FORMAT = 'lore-forge.world-snapshot';
-export const GENERATOR = 'lore-forge 1.0.0';
+/** The version, written in when the app is built (packages/desktop/build.mjs); none when run from source. */
+declare const __LORE_FORGE_VERSION__: string | undefined;
+/** The Lore-Forge version: the release being built, or the newest release tag for a build from source. */
+export const LORE_FORGE_VERSION = typeof __LORE_FORGE_VERSION__ === 'string' && __LORE_FORGE_VERSION__ ? __LORE_FORGE_VERSION__ : '1.0.0';
+/** Lore-Forge and its version, in snapshots, the World Codex, the Story Book and About. */
+export const GENERATOR = `lore-forge ${LORE_FORGE_VERSION}`;
 
 export type SnapshotDate = Omit<ParsedDate, 'lo' | 'hi'> & { text: string; lo: number; hi: number };
 

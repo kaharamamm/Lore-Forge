@@ -106,7 +106,7 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
   useEffect(() => window.lore.onSpelling((s) => setSpelt({ s, at: performance.now() })), []);
   const spelling = pick?.how === 'menu' && spelt && spelt.at >= pickedAt.current ? spelt.s : null;
   const guess = useMemo(() => {
-    if (!pick || !chapter) return undefined;
+    if (!pick || !chapter || pick.passage) return undefined;
     const s = sentences(chapter.body).find((x) => x.start <= pick.start && x.start + x.text.length >= pick.end);
     return guessEntry(world, pick.text, s?.text ?? pick.text);
   }, [pick?.start, pick?.end, pick?.text, world]);
@@ -134,7 +134,7 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
   const marks: SpanMark[] = [];
   for (const w of warnings) {
     for (const f of [w.offending, w.conflicting]) {
-      if (f?.chapter === chapter.file && f.span) marks.push({ start: f.span[0], end: f.span[1], cls: `warn-line warn-${kindOf(w)}`, title: kindOf(w) === 'error' ? t('Error') : kindOf(w) === 'intended' ? t('Intended') : t('Warning'), detail: tm(w.message) });
+      if (f?.chapter === chapter.file && f.span) marks.push({ start: f.span[0], end: f.span[1], cls: `warn-line warn-${kindOf(w)}`, title: kindOf(w) === 'error' ? t('Error') : kindOf(w) === 'intended' ? t('Intended') : kindOf(w) === 'info' ? t('Info') : t('Warning'), detail: tm(w.message) });
     }
   }
   const words = wordsOf(chapter);
@@ -171,14 +171,14 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
         </div>
         <ProseEditor id="story-text" world={world} value={chapter.body} fill marks={marks} reveal={reveal} label={chapter.title ? t('Text of {title}', { title: chapter.title }) : t('Text of this chapter')}
           onInput={(body) => actions.onChange({ ...chapter, body })} onOpen={actions.onOpen} onPick={onPick} />
-        {pick && guess && (
+        {pick && (guess || pick.passage) && (
           <PickMenu pick={pick} guess={guess} onClose={() => setPick(null)}
             spelling={pick.how === 'menu' && spelling && pick.text.includes(spelling.word) ? spelling : null}
             onSpell={(to) => { if (spelling) fixSpelling(pick, spelling.word, to); }}
             onDictionary={() => { if (spelling) void window.lore.addToDictionary(spelling.word); setPick(null); }}
             onOpen={(id) => { setPick(null); actions.onOpen(id); }}
-            onAdd={(type) => { setManual({ p: pickProposal(pick, guess, type), mode: 'edit' }); setPick(null); }}
-            onLink={() => { setManual({ p: pickProposal(pick, guess, guess.type), mode: 'merge' }); setPick(null); }}
+            onAdd={(type) => { if (guess) setManual({ p: pickProposal(pick, guess, type), mode: 'edit' }); setPick(null); }}
+            onLink={() => { if (guess) setManual({ p: pickProposal(pick, guess, guess.type), mode: 'merge' }); setPick(null); }}
             onSearch={() => { setPick(null); actions.onSearch(pick.text); }}
             onAsk={() => { const text = chosenText() ?? pick.text; setPick(null); onAsk(text); }} />
         )}
@@ -202,7 +202,8 @@ function PickMenu({ pick, guess, spelling, onSpell, onDictionary, onClose, onOpe
   onSpell: (to: string) => void;
   onDictionary: () => void;
   pick: TextPick;
-  guess: Guess;
+  /** What the picked name probably is; none for a passage. */
+  guess: Guess | undefined;
   onClose: () => void;
   onOpen: (id: string) => void;
   onAdd: (type: EntryType) => void;
@@ -244,8 +245,30 @@ function PickMenu({ pick, guess, spelling, onSpell, onDictionary, onClose, onOpe
     e.preventDefault();
     items[(go + items.length) % items.length]!.focus();
   };
+  const short = pick.text.length > 28 ? `${pick.text.slice(0, 27).trimEnd()}…` : pick.text;
+  // A longer part of the story: the AI can work on it; adding it as an entry or searching for it would make no sense.
+  if (!guess) {
+    return (
+      <div ref={box} class={`pick-menu pick-passage${full ? ' is-full' : ''}`} style={{ left: `${at.x}px`, top: `${at.y}px` }} onKeyDown={onKey}
+        role={full ? 'menu' : 'toolbar'} aria-label={t('The part you chose')}>
+        {full && <p class="pick-title" aria-hidden="true">“{short}”</p>}
+        {full && spelling && (
+          <div class="pick-spelling" role="group" aria-label={t('Spelling of “{word}”', { word: spelling.word })}>
+            {spelling.suggestions.map((s) => (
+              <button key={s} type="button" role="menuitem" class="pick-item pick-spell" onClick={() => onSpell(s)}><Icon name="quill" /> {s}</button>
+            ))}
+            {!spelling.suggestions.length && <p class="pick-note muted">{t('No suggestions')}</p>}
+            <button type="button" role="menuitem" class="pick-item pick-dictionary" onClick={onDictionary}><Icon name="spell-book" /> {t('Add “{word}” to the dictionary', { word: spelling.word })}</button>
+            <hr />
+          </div>
+        )}
+        {full
+          ? <button type="button" role="menuitem" class="pick-item pick-ask" onClick={onAsk}><Icon name="magic-lamp" /> {t('Ask AI about this part')}</button>
+          : <div class="pick-chip"><button type="button" class="small primary pick-ask" onClick={onAsk}><Icon name="magic-lamp" /> {t('Ask AI about this part')}</button></div>}
+      </div>
+    );
+  }
   const label = TYPE_SINGULAR[guess.type];
-  const short = pick.text.length > 28 ? `${pick.text.slice(0, 27)}…` : pick.text;
   return (
     <div ref={box} class={`pick-menu${full ? ' is-full' : ''}`} style={{ left: `${at.x}px`, top: `${at.y}px` }} onKeyDown={onKey}
       role={full ? 'menu' : 'toolbar'} aria-label={t('Add “{text}” to the world', { text: pick.text })}>

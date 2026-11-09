@@ -27,12 +27,18 @@ export type Block =
   | { kind: 'front'; role: FrontRole; lines: string[] }
   | { kind: 'facts'; rows: [label: string, value: string][] }
   | { kind: 'list'; items: string[] }
-  /** `file` is relative to the world folder. */
-  | { kind: 'image'; file: string; caption: string; details: string[] }
+  /**
+   * `file` is relative to the world folder. With `pins` the picture is a map: drawn as large as the page allows, each
+   * place a numbered disc at its spot, and the places listed by number under it.
+   */
+  | { kind: 'image'; file: string; caption: string; details: string[]; pins?: MapMark[] }
   /** Ready-to-copy text such as an image prompt; monospace in the PDF, a code block in Markdown. */
   | { kind: 'prompt'; label: string; text: string }
   | { kind: 'box'; title: string; blocks: Block[] }
   | { kind: 'toc' };
+
+/** A numbered place on a map picture: x and y in percent of the picture from its left and top edges; `id` is the place's entry. */
+export interface MapMark { n: number; x: number; y: number; name: string; id?: string }
 
 /**
  * Front matter, in book order, each on its own page: title page (title, subtitle, author, publisher), copyright

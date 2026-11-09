@@ -7,6 +7,7 @@
  */
 import { detailField } from './details.ts';
 import { checkWorld, ruleSetting, sortWarnings, type Rule } from './engine.ts';
+import { aiPhrasingWarnings } from './prose-check.ts';
 import { findExisting, reconcile, ruleExtractor, type Extraction, type Proposal, type ProposalFields, type RawProposal, type Reconciled, type SourceSpan } from './extract.ts';
 import { msg, rewritten, verbatim } from './i18n.ts';
 import { DEFAULT_STATUS, LIFECYCLE, statusOf } from './lifecycle.ts';
@@ -376,5 +377,7 @@ export function analyzeStory(world: World, extraction: Extraction = ruleExtracto
     seen.set(key, warnings.length);
     warnings.push(out);
   }
+  // How the prose reads: stock AI phrasing (prose-check.ts).
+  warnings.push(...aiPhrasingWarnings(world));
   return { ...rec, extraction, warnings: sortWarnings(warnings) };
 }

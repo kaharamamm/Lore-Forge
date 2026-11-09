@@ -245,6 +245,8 @@ export interface LoreApi {
   saveBook(dir: string, book: BookSettings): Promise<BookSettings>;
   /** Replace world.json's "calendar" (eras, default era, months); other calendar keys stay. Rejects a calendar with problems. Returns what was saved. */
   saveCalendar(dir: string, calendar: Calendar): Promise<Calendar>;
+  /** world.json "writingStyle" and "artStyle" (empty removes one); what is saved. */
+  saveStyle(dir: string, style: { writingStyle: string; artStyle: string }): Promise<{ writingStyle?: string; artStyle?: string }>;
   /**
    * Replace world.json's "cover" (empty fields removed). `picked` is an image from pickImageFile: it is copied into
    * images/ and becomes the cover picture. Returns what was saved.
@@ -268,8 +270,24 @@ export interface LoreApi {
   onSpelling(cb: (spelling: Spelling | null) => void): () => void;
   /** Save the whole book as one .loreforge file, where the user chooses; null when cancelled. */
   shareBook(dir: string): Promise<{ file: string; files: number; bytes: number } | null>;
-  /** Choose a .loreforge file and put its book on the shelf (in the worlds folder); null when cancelled. */
-  openBookFile(): Promise<{ dir: string; name: string } | null>;
+  /** Save the book as a website (World and Story pages with their pictures) in a new folder; null when cancelled. */
+  exportSite(dir: string): Promise<{ folder: string; index: string; pages: number; pictures: number } | null>;
+  /** Save the book as game data (world-snapshot.json and its pictures and models) in a new folder; null when cancelled. */
+  exportGameData(dir: string): Promise<{ folder: string; file: string } | null>;
+  /**
+   * Put a .loreforge file's book on the shelf (in the worlds folder): the file given (dropped on the window, or opened
+   * from the file manager), else one chosen in a file dialog; null when cancelled. The same file opened again gives
+   * the book it gave before, while that book is still there.
+   */
+  openBookFile(file?: string): Promise<{ dir: string; name: string } | null>;
+  /** Draw a map picture with the picture service: a temporary file that saveMaps takes like a picked one. */
+  mapPictureMake(prompt: string): Promise<{ path: string; tool: string }>;
+  /** The book files the file manager asked Lore-Forge to open, once each. */
+  takeBookFiles(): Promise<string[]>;
+  /** More book files are waiting (takeBookFiles). */
+  onBookFiles(cb: () => void): () => void;
+  /** Where a file dropped on the window is on disk ('' when it is not a file from the disk). */
+  pathOfFile(file: File): string;
   /** Reveal a saved file in the system file manager. */
   showInFolder(path: string): Promise<void>;
   /** Save a copy of a file of the world (a picture, a 3D model) where the user picks; its new path, or null when cancelled. */

@@ -179,8 +179,9 @@ function SpellingSection() {
 }
 
 /**
- * Settings, from the library (the gear) and from inside a book (the top bar): the language and the display, which
- * apply at once, then where new worlds go (a folder field with Browse…) and whether the sample world is on the shelf.
+ * Settings, from the library (the gear) and from inside a book (the top bar): the language with its spelling, and the
+ * display, which apply at once, then where new worlds go (a folder field with Browse…) and whether the sample world
+ * is on the shelf.
  * Those two are a draft until Save, and Cancel, Escape or a click outside leave them as they were.
  */
 export function AppSettings({ onClose, onSaved }: { onClose: () => void; onSaved?: () => void }) {
@@ -215,8 +216,8 @@ export function AppSettings({ onClose, onSaved }: { onClose: () => void; onSaved
       {s && (
         <>
           <LanguageSection />
-          <DisplaySection />
           <SpellingSection />
+          <DisplaySection />
           <section class="settings-section" aria-labelledby="settings-where">
             <h3 id="settings-where" class="settings-heading">{t('Where new worlds go')}</h3>
             <div class="settings-row">

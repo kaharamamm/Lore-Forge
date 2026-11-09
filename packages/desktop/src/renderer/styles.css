@@ -321,6 +321,8 @@ div.ask-note p { margin: 0; }
 /* Search results in the sidebar: where the query matched, with the match marked. */
 .entry-link.has-snippet { height: auto; min-height: 2.35rem; flex-wrap: wrap; row-gap: 0.1rem; padding-block: 0.3rem; }
 .entry-link.has-snippet .search-snippet { flex: 1 0 100%; padding-left: 2rem; }
+/* A long name stays on the first line (cut short), beside its picture, not wrapped under it. */
+.entry-link.has-snippet .entry-name { flex-basis: 0; }
 .search-snippet { min-width: 0; font-size: 0.78rem; line-height: 1.35; color: var(--muted); white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .search-field { font: 600 0.68rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
 mark.search-hit { color: var(--text); background: rgb(224 189 106 / 0.26); border-radius: 3px; padding: 0 0.1em; box-shadow: inset 0 -1px 0 var(--gold); }
@@ -746,6 +748,43 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .map-preview img { width: 100%; height: 100%; object-fit: cover; }
 .map-preview .muted { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.5rem; font-size: 0.85rem; text-align: center; }
 .map-picture-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+/* World settings: the writing and picture style, above the calendar. */
+.ws-style { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 0.4rem; }
+.ws-style .field { display: flex; flex-direction: column; gap: 0.3rem; }
+.ws-style textarea { width: 100%; resize: vertical; min-height: 4.5rem; }
+.ws-style input { width: 100%; }
+.ws-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: -0.3rem; }
+.ws-preset { padding: 0.15rem 0.65rem; border-radius: 999px; font-size: 0.82rem; background: var(--panel-2); border: 1px solid var(--border); }
+.ws-preset:hover { border-color: var(--gold-soft); }
+.ws-preset[aria-pressed='true'] { border-color: var(--gold); background: var(--selected-gold-bg); color: var(--text); }
+/* Time on the map: a bar at the bottom with whose journey to draw and the year; the year's events beside their pins,
+   places that do not stand that year faded, and the journey as a dashed line with numbered stops. */
+.map-time { position: absolute; left: 0; right: 0; bottom: 0.8rem; margin-inline: auto; width: fit-content; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.6rem 0.9rem; max-width: calc(100% - 2rem); padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--panel) 92%, transparent); box-shadow: 0 6px 18px rgb(0 0 0 / 0.35); backdrop-filter: blur(6px); }
+.map-time .select.map-follow { width: 13rem; padding-block: 0.32rem; border-radius: 999px; }
+.map-year { display: flex; align-items: center; gap: 0.5rem; color: var(--v-map); }
+.map-year-slider { width: min(22rem, 40vw); accent-color: var(--v-map); }
+.map-year-label { min-width: 5.5rem; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+.map-pin.is-absent { opacity: 0.32; filter: grayscale(0.85); }
+.map-route { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 0; }
+/* A solid bright line on a dark casing, so it never reads as a road drawn on the map; the way still ahead is dashed. */
+.map-route-line { fill: none; stroke: #ffd36b; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+.map-route-case { fill: none; stroke: rgb(20 14 6 / 0.75); stroke-width: 7.5; stroke-linecap: round; stroke-linejoin: round; }
+.map-route-line.is-ahead { stroke-opacity: 0.6; stroke-dasharray: 2 9; }
+.map-route-case.is-ahead { stroke-opacity: 0.35; stroke-dasharray: 2 9; }
+.map-route-stop { pointer-events: auto; cursor: default; }
+.map-route-stop circle { fill: #22252d; stroke: var(--gold); stroke-width: 1.5; }
+.map-route-stop text { fill: #fff; font: 700 10px/1 'DejaVu Sans', system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }
+.map-route-stop.is-ahead { opacity: 0.45; }
+.map-traveller { position: absolute; z-index: 3; transform: translate(-125%, -125%); padding: 0; border: 2px solid var(--gold); border-radius: 50%; background: var(--panel); box-shadow: 0 0 0 4px var(--gold-glow), 0 4px 10px rgb(0 0 0 / 0.5); }
+.map-event { position: absolute; z-index: 3; display: inline-flex; align-items: center; gap: 0.35rem; max-width: 15rem; height: 1.7rem; padding: 0 0.6rem 0 0.15rem; transform: translate(2.1rem, calc(-50% - var(--nth, 0) * 1.95rem)); border: 1px solid color-mix(in srgb, var(--tc, var(--gold)) 60%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: 0 3px 10px rgb(0 0 0 / 0.45); font-size: 0.8rem; white-space: nowrap; }
+.map-event:hover { border-color: var(--gold); }
+.map-event-name { overflow: hidden; text-overflow: ellipsis; }
+
+/* Draw one with AI: the prompt, who draws it, and the button, in a quiet panel under the picture. */
+.map-draw-panel { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.6rem; padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+.map-draw-panel textarea { width: 100%; resize: vertical; }
+.map-draw-panel .make-picture-service { margin: 0.1rem 0 0; }
+.map-draw-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.2rem; }
 .map-book-pictures { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
 .map-book-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .map-book-picture { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; width: 6.5rem; padding: 0.3rem; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); font-size: 0.78rem; }
@@ -907,6 +946,14 @@ mark.mention-ambiguous { box-shadow: inset 0 -2px 0 var(--tc), inset 0 -4px 0 tr
 .doc-list { margin: 0.4rem 0; padding-left: 1.3rem; }
 .doc-figure { margin: 0.8rem 0; }
 .doc-figure img { max-width: 100%; max-height: 22rem; display: block; border-radius: 3px; }
+/* A map in the World Codex: numbered discs on the picture (as in the PDF), and its places by number under it. */
+.doc-map { text-align: center; }
+.doc-map-frame { position: relative; display: inline-block; max-width: 100%; vertical-align: top; }
+.doc-map-frame img { max-height: 34rem; }
+.doc-pin { display: inline-grid; place-items: center; box-sizing: border-box; min-width: 1.2rem; height: 1.2rem; padding: 0 0.2rem; border-radius: 999px; background: #22252d; border: 1.5px solid #c9a24f; color: #fff; font: 700 0.62rem/1 'DejaVu Sans', system-ui, sans-serif; }
+.doc-map-frame .doc-pin { position: absolute; transform: translate(-50%, -50%); }
+.doc-map-legend { list-style: none; columns: 3 9rem; column-gap: 1.2rem; margin: 0.7rem 0 0; padding: 0; text-align: left; font-size: 0.85rem; }
+.doc-map-legend li { display: flex; align-items: center; gap: 0.45rem; break-inside: avoid; margin-bottom: 0.3rem; }
 .doc-img-missing { border: 1px dashed #8a8270; padding: 1.2rem; text-align: center; color: #5a554c; }
 .doc-figure figcaption { font-size: 0.85rem; margin-top: 0.3rem; }
 .doc-prompt { background: #efe9dc; border-radius: 4px; padding: 0.5rem 0.7rem; margin: 0.6rem 0; }
@@ -2112,3 +2159,21 @@ summary.release-head:focus-visible { outline: 3px solid var(--accent); outline-o
   /* The sidebar keeps its width in pixels while the text grows: its group names stay their 1920 size, on one line. */
   .type-head h2 { font-size: 0.85rem; }
 }
+
+/* Chapters and maps a search finds, after the entries: rows like the entries', each with its view's icon and colour. */
+.search-also { margin-top: 0.75rem; }
+.search-results ul, .search-also ul { list-style: none; margin: 0.25rem 0 0; padding: 0; }
+.search-chapters { --tc: var(--v-story); }
+.search-maps { --tc: var(--v-map); }
+.search-link-icon { flex: none; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; color: var(--tc); background: color-mix(in srgb, var(--tc) 14%, var(--panel-2)); }
+.search-link-icon .icon { width: 0.85rem; height: 0.85rem; }
+
+/* Share…: three ways out, each a wide button with its icon, its name and what it is for. */
+.share-dialog { width: min(34rem, calc(100vw - 2rem)); }
+.share-choices { display: flex; flex-direction: column; gap: 0.6rem; }
+.share-choice { display: flex; align-items: flex-start; gap: 0.85rem; width: 100%; padding: 0.8rem 0.9rem; text-align: left; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+.share-choice:hover, .share-choice:focus-visible { border-color: var(--gold-soft); background: var(--selected-gold-bg); }
+.share-choice-icon { flex: none; display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: color-mix(in srgb, var(--gold) 14%, var(--panel)); color: var(--gold); }
+.share-choice-icon .icon { width: 1.25rem; height: 1.25rem; }
+.share-choice-text { display: flex; flex-direction: column; gap: 0.15rem; }
+.share-choice-text .muted { font-size: 0.88rem; line-height: 1.4; }

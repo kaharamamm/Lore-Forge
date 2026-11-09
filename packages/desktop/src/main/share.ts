@@ -4,6 +4,7 @@
  * any zip tool can open it too. Opening one puts a copy of the book in a free folder of the worlds folder, with its
  * own id and the same cover.
  */
+import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
@@ -165,4 +166,44 @@ export async function unpackBook(file: string, parent: string): Promise<{ dir: s
     throw e;
   }
   return { dir, name: manifest.name };
+}
+
+/** The book files among the arguments Lore-Forge was started with: what the file manager asked it to open. */
+export function bookFileArgs(args: readonly string[], cwd = process.cwd()): string[] {
+  return args.filter((a) => !a.startsWith('-') && /\.loreforge$/i.test(a)).map((a) => resolve(cwd, a)).filter((a) => existsSync(a));
+}
+
+/** SHA-256 of a file's bytes, read in chunks. */
+async function fileHash(file: string): Promise<string> {
+  const h = createHash('sha256');
+  for await (const chunk of createReadStream(file)) h.update(chunk as Buffer);
+  return h.digest('hex');
+}
+
+/**
+ * Opens a book file onto the shelf once: the same file opened again (the same bytes, from wherever) opens the book it
+ * gave the first time, while that book is still there, instead of making another copy. `known` is the small JSON file
+ * that remembers which file gave which book.
+ */
+export async function openBook(file: string, parent: string, known: string): Promise<{ dir: string; name: string }> {
+  const key = await fileHash(file);
+  let seen: Record<string, string> = {};
+  try {
+    const raw = JSON.parse(await readFile(known, 'utf8')) as unknown;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) seen = Object.fromEntries(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === 'string'));
+  } catch { /* nothing opened yet */ }
+  const before = seen[key];
+  if (before && existsSync(join(before, 'world.json'))) {
+    try {
+      const name = (JSON.parse(await readFile(join(before, 'world.json'), 'utf8')) as { name?: unknown }).name;
+      return { dir: before, name: typeof name === 'string' ? name : basename(before) };
+    } catch { /* that book cannot be read now: a new copy */ }
+  }
+  const book = await unpackBook(file, parent);
+  delete seen[key];
+  seen[key] = book.dir;
+  await mkdir(dirname(known), { recursive: true });
+  // The last few hundred book files are plenty to remember.
+  await writeFile(known, JSON.stringify(Object.fromEntries(Object.entries(seen).slice(-300)), null, 1) + '\n', 'utf8');
+  return book;
 }

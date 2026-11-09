@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { artBrief, bookChapters, LORE_AND_LEGENDS, resolveLinks, storyBook, toMarkdown, worldCodex, WorldIndex } from '@lore-forge/core';
+import { artBrief, bookChapters, bookSite, LORE_AND_LEGENDS, mapPrompt, resolveLinks, storyBook, toMarkdown, worldCodex, WorldIndex } from '@lore-forge/core';
 import { loadWorld } from '@lore-forge/core/node';
 import { world } from './helpers.ts';
 
@@ -100,4 +100,61 @@ test('codex headings carry default entry pictures (Leyla: female), and a tombsto
   assert.deepEqual(h && h.kind === 'heading' && [h.icon, h.mark], ['female', 'tombstone']);
   assert.ok(doc.blocks.some((b) => b.kind === 'heading' && b.level === 1 && b.text === 'Characters' && b.icon === 'person'));
   assert.doesNotMatch(toMarkdown(doc), /undefined/);
+});
+
+test('world codex: each map with its places numbered by name, after the overview; nothing without maps', () => {
+  const w = world([
+    { id: 'qarim', type: 'place', name: 'Qarim', pins: [{ map: 'coast', x: 40, y: 60 }] },
+    { id: 'aden', type: 'place', name: 'Aden', pins: [{ map: 'coast', x: 10.5, y: 20 }] },
+    { id: 'inland', type: 'place', name: 'Inland' },
+  ], { manifest: { maps: [{ id: 'coast', name: 'The Coast', image: 'maps/coast.png' }, { id: 'town', name: 'Qarim Town', image: 'maps/town.png', place: 'qarim' }] } });
+  const doc = worldCodex(w);
+  const parts = doc.blocks.flatMap((b) => (b.kind === 'heading' && b.level === 1 ? [b.text] : []));
+  assert.deepEqual(parts.slice(0, 3), ['About this document', 'World overview', 'Maps']);
+  const maps = doc.blocks.flatMap((b) => (b.kind === 'image' && b.pins ? [b] : []));
+  assert.deepEqual(maps.map((m) => m.pins), [[{ n: 1, x: 10.5, y: 20, name: 'Aden', id: 'aden' }, { n: 2, x: 40, y: 60, name: 'Qarim', id: 'qarim' }], []]);
+  const md = toMarkdown(doc);
+  assert.match(md, /!\[The Coast\]\(maps\/coast\.png\)\n\n1\. Aden\n2\. Qarim\n/);
+  assert.match(md, /A map of Qarim\.\n/);
+  assert.match(md, /No places are pinned on this map yet\./);
+  assert.ok(!worldCodex(world([{ id: 'x', type: 'place', name: 'X' }])).blocks.some((b) => b.kind === 'heading' && b.text === 'Maps'));
+});
+
+test('a map prompt: the places it shows, nearest first, where each lies, and no text on the picture', () => {
+  const ix = new WorldIndex(world([
+    { id: 'coast', type: 'place', name: 'The Coast', summary: 'A long salt coast. Windy.' },
+    { id: 'qarim', type: 'place', name: 'Qarim', summary: 'A port city of white towers.', partOf: 'coast' },
+    { id: 'well', type: 'place', name: 'The Old Well', partOf: 'qarim' },
+    { id: 'far', type: 'place', name: 'Far Isle' },
+  ]));
+  const all = mapPrompt(ix);
+  assert.match(all, /^A map of the world of [^,]+, seen from above\. Show these places, each where it would lie: Far Isle; The Coast \(A long salt coast\); Qarim \(A port city of white towers\), in The Coast; The Old Well, in Qarim\. Hand-drawn .* No text, no labels/);
+  const coast = mapPrompt(ix, 'coast');
+  assert.match(coast, /^A map of The Coast \(A long salt coast\), in the world of [^,]+, seen from above\. Show these places, each where it would lie: Qarim \(A port city of white towers\); The Old Well, in Qarim\./);
+  assert.ok(!coast.includes('Far Isle'));
+  // Three steps down is too small for the map: a tea house in a well in a town.
+  const deep = new WorldIndex(world([{ id: 'a', type: 'place', name: 'A' }, { id: 'b', type: 'place', name: 'B', partOf: 'a' }, { id: 'c', type: 'place', name: 'C', partOf: 'b' }, { id: 'd', type: 'place', name: 'D', partOf: 'c' }]));
+  assert.match(mapPrompt(deep), /lie: A; B, in A; C, in B\. /);
+  assert.match(mapPrompt(deep, 'a'), /lie: B; C, in B\. /);
+});
+
+test('a book as a website: the World page with names linked and map pins linked, the Story page, and the pictures to copy', () => {
+  const w = world([
+    { id: 'qarim', type: 'place', name: 'Qarim', summary: 'A port.', pins: [{ map: 'coast', x: 40, y: 60 }], images: [{ file: 'images/qarim/establishing.png', view: 'establishing' }] },
+    { id: 'nur', type: 'character', name: 'Nur', summary: 'A scribe of **Qarim** <who> keeps the ledgers.' },
+  ], { manifest: { maps: [{ id: 'coast', name: 'The Coast', image: 'maps/coast.png' }] }, story: 'Nur walked to Qarim at dawn.' });
+  const codex = worldCodex(w, { artBriefs: false, warnings: false, about: false, ids: false });
+  const site = bookSite(w, codex, storyBook(w), { lang: 'en', labels: { contents: 'Contents', world: 'World', story: 'Story', footer: 'Made with Lore-Forge' }, icon: { svg: 'icon.svg', png: 'icon.png' } });
+  assert.deepEqual(site.pages.map((p) => p.file), ['index.html', 'story.html']);
+  const [index, story] = site.pages.map((p) => p.html);
+  assert.match(index!, /<h3 id="entry-nur">/);
+  // Lore-Forge's icon in the tab, on every page.
+  for (const page of [index!, story!]) assert.match(page, /<link rel="icon" type="image\/png" href="icon.png">\n<link rel="apple-touch-icon" href="icon.png">\n<link rel="icon" type="image\/svg\+xml" href="icon.svg">/);
+  assert.match(index!, /A scribe of <strong><a href="#entry-qarim">Qarim<\/a><\/strong> &lt;who&gt; keeps the ledgers\./);
+  assert.match(index!, /<a class="pin" href="#entry-qarim" style="left:40%;top:60%" title="Qarim">1<\/a>/);
+  assert.ok(!index!.includes('About this document') && !index!.includes('Art brief') && !index!.includes('consistency warnings'));
+  assert.ok(!/<dt>(Id|File|World id)<\/dt>/.test(index!), 'no ids or file paths for readers');
+  assert.match(story!, /<a href="index.html#entry-nur">Nur<\/a> walked to <a href="index.html#entry-qarim">Qarim<\/a> at dawn\./);
+  assert.match(story!, /<nav class="pages"><a href="index.html">World<\/a><a href="story.html" aria-current="page">Story<\/a><\/nav>/);
+  assert.deepEqual(site.files, ['images/qarim/establishing.png', 'maps/coast.png']);
 });

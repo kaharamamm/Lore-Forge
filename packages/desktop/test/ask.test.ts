@@ -179,6 +179,11 @@ test('what the AI is told: the book, its folder, Lore-Forge tools only, and the 
   assert.doesNotMatch(c, /read-only/);
   assert.match(bookContext({ name: 'Camelamamm', dir: 'x', readOnly: true }), /read-only sample/);
   assert.doesNotMatch(c, /\u2014/, 'no long dashes');
+  // Chapter work goes through the brief and partial edits; the book's writing style comes along when it has one.
+  assert.match(c, /chapter_brief/);
+  assert.match(c, /edit_chapter/);
+  assert.doesNotMatch(c, /writing style;/);
+  assert.match(bookContext({ name: 'Camelamamm', dir: 'x', readOnly: false, writingStyle: '  First person, present tense.  ' }), /The book's writing style; follow it in everything you write in the book:\nFirst person, present tense\.$/m);
 });
 
 test('reply Markdown: paragraphs, headings, lists, quotes, code and tables', () => {

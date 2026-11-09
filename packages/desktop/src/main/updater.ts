@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AppUpdater, ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater';
+import { LORE_FORGE_VERSION } from '@lore-forge/core';
 import { debInstallCommand, initialUpdateState, nextUpdateState, notesText, updateErrorText, updaterOff, type UpdateEvent, type UpdateState } from '../shared/update-state.ts';
 import { t } from '../shared/i18n.ts';
 
@@ -40,7 +41,8 @@ export function setupUpdater(opts: { smoke: boolean; window: () => BrowserWindow
   const appImage = Boolean(process.env['APPIMAGE']);
   const off = updaterOff({ isPackaged: app.isPackaged, smoke: opts.smoke, disabled: process.env['LORE_FORGE_NO_UPDATE'] === '1', platform: process.platform, packageType: packageType(), appImage });
   // macOS builds are unsigned: Squirrel.Mac refuses to install them, so a found update is downloaded by hand.
-  state = initialUpdateState(app.getVersion(), off, process.platform === 'darwin');
+  // From source, package.json still says 1.0.0: the build's version (the newest release tag) is the one to show.
+  state = initialUpdateState(app.isPackaged ? app.getVersion() : LORE_FORGE_VERSION, off, process.platform === 'darwin');
   if (off) return;
 
   // Loaded only when updates are on, so development and the smoke run never touch it.

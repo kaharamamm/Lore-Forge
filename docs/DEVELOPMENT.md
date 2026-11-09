@@ -142,7 +142,7 @@ LORE_FORGE_ASK_SCRIPT=$PWD/my-fake-claude.cjs npx electron packages/desktop
 
 ### Pictures without a picture service
 
-`LORE_FORGE_PICTURE_FILE` points **Make a picture** at a picture file instead of a service: the app "draws" by copying it, after `LORE_FORGE_PICTURE_DELAY` milliseconds. Nothing is sent anywhere and no key is used.
+`LORE_FORGE_PICTURE_FILE` points **Make a picture** and **Draw one with AI…** (a new map) at a picture file instead of a service: the app "draws" by copying it, after `LORE_FORGE_PICTURE_DELAY` milliseconds. Nothing is sent anywhere and no key is used.
 
 ### Icons
 
@@ -175,14 +175,15 @@ Only the sample world is packaged; other folders in `worlds/` stay private.
 
 ### Releases
 
-**Actions → Release → Run workflow** (`.github/workflows/release.yml`) makes a release. Choose a bump (patch, minor, major) from the newest `vX.Y.Z` tag, or type an exact version, and optionally release notes. The workflow:
+Write what changed under `## [Unreleased]` in `CHANGELOG.md` and `CHANGELOG.tr.md` as you go. **Actions → Release → Run workflow** (`.github/workflows/release.yml`) makes a release. Choose a bump (patch, minor, major) from the newest `vX.Y.Z` tag, or type an exact version, and optionally a few words for the top of the release page. The workflow:
 
 1. works out the version (`scripts/release-version.mjs`) and stops if that tag already exists;
-2. runs the typecheck and the tests;
-3. builds the Windows installer, the `.deb` and AppImage, and the macOS disk images and zips on GitHub's machines, passing the version to electron-builder (`-c.extraMetadata.version`), so no `package.json` is bumped by hand;
-4. creates the tag and the release with the versioned files, their `.blockmap`s and `latest.yml`, `latest-linux.yml`, `latest-mac.yml` (which the app's updater reads), plus copies under stable names: `Lore-Forge-Setup-x64.exe`, `Lore-Forge-amd64.deb`, `Lore-Forge-x86_64.AppImage`, `Lore-Forge-mac-arm64.dmg`, `Lore-Forge-mac-x64.dmg`. Links of the form `https://github.com/kaharamamm/Lore-Forge/releases/latest/download/<stable name>` always fetch the newest version.
+2. turns `## [Unreleased]` into `## [X.Y.Z] - <date>` in both changelogs, with the compare link (`scripts/stamp-changelog.mjs`; it stops when there are no notes for the version), then runs the typecheck and the tests;
+3. commits the two changelogs to the branch as whoever ran the workflow (`Changelog for X.Y.Z`) and builds from that commit; pull afterwards, before you push again;
+4. builds the Windows installer, the `.deb` and AppImage, and the macOS disk images and zips on GitHub's machines, passing the version to electron-builder (`-c.extraMetadata.version`), so no `package.json` is bumped by hand;
+5. creates the tag on that commit and the release, with that version's changelog section as its notes, the versioned files, their `.blockmap`s and `latest.yml`, `latest-linux.yml`, `latest-mac.yml` (which the app's updater reads), plus copies under stable names: `Lore-Forge-Setup-x64.exe`, `Lore-Forge-amd64.deb`, `Lore-Forge-x86_64.AppImage`, `Lore-Forge-mac-arm64.dmg`, `Lore-Forge-mac-x64.dmg`. Links of the form `https://github.com/kaharamamm/Lore-Forge/releases/latest/download/<stable name>` always fetch the newest version.
 
-It only uses the workflow's own `GITHUB_TOKEN` (`contents: write`). `GENERATOR` in `packages/core/src/snapshot.ts` is not changed by the workflow.
+It only uses the workflow's own `GITHUB_TOKEN` (`contents: write`). The version the app shows (About, Updates, the credit lines of the exports) comes from the build: `APP_VERSION` in the workflow, else the newest `vX.Y.Z` tag of the checkout (`packages/desktop/build.mjs`), so nothing is edited by hand for a release.
 
 ### Self-update
 
@@ -193,6 +194,10 @@ It only uses the workflow's own `GITHUB_TOKEN` (`contents: write`). `GENERATOR` 
 `lore mcp` (in `packages/mcp`) is bundled into `dist/cli.cjs` with the rest of the CLI. **Connect AI** writes AI app settings that start the app's own executable with `ELECTRON_RUN_AS_NODE=1` on that file, plus `LORE_FORGE_DATA` (the app's user-data folder), so the server sees the same library and settings as the app. The settings point at the running app, so connecting from a source checkout uses `packages/desktop/dist/cli.cjs` and the checkout's `worlds/` folder (`LORE_FORGE_WORLDS`). The AppImage cannot be connected, since its path changes on every start.
 
 To try the server with a client without touching any app's settings, Claude Code can load it for one session: `claude --mcp-config <file> --strict-mcp-config`, with the server in the file's `mcpServers` and `LORE_FORGE_DATA`/`LORE_FORGE_WORLDS` pointing at a scratch folder.
+
+### Book files from the file manager
+
+`fileAssociations` in `electron-builder.yml` registers `.loreforge` (the Windows installer, the `.deb` with its MIME type, macOS). A book file given on the command line (a double-click) waits in the main process until the window takes it (`takeBookFiles`). A packaged Lore-Forge started with a book file while another one runs hands it over through the single-instance lock and quits; a start without one still opens its own window. macOS sends `open-file` instead. From source, `npx electron packages/desktop <file>.loreforge` opens one the same way, and a `.loreforge` file dropped on the window opens too.
 
 ### The `lore` command in the packages
 

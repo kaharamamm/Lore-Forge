@@ -10,6 +10,7 @@
     "name": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
     "artStyle": { "type": "string", "description": "One line describing the look of every picture made for this world (used by image tools), e.g. \"painterly fantasy concept art, warm desert light\"." },
+    "writingStyle": { "type": "string", "description": "How the book is written: point of view, tense, tone, audience, what to avoid, maybe a sample paragraph. AI tools that write in the book follow it." },
     "calendar": {
       "type": "object",
       "required": ["eras", "defaultEra"],

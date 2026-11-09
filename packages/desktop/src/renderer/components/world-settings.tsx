@@ -23,18 +23,66 @@ interface MonthRow { key: number; name: string; days: string }
 
 const num = (s: string) => (s.trim() === '' ? NaN : Number(s));
 
+/** Ready writing styles to start from: one fills the field, to use as it is or to change. In the app's language. */
+const writingPresets = (): { name: string; text: string }[] => [
+  { name: t('Cozy'), text: t('Third person, past tense. Warm and unhurried: small comforts, kind people, and troubles that feel big to the characters but end well. Clear, gentle sentences; humour from the characters.') },
+  { name: t('Funny'), text: t('Third person, past tense. Light and funny: comic timing, dry understatement and quick dialogue. The humour comes from the characters and their situation, never from winking at the reader. Short scenes.') },
+  { name: t('Adventure'), text: t('Third person, past tense. Fast and vivid: journeys, danger and narrow escapes. Every chapter moves the quest on and ends on a hook. Strong verbs; short paragraphs when the action starts.') },
+  { name: t('Epic'), text: t('Third person, past tense, moving between a few points of view. Serious and wide in scope: kingdoms, old powers and hard choices with a cost. Rich but clear description of places, customs and history.') },
+  { name: t('Mystery'), text: t('Close third person, past tense. Quiet and puzzling: fair clues, secrets that come out slowly, and every scene holding something back. Precise detail and short, guarded dialogue.') },
+  { name: t('Creepy'), text: t('Close third person, past tense. Slow and unsettling: ordinary things that are slightly wrong, sounds and silences, a dread that grows. Little gore; what is not shown matters most.') },
+  { name: t('Horror'), text: t('Close third person, past tense. Dark and frightening: real danger, fear felt in the body, and threats that can win. Specific, sensory detail; short sentences when it strikes. Violence when the story needs it, never for its own sake.') },
+  { name: t('Dark and gritty'), text: t('Close third person, past tense. Harsh and grounded: flawed people, hard choices and costs that stay. Plain, blunt prose; no clean heroes and no easy wins.') },
+  { name: t('Fairy tale'), text: t('Told like an old tale, in the third person and the past tense: once upon a time, magic with rules, clear good and bad, and a simple, wise voice for readers of every age.') },
+];
+
 /**
- * The world's calendar, from world.json: its eras (what "312 OK" means) and months. Eras still used by dates
- * keep their abbreviation; other problems (overlaps, missing names) block Save until fixed.
+ * Ready picture styles. Their text stays in English in every language, like the rest of a picture prompt: image
+ * models read English best.
  */
-export function WorldSettings({ world, onSave, onClose }: { world: World; onSave: (cal: Calendar) => Promise<boolean>; onClose: () => void }) {
+const picturePresets = (): { name: string; text: string }[] => [
+  { name: t('Painterly fantasy'), text: 'Painterly fantasy concept art, rich colour, soft brushwork, warm dramatic light' },
+  { name: t('Storybook'), text: 'Storybook watercolour illustration, soft edges, gentle colours, hand-drawn ink lines' },
+  { name: t('Comic book'), text: 'Bold comic book art, clean ink outlines, flat bright colours, dynamic angles' },
+  { name: t('Anime'), text: 'Anime illustration, clean line art, cel shading, vivid colours, expressive faces' },
+  { name: t('Dark ink'), text: 'Dark ink and wash illustration, heavy shadows, muted colours, an uneasy mood' },
+  { name: t('Gothic horror'), text: 'Gothic horror oil painting, deep shadows, candlelight, desaturated colours' },
+  { name: t('Pixel art'), text: 'Detailed pixel art in a 16-bit game style, limited palette, crisp edges' },
+  { name: t('Cinematic'), text: 'Cinematic realistic concept art, natural light, detailed textures, like a film still' },
+];
+
+/** The ready styles under a field: a click puts one in the field (the one it holds shows as chosen). */
+function Presets({ presets, value, label, onPick }: { presets: { name: string; text: string }[]; value: string; label: string; onPick: (text: string) => void }) {
+  return (
+    <div class="ws-presets" role="group" aria-label={label}>
+      <span class="muted small">{t('Start from:')}</span>
+      {presets.map((p) => (
+        <button key={p.name} type="button" class="ws-preset" aria-pressed={value.trim() === p.text} title={p.text} onClick={() => onPick(p.text)}>{p.name}</button>
+      ))}
+    </div>
+  );
+}
+
+/** How the book is written and how its pictures look: what Ask AI and AI apps follow (world.json). */
+export interface BookStyle {
+  writingStyle: string;
+  artStyle: string;
+}
+
+/**
+ * World settings: how the book is written and drawn (for AI), then its calendar from world.json: its eras (what
+ * "312 OK" means) and months. Eras still used by dates keep their abbreviation; other problems (overlaps, missing
+ * names) block Save until fixed.
+ */
+export function WorldSettings({ world, onSave, onClose }: { world: World; onSave: (cal: Calendar, style: BookStyle) => Promise<boolean>; onClose: () => void }) {
   const cal = world.manifest.calendar;
+  const [style, setStyle] = useState<BookStyle>({ writingStyle: world.manifest.writingStyle ?? '', artStyle: world.manifest.artStyle ?? '' });
   const seq = useRef(0);
   const [eras, setEras] = useState<EraRow[]>(() => cal.eras.map((e) => ({ key: seq.current++, orig: e.id, id: e.id, name: e.name, start: String(e.start), end: e.end === undefined ? '' : String(e.end), color: e.color ?? '' })));
   const [months, setMonths] = useState<MonthRow[]>(() => (cal.months ?? []).map((m) => ({ key: seq.current++, name: m.name, days: String(m.days) })));
   const [defaultEra, setDefaultEra] = useState(cal.defaultEra);
   const [saving, setSaving] = useState(false);
-  const first = useRef<HTMLInputElement>(null);
+  const first = useRef<HTMLTextAreaElement>(null);
   const back = useRef<Element | null>(document.activeElement);
   const usage = useMemo(() => eraUsage(world), [world]);
 
@@ -69,7 +117,7 @@ export function WorldSettings({ world, onSave, onClose }: { world: World; onSave
   const save = async () => {
     if (problems.length || saving) return;
     setSaving(true);
-    const ok = await onSave({ ...draft, months: draft.months?.length ? draft.months : undefined } as Calendar);
+    const ok = await onSave({ ...draft, months: draft.months?.length ? draft.months : undefined } as Calendar, style);
     setSaving(false);
     if (ok) onClose();
   };
@@ -85,6 +133,26 @@ export function WorldSettings({ world, onSave, onClose }: { world: World; onSave
         </header>
 
         <div class="dialog-body">
+        <h3 id="ws-style">{t('Writing and pictures')}</h3>
+        <p class="muted small ws-explain">{t('Ask AI, and AI apps connected to Lore-Forge, write and draw this book this way. Leave a field empty to let them follow what the book already has.')}</p>
+        <div class="ws-style" role="group" aria-labelledby="ws-style">
+          <label class="field">
+            <span class="field-label">{t('Writing style')}</span>
+            <textarea ref={first} class="ws-writing" rows={3} value={style.writingStyle} placeholder={t('Third person, past tense. Warm and wry, short sentences, for readers of ten and up. No modern slang.')}
+              onInput={(e) => { const v = e.currentTarget.value; setStyle((s) => ({ ...s, writingStyle: v })); }} />
+            <span class="hint">{t('Point of view, tense, tone, audience, what to avoid. A short paragraph in your own voice helps too.')}</span>
+          </label>
+          <Presets presets={writingPresets()} value={style.writingStyle} label={t('Ready writing styles')} onPick={(text) => setStyle((s) => ({ ...s, writingStyle: text }))} />
+          <label class="field">
+            <span class="field-label">{t('Picture style')}</span>
+            <input class="ws-art" type="text" value={style.artStyle} placeholder={t('Painterly fantasy concept art, warm desert light')}
+              onInput={(e) => { const v = e.currentTarget.value; setStyle((s) => ({ ...s, artStyle: v })); }} />
+            <span class="hint">{t('Added to every picture an AI makes for this book, so they look alike.')}</span>
+          </label>
+          <Presets presets={picturePresets()} value={style.artStyle} label={t('Ready picture styles')} onPick={(text) => setStyle((s) => ({ ...s, artStyle: text }))} />
+        </div>
+
+        <h3 id="ws-calendar">{t('Calendar')}</h3>
         <div class="ws-default-row">
           <label class="ws-default">
             <span class="field-label">{t('Default era')}</span>
@@ -109,7 +177,7 @@ export function WorldSettings({ world, onSave, onClose }: { world: World; onSave
                   <button type="button" class="ghost small ws-up" aria-label={t('Move {era} up', { era: label })} disabled={i === 0} onClick={() => setEras((rs) => move(rs, i, -1))}><span class="chev chev-up" /></button>
                   <button type="button" class="ghost small ws-down" aria-label={t('Move {era} down', { era: label })} disabled={i === eras.length - 1} onClick={() => setEras((rs) => move(rs, i, 1))}><span class="chev chev-down" /></button>
                 </span>
-                <input ref={i === 0 ? first : undefined} class="ws-name" type="text" value={r.name} aria-label={t('Name of {era}', { era: label })} placeholder={t('After the Sundering')} onInput={(e) => setEra(r.key, { name: e.currentTarget.value })} />
+                <input class="ws-name" type="text" value={r.name} aria-label={t('Name of {era}', { era: label })} placeholder={t('After the Sundering')} onInput={(e) => setEra(r.key, { name: e.currentTarget.value })} />
                 <input class="ws-code" type="text" value={r.id} aria-label={t('Abbreviation of {era}', { era: label })} placeholder={t('AS')} onInput={(e) => setEra(r.key, { id: e.currentTarget.value })} />
                 <input class="ws-start" type="number" step={1} value={r.start} aria-label={t('World year {era} starts at', { era: label })} onInput={(e) => setEra(r.key, { start: e.currentTarget.value })} />
                 <input class="ws-end" type="number" step={1} value={r.end} aria-label={t('World year {era} ends at (optional)', { era: label })} placeholder={t('open')} onInput={(e) => setEra(r.key, { end: e.currentTarget.value })} />
@@ -153,7 +221,7 @@ export function WorldSettings({ world, onSave, onClose }: { world: World; onSave
         <div class="dialog-actions">
           <span class="muted small spacer">{t('Changing a start year moves every date in that era on the timeline.')}</span>
           <button type="button" class="ghost ws-cancel" onClick={onClose}>{t('Cancel')}</button>
-          <button type="button" class="primary ws-save" disabled={problems.length > 0 || saving} onClick={() => void save()}><Icon name="check-mark" /> {t('Save calendar')}</button>
+          <button type="button" class="primary ws-save" disabled={problems.length > 0 || saving} onClick={() => void save()}><Icon name="check-mark" /> {t('Save')}</button>
         </div>
       </section>
     </div>

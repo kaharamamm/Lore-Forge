@@ -97,6 +97,8 @@ export interface TextPick {
   y: number;
   /** How it was picked: a plain selection, the context menu, or the add shortcut. */
   how: 'select' | 'menu' | 'quick';
+  /** More than a name: a longer or multi-line part of the text (to ask the AI about, not to add as an entry). */
+  passage?: boolean;
 }
 
 export interface ProseEditorProps {
@@ -242,7 +244,10 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
     }
     return undefined;
   };
-  /** Report the current selection (trimmed to one line of at most 80 characters) to `onPick`. */
+  /**
+   * Report the current selection to `onPick`: a name-sized pick (one line of at most 80 characters), or a longer part
+   * (a passage). The add shortcut takes names only.
+   */
   const pick = (how: TextPick['how'], at?: { x: number; y: number }): boolean => {
     const el = area.current;
     if (!onPick || !el) return false;
@@ -265,7 +270,8 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
     const raw = value.slice(start, end);
     const lead = raw.length - raw.trimStart().length;
     const text = raw.trim();
-    if (!text || text.length > 80 || /\n/.test(text)) {
+    const passage = text.length > 80 || /\n/.test(text);
+    if (!text || (passage && how === 'quick')) {
       onPick(null);
       return false;
     }
@@ -273,7 +279,7 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
     const box = el.getBoundingClientRect();
     const x = at?.x ?? Math.min(Math.max(r?.right ?? box.left, box.left), box.right);
     const y = at?.y ?? Math.min(Math.max(r?.bottom ?? box.top, box.top), box.bottom);
-    onPick({ start: start + lead, end: start + lead + text.length, text, x, y, how });
+    onPick({ start: start + lead, end: start + lead + text.length, text, x, y, how, ...(passage ? { passage: true } : {}) });
     return true;
   };
 

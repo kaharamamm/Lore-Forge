@@ -100,6 +100,8 @@ export const LIBRARY: Readonly<Record<string, string>> = {
   'On (macOS picks the language)': 'Açık (dili macOS seçer)',
   'Words the dictionary does not know get a wavy line: right-click one for suggestions. The names in the open book count as spelled right. A dictionary this computer does not have is downloaded once from Google; nothing you write is sent.':
     "Sözlükte olmayan sözcüklerin altı dalgalı çizilir; öneriler için sözcüğe sağ tıklayın. Açık kitaptaki adlar doğru yazılmış sayılır. Bu bilgisayarda olmayan bir sözlük bir kez Google'dan indirilir; yazdıklarınız gönderilmez.",
+  // About: the zip library's credit line (about.tsx).
+  'Zip files (Word files, shared book files)': 'Zip dosyaları (Word dosyaları, paylaşılan kitap dosyaları)',
   // A book someone shared as one file (start.tsx).
   'Open a book someone shared as one file (.loreforge): it goes on your shelf': 'Birinin tek dosya olarak paylaştığı bir kitabı açın (.loreforge): kitaplığınıza eklenir',
   'Opening…': 'Açılıyor…',

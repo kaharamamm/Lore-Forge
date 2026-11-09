@@ -16,11 +16,14 @@ export interface ServerLaunch {
 }
 
 /** What the AI is told about where it is: appended to Claude Code's system prompt; Codex gets it before the first message. */
-export function bookContext(book: { name: string; dir: string; readOnly: boolean }): string {
+export function bookContext(book: { name: string; dir: string; readOnly: boolean; writingStyle?: string }): string {
+  const style = book.writingStyle?.trim();
   return [
     `You are working inside the Lore-Forge desktop app, in its Ask AI panel. The user has the book "${book.name}" open; its folder is ${book.dir}.`,
     `Work on that book unless the user names another one: pass book: ${JSON.stringify(book.dir)} to the Lore-Forge tools. You can only use the Lore-Forge tools.`,
     'Call lore_forge_guide once before you add or change anything.',
+    'Before you write or change a chapter, call chapter_brief for it. To change part of a chapter, use edit_chapter, so the rest stays exactly as the user wrote it.',
+    style ? `The book's writing style; follow it in everything you write in the book:\n${style}` : '',
     book.readOnly
       ? 'This book is the read-only sample that comes with the app: you can read it and answer questions about it, but not change it. If the user asks for changes, tell them to duplicate the book in the Library first and open the copy.'
       : '',

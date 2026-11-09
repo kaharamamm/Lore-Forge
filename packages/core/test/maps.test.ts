@@ -1,7 +1,7 @@
 /** Maps: pictures of the world with places pinned on them (world.json "maps", a place's "pins"), and their check. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findMap, mapModel, newMapId, parseEntry, parseManifest, pinNumber, pinOn, serializeEntry, withoutPin, withPin, type Place, type WorldMap } from '@lore-forge/core';
+import { findMap, inYear, journeyAt, mapModel, mapTime, newMapId, parseEntry, parseManifest, pinNumber, pinOn, serializeEntry, withoutPin, withPin, type Place, type WorldMap } from '@lore-forge/core';
 import { manifest, warnings, world, type Draft } from './helpers.ts';
 
 const maps: WorldMap[] = [
@@ -116,4 +116,37 @@ test('the check: a pin on a map the book does not have, and a map set to show so
   ]);
   assert.deepEqual(ws.map((w) => w.offending.field).sort(), ['maps[2].place', 'maps[3].place', 'pins[0]']);
   assert.equal(warnings(drafts, 'map-pin', { manifest: { maps } }).length, 0);
+});
+
+test('the map in time: dated events at their places (or the place around them), journeys, and when places stood', () => {
+  const w = world([
+    { id: 'place-sunsea', type: 'place', name: 'The Sunsea' },
+    { id: 'place-town', type: 'place', name: 'Camelamamm', partOf: 'place-sunsea', founded: '100', pins: [{ map: 'land', x: 40, y: 60 }] },
+    { id: 'place-well', type: 'place', name: 'The Singing Well', partOf: 'place-town' },
+    { id: 'place-dunes', type: 'place', name: 'The Glass Dunes', status: 'destroyed', destroyed: '512', pins: [{ map: 'land', x: 70, y: 10 }] },
+    { id: 'place-far', type: 'place', name: 'Far Isle' },
+    { id: 'char-pip', type: 'character', name: 'Pip', born: '480', locations: [{ place: 'place-town', from: '490' }, { place: 'place-dunes', from: '505', to: '510' }, { place: 'place-far' }] },
+    { id: 'char-stay', type: 'character', name: 'Stay', locations: [{ place: 'place-town' }] },
+    { id: 'evt-quiet', type: 'event', name: 'The Well Went Quiet', date: '500', place: 'place-well', participants: [{ id: 'char-pip' }] },
+    { id: 'evt-storm', type: 'event', name: 'The Glass Storm', date: '512', place: 'place-dunes', actions: [{ actor: 'char-pip', verb: 'fled' }] },
+    { id: 'evt-far', type: 'event', name: 'Far Away', date: '300', place: 'place-far' },
+    { id: 'evt-someday', type: 'event', name: 'Someday', place: 'place-town' },
+  ], { manifest: { maps: [{ id: 'land', name: 'The Land', image: 'maps/land.png' }] } });
+  const time = mapTime(w, mapModel(w, 'land')!);
+  // Only dated events at a place on this map; the well's shows at the pin of the town it lies in.
+  assert.deepEqual(time.events.map((e) => [e.entry.name, e.spot.pin.entry.name, e.spot.place.name, e.when]), [['The Well Went Quiet', 'Camelamamm', 'The Singing Well', '500'], ['The Glass Storm', 'The Glass Dunes', 'The Glass Dunes', '512']]);
+  // Pip lived in the town (the well event there joins that stop), then in the dunes (and the storm); Far Isle is not
+  // on this map. Stay has one stop: no journey.
+  assert.deepEqual(time.journeys.map((j) => [j.entry.name, j.stops.map((s) => [s.spot.pin.entry.name, s.why.map((y) => y.kind)])]), [['Pip', [['Camelamamm', ['lived', 'event']], ['The Glass Dunes', ['lived', 'event']]]]]);
+  const { min, max, daysPerYear: per } = time.span!;
+  assert.deepEqual([min / per, max / per], [100, 512]);
+  // The dunes stood until 512, the town from 100.
+  assert.ok(inYear(time.lives['place-dunes']!, 512 * per, per) && !inYear(time.lives['place-dunes']!, 513 * per, per));
+  assert.ok(!inYear(time.lives['place-town']!, 99 * per, per) && inYear(time.lives['place-town']!, 100 * per, per));
+  // Where Pip is: nowhere before birth or before the first dated stop; the town in 495; the dunes from 505.
+  const pip = time.journeys[0]!;
+  assert.deepEqual([470, 485, 495, 506, 600].map((y) => journeyAt(pip, y * per, per)), [undefined, undefined, 0, 1, 1]);
+  // Nothing dated: no years to move through.
+  const plain = world([{ id: 'a', type: 'place', name: 'A', pins: [{ map: 'land', x: 1, y: 1 }] }], { manifest: { maps: [{ id: 'land', name: 'The Land', image: 'maps/land.png' }] } });
+  assert.equal(mapTime(plain, mapModel(plain, 'land')!).span, undefined);
 });

@@ -41,3 +41,43 @@ test('the command line prints GITHUB_OUTPUT lines from a tag list on stdin', () 
   assert.equal(execFileSync(process.execPath, [script, 'patch', '1.0.0'], { input: 'v1.0.0\n', encoding: 'utf8' }), 'latest=1.0.0\nversion=1.0.0\ntag=v1.0.0\nskip=true\n');
   assert.throws(() => execFileSync(process.execPath, [script, 'sideways'], { input: '', stdio: 'pipe' }));
 });
+
+// @ts-expect-error plain JavaScript script, no types
+import { releaseNotes, stampChangelog } from '../../../scripts/stamp-changelog.mjs';
+
+const changelog = [
+  '# Changelog', '', '## [Unreleased]', '', '### Fixed', '', '- A fix.', '',
+  '## [1.1.0] - 2026-11-09', '', '### Added', '', '- Maps.', '',
+  '[Unreleased]: https://github.com/o/r/compare/v1.1.0...HEAD',
+  '[1.1.0]: https://github.com/o/r/compare/v1.0.0...v1.1.0', '',
+].join('\n');
+
+test('at release time the Unreleased section takes the version and date, with its compare link', () => {
+  const out: string = stampChangelog(changelog, '1.2.0', '2026-11-12');
+  assert.match(out, /^## \[1\.2\.0\] - 2026-11-12$/m);
+  assert.doesNotMatch(out, /Unreleased/);
+  assert.match(out, /^\[1\.2\.0\]: https:\/\/github\.com\/o\/r\/compare\/v1\.1\.0\.\.\.v1\.2\.0$/m);
+  assert.equal(stampChangelog(out, '1.2.0', '2026-11-12'), out, 'stamped once: running it again changes nothing');
+  assert.equal(releaseNotes(out, '1.2.0'), '### Fixed\n\n- A fix.');
+  assert.equal(releaseNotes(out, '1.1.0'), '### Added\n\n- Maps.', 'no link lines in the notes');
+  assert.equal(releaseNotes(out, '9.9.9'), '');
+  // Windows line endings stay, and a file without an Unreleased link gets one for the release.
+  const crlf: string = stampChangelog(changelog.replace(/\[Unreleased\]: .*\n/, '').replace(/\n/g, '\r\n'), '1.2.0', '2026-11-12');
+  assert.ok(crlf.includes('\r\n## [1.2.0] - 2026-11-12\r\n'));
+  assert.match(crlf, /\[1\.2\.0\]: https:\/\/github\.com\/o\/r\/compare\/v1\.1\.0\.\.\.v1\.2\.0\r\n\[1\.1\.0\]/);
+  assert.throws(() => stampChangelog(changelog, '1.2', '2026-11-12'), /X\.Y\.Z/);
+  // Notes for the version already there, and new Unreleased ones: a person puts them together, not the script.
+  assert.throws(() => stampChangelog(out.replace('## [1.2.0]', '## [Unreleased]\n\n- More.\n\n## [1.2.0]'), '1.2.0', '2026-11-12'), /already/);
+});
+
+test('the real changelogs can be stamped, in both languages', async () => {
+  const { readFileSync } = await import('node:fs');
+  for (const f of ['CHANGELOG.md', 'CHANGELOG.tr.md']) {
+    const md = readFileSync(join(import.meta.dirname, '..', '..', '..', f), 'utf8');
+    const out: string = stampChangelog(md, '9.0.0', '2030-01-01');
+    if (/^## \[Unreleased\]/m.test(md)) {
+      assert.match(out, /^## \[9\.0\.0\] - 2030-01-01/m, f);
+      assert.ok(releaseNotes(out, '9.0.0').length > 0, f);
+    } else assert.equal(out, md, f);
+  }
+});

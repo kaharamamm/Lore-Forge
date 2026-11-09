@@ -1,6 +1,8 @@
 # Build and publish a Lore-Forge release: Actions > Release > Run workflow.
 # The version is the newest vX.Y.Z tag plus the chosen bump, or the exact version given. It goes to electron-builder
 # on the command line; package.json is never bumped by hand. If that tag already exists, nothing runs.
+# The changelogs' "## [Unreleased]" becomes "## [X.Y.Z] - <date>" (scripts/stamp-changelog.mjs), committed to the
+# branch by whoever ran the workflow, so the app's Patch notes name the version; that section is the release's notes.
 #
 # Each release publishes only:
 #   Lore-Forge-Setup-x64.exe, Lore-Forge-amd64.deb, Lore-Forge-x86_64.AppImage, Lore-Forge-mac-arm64.dmg, Lore-Forge-mac-x64.dmg
@@ -23,7 +25,7 @@ on:
         required: false
         default: ''
       notes:
-        description: Release notes (shown above the generated list of changes)
+        description: A few words above the changelog's notes on the release page (optional)
         type: string
         required: false
         default: ''
@@ -65,6 +67,10 @@ jobs:
     needs: version
     if: needs.version.outputs.skip != 'true'
     runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    env:
+      V: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,8 +78,28 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # "## [Unreleased]" becomes "## [$V] - today" in CHANGELOG.md and CHANGELOG.tr.md (already stamped: no change).
+      - name: Stamp the changelogs
+        run: node scripts/stamp-changelog.mjs "$V" "$(date -u +%F)"
       - run: npm run typecheck
       - run: npm test
+      # Tests passed: the stamped changelogs go to the branch as a commit by whoever ran the workflow, and the builds
+      # and the release tag use that commit.
+      - name: Commit the changelogs
+        id: commit
+        env:
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- CHANGELOG.md CHANGELOG.tr.md; then
+            git config user.name "$ACTOR"
+            git config user.email "$ACTOR_ID+$ACTOR@users.noreply.github.com"
+            git commit -m "Changelog for $V" -- CHANGELOG.md CHANGELOG.tr.md
+            git push origin "HEAD:refs/heads/$BRANCH" || { echo "::error::$BRANCH changed while releasing. Run the workflow again."; exit 1; }
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
     name: ${{ matrix.name }}
@@ -98,6 +124,8 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.test.outputs.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -123,14 +151,24 @@ jobs:
 
   release:
     name: Publish
-    needs: [version, build]
+    needs: [version, test, build]
     runs-on: ubuntu-latest
     env:
       V: ${{ needs.version.outputs.version }}
       TAG: ${{ needs.version.outputs.tag }}
+      SHA: ${{ needs.test.outputs.sha }}
       NOTES: ${{ inputs.notes }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.test.outputs.sha }}
+      # The release's notes: the optional words from the form, then this version's section of CHANGELOG.md.
+      - name: Release notes
+        run: |
+          set -euo pipefail
+          { if [ -n "$NOTES" ]; then printf '%s\n\n' "$NOTES"; fi; node scripts/stamp-changelog.mjs --notes "$V"; } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*
@@ -202,8 +240,8 @@ jobs:
             assets/latest-linux.yml \
             assets/latest-mac.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
+            --target "$SHA" \
             --title "Lore-Forge $V" \
-            --notes "$NOTES" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             --generate-notes \
             --latest

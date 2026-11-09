@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { unzipSync, zipSync, strToU8 } from 'fflate';
-import { bookPath, packBook, unpackBook } from '../src/main/share.ts';
+import { bookFileArgs, bookPath, openBook, packBook, unpackBook } from '../src/main/share.ts';
 
 const manifest = { schemaVersion: 1, id: 'salt-coast', name: 'The Salt Coast', calendar: { eras: [{ id: 'SR', name: 'Salt Reckoning', start: 1 }], defaultEra: 'SR' }, cover: { color: '#336699' } };
 const PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
@@ -123,6 +123,49 @@ test('nothing is written outside the new book, and files that are not books are 
     assert.deepEqual((await readdir(s.shelf)).sort(), ['evil'], 'a refused file leaves no folder behind');
   } finally {
     await rm(s.root, { recursive: true, force: true });
+  }
+});
+
+test('the same book file opened again gives the same book, while that book is still there', async () => {
+  const { root, book, shelf } = await setup();
+  try {
+    const file = join(root, 'The Salt Coast.loreforge');
+    await packBook(book, file);
+    const known = join(root, 'data', 'book-files.json');
+    const first = await openBook(file, shelf, known);
+    // A copy of the file somewhere else is the same book file.
+    const copy = join(root, 'Downloads', 'salt.loreforge');
+    await mkdir(dirname(copy), { recursive: true });
+    await writeFile(copy, readFileSync(file));
+    assert.deepEqual(await openBook(copy, shelf, known), first);
+    assert.equal((await readdir(shelf)).length, 1);
+    // Another book file (a changed book) is a new copy; so is the same file once its book is gone.
+    await writeFile(join(book, 'story', '02-the-ebb.md'), '---\ntitle: The Ebb\norder: 2\n---\n\nIt fell.\n');
+    await packBook(book, file);
+    const second = await openBook(file, shelf, known);
+    assert.notEqual(second.dir, first.dir);
+    await rm(first.dir, { recursive: true });
+    const third = await openBook(copy, shelf, known);
+    assert.ok(existsSync(join(third.dir, 'world.json')));
+    assert.equal((await readdir(shelf)).length, 2);
+    // A broken record of what was opened is only forgotten.
+    await writeFile(known, '{ not json');
+    assert.ok((await openBook(copy, shelf, known)).dir);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('book files among the start arguments: only .loreforge files that exist, as full paths', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lore-args-'));
+  try {
+    await writeFile(join(root, 'a.loreforge'), 'x');
+    await writeFile(join(root, 'B.LOREFORGE'), 'x');
+    await writeFile(join(root, 'c.zip'), 'x');
+    const args = ['--allow-file-access', 'a.loreforge', join(root, 'B.LOREFORGE'), 'c.zip', 'missing.loreforge', join(root, 'world')];
+    assert.deepEqual(bookFileArgs(args, root), [join(root, 'a.loreforge'), join(root, 'B.LOREFORGE')]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

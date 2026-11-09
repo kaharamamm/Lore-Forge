@@ -93,7 +93,7 @@ export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCove
               <button type="button" class="ghost home-settings" onClick={onSettings}><Icon name="calendar" /> {t('World settings')}</button>
             </span>
             <button type="button" class={sample ? 'primary home-duplicate' : 'ghost home-duplicate'} onClick={onDuplicate} title={t('Make a full copy of this world under a new name, and open it')}><Icon name="files" /> {t('Duplicate')}</button>
-            <button type="button" class="ghost home-share" onClick={onShare} disabled={sharing} title={t('Save the whole book as one file, to send to someone or keep as a backup. Anyone with Lore-Forge can open it.')}><Icon name="envelope" /> {sharing ? t('Packing…') : t('Share…')}</button>
+            <button type="button" class="ghost home-share" onClick={onShare} disabled={sharing} title={t('Share the book: as one file for Lore-Forge, as a website, or as game data')}><Icon name="envelope" /> {sharing ? t('Packing…') : t('Share…')}</button>
             <button type="button" class="ghost home-history" onClick={onHistory} title={t('Book history: earlier versions of this book, and putting them back')}><Icon name="tied-scroll" /> {t('History')}</button>
             <button type="button" class="ghost home-reload" onClick={onReload} title={t('Read every file of this world again, after editing them outside Lore-Forge')}><Icon name="cycle" /> {t('Reload from disk')}</button>
           </div>

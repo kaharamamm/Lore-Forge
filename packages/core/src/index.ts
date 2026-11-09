@@ -36,8 +36,11 @@ export function check(world: World): Warning[] {
   const base = checkWorld(world, builtinRules);
   return world.story?.length ? sortWarnings([...base, ...analyzeStory(world).warnings]) : base;
 }
+export { AI_PHRASING, aiPhrasesIn, aiPhrasing, aiPhrasingRule, aiPhrasingWarnings, type AiPhrase } from './prose-check.ts';
+export { chapterBrief, type BriefTarget } from './story-brief.ts';
 export * from './publish/doc.ts';
-export { artBrief, PICTURE_VIEW, picturePrompt, withArtStyle, type ArtBrief } from './publish/art.ts';
+export { artBrief, mapPrompt, PICTURE_VIEW, picturePrompt, withArtStyle, type ArtBrief } from './publish/art.ts';
+export { bookSite, type BookSite, type SiteLabels, type SitePage } from './publish/html.ts';
 export { worldCodex, CODEX_FORMAT_VERSION, type CodexOptions } from './publish/codex.ts';
 /** Old names from before the World Bible became the World Codex (0.3.1); kept so existing callers keep working. */
 export { worldCodex as worldBible, CODEX_FORMAT_VERSION as BIBLE_FORMAT_VERSION, type CodexOptions as BibleOptions } from './publish/codex.ts';
@@ -47,3 +50,4 @@ export { familyTree, TREE_LAYOUT, type FamilyTree, type TreeNode, type TreeEdge 
 export { relationWeb, WEB_LAYOUT, type RelationWeb, type WebOptions, type WebNode, type WebEdge } from './views/relation-web.ts';
 export { timelineModel, yearLabel, yearTicks, monthTicks, packRows, involvesEntry, type TimelineModel, type TimelineLane, type TimelineLook, type TimelineGroup, type EraBand } from './views/timeline-model.ts';
 export { findMap, mapModel, newMapId, pinNumber, pinOn, withPin, withoutPin, type MapModel, type MapPlace } from './views/map-model.ts';
+export { inYear, journeyAt, mapTime, type Journey, type JourneyStop, type JourneyWhy, type MapEvent, type MapSpot, type MapTime } from './views/map-time.ts';

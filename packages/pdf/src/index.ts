@@ -7,7 +7,7 @@ import en from 'hyphen/en-us/index.js';
 import { bundledFontPath, coverFont } from './fonts.ts';
 import { readPicture } from './gif.ts';
 import { english, type Translate } from './words.ts';
-import { bundledFont, COVER_EMBLEM, DEFAULT_LOOK, ICON_SIZE, ICONS, inlineRuns, placeOnCover, splitAlpha, toMarkdown, trimFor, type Block, type BookLook, type CoverArt, type Doc, type IconName, type Trim } from '@lore-forge/core';
+import { bundledFont, COVER_EMBLEM, DEFAULT_LOOK, ICON_SIZE, ICONS, inlineRuns, placeOnCover, splitAlpha, toMarkdown, trimFor, type Block, type BookLook, type CoverArt, type Doc, type IconName, type MapMark, type Trim } from '@lore-forge/core';
 
 type Pdf = PDFKit.PDFDocument;
 type Heading = Extract<Block, { kind: 'heading' }>;
@@ -90,6 +90,9 @@ const INK = '#222222';
 const OPENER_SINK = 18;
 const GOLD = '#e0bd6a';
 const MUTED = '#6b6b6b';
+/** A map's numbered places: a dark disc with a gold ring, readable on any picture. */
+const PIN_FILL = '#22252d';
+const PIN_RING = '#c9a24f';
 
 /** Moved to core so the in-app preview shares it; re-exported for existing callers. */
 export { inlineRuns };
@@ -560,19 +563,56 @@ class Layout {
       }
     }
     if (img) {
-      const maxW = this.width * (this.trim ? 1 : this.doc.kind === 'book' ? 0.9 : 0.55);
-      const maxH = this.trim ? this.pdf.page.height * 0.42 : this.doc.kind === 'book' ? 300 : 220;
+      // A map is as large as the page allows, so its numbered places can be told apart.
+      const map = !!b.pins;
+      const maxW = map ? this.width : this.width * (this.trim ? 1 : this.doc.kind === 'book' ? 0.9 : 0.55);
+      const maxH = map ? (this.bottom - this.top) * 0.66 : this.trim ? this.pdf.page.height * 0.42 : this.doc.kind === 'book' ? 300 : 220;
       const s = Math.min(maxW / img.width, maxH / img.height);
       const w = img.width * s;
       const h = img.height * s;
       this.room(h + 40);
       this.space(4);
-      this.pdf.image(img as unknown as Buffer, this.left + (this.width - w) / 2, this.pdf.y, { width: w, height: h });
-      this.pdf.y += h + 4;
+      const x = this.left + (this.width - w) / 2;
+      const y = this.pdf.y;
+      this.pdf.image(img as unknown as Buffer, x, y, { width: w, height: h });
+      for (const p of b.pins ?? []) this.pin(x + (w * p.x) / 100, y + (h * p.y) / 100, p.n);
+      this.pdf.x = this.left;
+      this.pdf.y = y + h + 4;
     }
-    this.runs(b.caption, { size: this.t.size - 1, italic: true, align: 'center', color: INK });
+    if (!b.pins) this.runs(b.caption, { size: this.t.size - 1, italic: true, align: 'center', color: INK });
     for (const d of b.details) this.runs(d, { size: this.t.size - 1.5, color: MUTED, align: 'center' });
+    if (b.pins?.length) this.legend(b.pins);
     this.pdf.y += 8;
+  }
+
+  /** A numbered place: the number in a disc centred on (cx, cy), the same on the map and in its list. */
+  private pin(cx: number, cy: number, n: number): void {
+    const label = String(n);
+    const size = label.length > 2 ? 5.6 : 6.8;
+    const r = label.length > 1 ? 7 : 6;
+    this.pdf.circle(cx, cy, r).lineWidth(1.1).fillAndStroke(PIN_FILL, PIN_RING);
+    this.font('b', 'sans').fontSize(size).fillColor('#ffffff').text(label, cx - r, cy - size * 0.56, { width: r * 2, align: 'center', lineBreak: false });
+  }
+
+  /** A map's places by number, row by row in columns, each number in the disc it has on the map. */
+  private legend(pins: MapMark[]): void {
+    const cols = Math.max(1, Math.min(3, Math.floor(this.width / 140)));
+    const colW = this.width / cols;
+    const size = this.t.size - 0.5;
+    const lineH = Math.max(size + 6, 16);
+    this.space(4);
+    for (let i = 0; i < pins.length; i += cols) {
+      this.room(lineH);
+      const y = this.pdf.y;
+      pins.slice(i, i + cols).forEach((p, j) => {
+        const x = this.left + j * colW;
+        this.pin(x + 8, y + lineH / 2, p.n);
+        this.font('r').fontSize(size).fillColor(INK).text(p.name, x + 20, y + lineH / 2 - size * 0.62, { width: colW - 26, height: size + 2, ellipsis: true });
+      });
+      this.pdf.x = this.left;
+      this.pdf.y = y + lineH;
+    }
+    this.pdf.y += 2;
   }
 
   private prompt(b: Extract<Block, { kind: 'prompt' }>): void {

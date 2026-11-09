@@ -20,7 +20,7 @@ test('lore check on the example world prints every starter rule and exits 1', ()
   assert.match(r.stdout, /Orsan the Grey can't kill Queen Ilsa in 1920: Orsan the Grey died in 1800 \(source: Characters\/Orsan the Grey\)\./);
   for (const rule of builtinRules) assert.match(r.stdout, new RegExp(`\\[${rule.id}\\]`), `rule ${rule.id} should fire on the example world`);
   assert.match(r.stdout, /INTENDED \[after-death\] Nur the Twice-Born/);
-  assert.match(r.stdout, /10 errors, 9 warnings, 1 info, 1 marked intended/);
+  assert.match(r.stdout, /10 errors, 9 warnings, 2 info, 1 marked intended/);
   assert.match(r.stdout, /\[story-contradiction\] The story says Orsan the Grey was born in 1745, but Characters\/Orsan the Grey says 1740\.\n\s+at Story\/The Salt Road \(story\/01-the-salt-road\.md\): "Orsan the Grey was born in 1745/);
 });
 
@@ -29,7 +29,7 @@ test('lore check --json prints a versioned report', () => {
   assert.equal(r.status, 1);
   const report = JSON.parse(r.stdout);
   assert.equal(report.schemaVersion, 1);
-  assert.deepEqual(report.counts, { error: 10, warning: 9, info: 1, intended: 1 });
+  assert.deepEqual(report.counts, { error: 10, warning: 9, info: 2, intended: 1 });
   // Every starter rule fires once in the example, plus the story check (story/01-the-salt-road.md).
   assert.equal(new Set(report.warnings.map((w: { ruleId: string }) => w.ruleId)).size, builtinRules.length + 1);
 });

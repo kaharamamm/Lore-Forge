@@ -17,6 +17,7 @@ const credits = (): [string, string, string, string][] => [
   [t('3D model viewer'), t('three.js (GLTF, OBJ and FBX loaders, OrbitControls), loaded only when a model is shown'), 'MIT', 'https://threejs.org'],
   [t('Self-update'), 'electron-updater (electron-builder)', 'MIT', 'https://www.electron.build/auto-update'],
   [t('AI apps (MCP server)'), t('MCP TypeScript SDK and zod'), 'MIT', 'https://modelcontextprotocol.io'],
+  [t('Zip files (Word files, shared book files)'), 'fflate', 'MIT', 'https://github.com/101arrowz/fflate'],
 ];
 
 /** About and credits: who made the icons and fonts, and their licences (CC BY needs the attribution). */

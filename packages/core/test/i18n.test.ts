@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import {
   analyzeStory, builtinRules, BUNDLED_FONTS, calendarProblems, check, CHRONICLE_APPENDIX, CORE_TR, DATE_FORMATS_HINT, describeDate, DETAIL_FIELDS,
   DETAIL_SECTIONS, ENTRY_TYPES, familyTree, IMAGE_VIEWS, LIFECYCLE, localize, localizeDoc, LORE_AND_LEGENDS, msg, parseManifest, parseWorld, recordMessages,
-  RELATION_GROUPS, RELATION_KINDS, relationWeb, searchEntries, SINGLE_CHAPTER, storyBook, storyContradiction, timelineModel, TITLE_STYLE_LABELS, toMarkdown,
+  RELATION_GROUPS, RELATION_KINDS, relationWeb, searchEntries, SINGLE_CHAPTER, storyBook, storyContradiction, aiPhrasing, timelineModel, TITLE_STYLE_LABELS, toMarkdown,
   TRIMS, TYPE_LABELS, TYPE_SINGULAR, viewLabel, VISUAL_FIELDS, worldCodex, type Block, type Doc, type Warning, type World,
 } from '@lore-forge/core';
 import { gltfMustBeEmbedded, loadWorld } from '@lore-forge/core/node';
@@ -242,7 +242,7 @@ describe('every text core shows has Turkish', () => {
   });
 
   test('labels and rule texts the app shows on their own', () => {
-    for (const r of [...builtinRules, storyContradiction]) { has(r.title, 'rule title'); has(r.description, 'rule description'); }
+    for (const r of [...builtinRules, storyContradiction, aiPhrasing]) { has(r.title, 'rule title'); has(r.description, 'rule description'); }
     for (const t of ENTRY_TYPES) { has(TYPE_LABELS[t], 'types'); has(TYPE_SINGULAR[t], 'types'); }
     for (const lc of Object.values(LIFECYCLE)) { has(lc.endLabel, 'lifecycle'); has(lc.endedWord, 'lifecycle'); for (const s of lc.statuses) has(s.label, 'statuses'); }
     for (const fields of Object.values(DETAIL_FIELDS)) for (const f of fields) { has(f.label, 'details'); if (f.hint) has(f.hint, 'details'); for (const s of f.suggest ?? []) has(s, 'suggestions'); }

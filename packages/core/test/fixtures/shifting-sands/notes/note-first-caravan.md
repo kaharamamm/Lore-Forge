@@ -8,4 +8,4 @@ tags:
 date: "~200 OK"
 ---
 
-Long before the Sundering, the first caravan crossed [[place-dunes|the Endless Dunes]] following a star that did not move. The camel-folk still count their years from the night it reached water.
+Long before the Sundering, the first caravan crossed [[place-dunes|the Endless Dunes]] following a star that did not move. The camel-folk still count their years from the night it reached water. Their songs call the crossing a testament to patience.

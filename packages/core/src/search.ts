@@ -1,5 +1,5 @@
 import { DETAIL_FIELDS } from './details.ts';
-import { TYPE_SINGULAR, VISUAL_FIELDS, type Entry, type World } from './types.ts';
+import { TYPE_SINGULAR, VISUAL_FIELDS, type Entry, type StoryChapter, type World, type WorldMap } from './types.ts';
 
 /**
  * Search over entry content, ranked in tiers: 0 name and alias, 1 basic facts (type, race, title, occupation,
@@ -102,41 +102,95 @@ function fit(hay: string, q: string): { quality: number; at: number } {
   return word ? { quality: 2, at: word.index + word[1]!.length } : { quality: 3, at };
 }
 
+type Field = { tier: SearchTier; field: string; text: string; folded: string };
+
+/** The query folded for matching, and its words; '' when there is nothing to search for. */
+function queryOf(query: string): { q: string; words: string[] } {
+  const q = foldSearch(query.normalize('NFC')).trim().replace(/\s+/g, ' ');
+  return { q, words: q ? q.split(' ') : [] };
+}
+
+/**
+ * Where the query matches best among `fields`: the whole query in the best field, or else every word somewhere,
+ * ranked by the weakest word and shown at the first word's match. Undefined when it does not match.
+ */
+function bestMatch(fields: Field[], q: string, words: string[]): { tier: SearchTier; quality: number; at: number; len: number; f: Field } | undefined {
+  const best = (term: string) => {
+    let top: { tier: SearchTier; quality: number; at: number; f: Field } | undefined;
+    for (const f of fields) {
+      const m = fit(f.folded, term);
+      if (m.quality < 0) continue;
+      if (!top || f.tier < top.tier || (f.tier === top.tier && m.quality < top.quality)) top = { tier: f.tier, quality: m.quality, at: m.at, f };
+    }
+    return top;
+  };
+  const whole = best(q);
+  if (whole) return { ...whole, len: q.length };
+  if (words.length < 2) return undefined;
+  const each = words.map(best);
+  if (each.some((x) => !x)) return undefined;
+  const worst = each.reduce((a, b) => (b!.tier > a!.tier || (b!.tier === a!.tier && b!.quality > a!.quality) ? b : a))!;
+  return { ...each[0]!, tier: worst.tier, quality: worst.quality, len: words[0]!.length };
+}
+
 /**
  * Entries that match `query`, best first. Every word of the query has to appear somewhere in the entry; the entry
  * ranks by the best field the whole query appears in, or else by the weakest of its words.
  */
 export function searchEntries(world: Pick<World, 'entries'>, query: string): SearchHit[] {
-  const q = foldSearch(query.normalize('NFC')).trim().replace(/\s+/g, ' ');
+  const { q, words } = queryOf(query);
   if (!q) return [];
-  const words = q.split(' ');
   const names = new Map(world.entries.map((e) => [e.id, e.name]));
   const nameOf = (id: string) => names.get(id) ?? id;
   const hits: SearchHit[] = [];
   for (const entry of world.entries) {
     const fields = fieldsOf(entry, nameOf).map(([tier, field, text]) => ({ tier, field, text, folded: foldSearch(text) }));
-    const best = (term: string) => {
-      let top: { tier: SearchTier; quality: number; at: number; f: (typeof fields)[number] } | undefined;
-      for (const f of fields) {
-        const m = fit(f.folded, term);
-        if (m.quality < 0) continue;
-        if (!top || f.tier < top.tier || (f.tier === top.tier && m.quality < top.quality)) top = { tier: f.tier, quality: m.quality, at: m.at, f };
-      }
-      return top;
-    };
-    let hit = best(q);
-    let len = q.length;
-    if (!hit && words.length > 1) {
-      const each = words.map(best);
-      if (each.some((x) => !x)) continue;
-      // Rank by the weakest word, show the first word's match.
-      const worst = each.reduce((a, b) => (b!.tier > a!.tier || (b!.tier === a!.tier && b!.quality > a!.quality) ? b : a))!;
-      hit = { ...each[0]!, tier: worst.tier, quality: worst.quality };
-      len = words[0]!.length;
-    }
+    const hit = bestMatch(fields, q, words);
     if (!hit) continue;
-    const { snippet, start, end } = cut(hit.f.text, hit.at, len);
+    const { snippet, start, end } = cut(hit.f.text, hit.at, hit.len);
     hits.push({ entry, tier: hit.tier, rank: hit.tier * 10 + hit.quality, field: hit.f.field, snippet, start, end });
   }
   return hits.sort((a, b) => a.rank - b.rank || a.entry.name.localeCompare(b.entry.name));
+}
+
+/** A chapter that matches a search: by its title, else by its text. */
+export interface ChapterHit {
+  file: string;
+  title: string;
+  field: 'Title' | 'Text';
+  /** The matched title, or the text around the match on one line, with the match at [start, end). */
+  snippet: string;
+  start: number;
+  end: number;
+  /** A text match's place in the chapter's text, to show it there. */
+  span?: [number, number];
+}
+
+/** Chapters that match `query` the way entries do: titles first, then the text; within each, in reading order. */
+export function searchChapters(world: { story?: readonly StoryChapter[] | undefined }, query: string): ChapterHit[] {
+  const { q, words } = queryOf(query);
+  if (!q) return [];
+  const hits: (ChapterHit & { rank: number; order: number })[] = [];
+  for (const c of world.story ?? []) {
+    // One line, with every offset where it was in the text (each space or line break stays one character).
+    const line = c.body.replace(/\s/g, ' ');
+    const fields: Field[] = [{ tier: 0, field: 'Title', text: c.title, folded: foldSearch(c.title) }, { tier: 4, field: 'Text', text: line, folded: foldSearch(line) }];
+    const hit = bestMatch(fields, q, words);
+    if (!hit) continue;
+    const { snippet, start, end } = cut(hit.f.text, hit.at, hit.len);
+    const text = hit.f.field === 'Text';
+    hits.push({ file: c.file, title: c.title, field: text ? 'Text' : 'Title', snippet, start, end, ...(text ? { span: [hit.at, hit.at + hit.len] as [number, number] } : {}), rank: hit.tier * 10 + hit.quality, order: c.order });
+  }
+  return hits.sort((a, b) => a.rank - b.rank || a.order - b.order).map(({ rank: _r, order: _o, ...h }) => h);
+}
+
+/** The book's maps (world.json's `maps`) whose names match `query` (every word), best first. */
+export function searchMaps(manifest: { maps?: readonly WorldMap[] | undefined }, query: string): WorldMap[] {
+  const { q, words } = queryOf(query);
+  if (!q) return [];
+  return (manifest.maps ?? [])
+    .map((m) => ({ m, hit: bestMatch([{ tier: 0, field: 'Name', text: m.name, folded: foldSearch(m.name) }], q, words) }))
+    .filter((x) => x.hit)
+    .sort((a, b) => a.hit!.quality - b.hit!.quality || a.m.name.localeCompare(b.m.name))
+    .map((x) => x.m);
 }

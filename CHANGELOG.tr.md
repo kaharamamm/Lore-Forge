@@ -2,6 +2,31 @@
 
 Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) kurallarına, sürüm numaraları da [Anlamsal Sürümleme](https://semver.org/) kurallarına uyar.
 
+## [Unreleased]
+
+### Eklenenler
+
+- **Kitabın yazı üslubu.** Dünya ayarlarında resim üslubunun yanında bir yazı üslubu var (anlatıcı, zaman, ton, okur kitlesi, kaçınılacaklar); resim üslubu da artık uygulamadan ayarlanabiliyor. Yapay zekâya sor ve Lore-Forge'a bağlı yapay zekâ uygulamaları ikisine de uyuyor. Başlamak için hazır üsluplar var: yazı için Huzurlu, Komik, Macera, Destansı, Gizem, Ürkütücü, Korku, Karanlık ve sert ile Masal; resim için de Resimsel fantastik'ten Piksel sanatı'na sekiz üslup. Örnek dünyada ikisi de ayarlı.
+- **Yapay zekâ için bölüm özeti.** Bir yapay zekâ bir bölümü yazmadan ya da değiştirmeden önce Lore-Forge ona şimdiye kadarki hikâyeyi ve önceki bölümün sonunu veriyor; bölümün tarihinde kimin yaşadığını, kaç yaşında olduğunu, nerede oturduğunu ve nasıl göründüğünü, hangi yerlerin ayakta olduğunu, hangi olayların olup bittiğini ya da daha geleceğini de. Yazdığı hikâye kitaba uyuyor.
+- **Yapay zekâ gibi duran anlatım işaretleniyor.** Denetim kalıp yapay zekâ sözlerini ("a testament to", "a tapestry of", "little did they know"), iki tire arasındaki ara sözleri ve "X değildi. Y idi." kalıplarını, kim yazmış olursa olsun işaretliyor: bölümlerde altını çiziyor, kayıtların özetleri, ayrıntıları ve metinleri için de listeliyor. Lore-Forge'da yazan bir yapay zekâ bunları bitirmeden düzeltiyor. Yalnızca İngilizce metinde; **Kasıtlı say** birini olduğu gibi bırakıyor.
+- **Yapay zekâya sor yalnızca seçtiğiniz kısmı değiştiriyor.** Seçili metinde yeniden yazma, sürdürme ve denetleme, bölümün geri kalanını kelimesi kelimesine koruyor.
+- **Haritada zaman.** Kitapta yerlere bağlı tarihli olaylar varsa haritanın altındaki çubuk onları gösteriyor. Yıl kaydırıcısı o yılın olaylarını yerlerinin yanına koyuyor ve o yıl ayakta olmayan yerleri soluklaştırıyor. Yolculuk listesi birinin haritadaki yolunu çiziyor: yaşadığı yerlerden ve katıldığı olaylardan geçerek, sırasıyla.
+- **Yapay zekâya harita çizdirme.** **Harita ekle…** penceresinde **Yapay zekâya çizdir…** var: Yapay zekâ bağla bölümünde kurulan resim servisi haritayı kitabın yerlerinden oluşturulan bir istemle çiziyor; isterseniz önce istemi değiştirebilirsiniz. Adları işaretler ekliyor.
+- **Dünya Kodeksi'nde haritalar.** Her harita PDF'te, önizlemede ve Markdown kopyasında yer alıyor; yerleri üzerinde numaralanmış, altında da numaralarıyla listelenmiş olarak.
+- **Paylaş… ile web sitesi ya da oyun verisi.** Kitap dosyasının yanında **Web sitesi**, herhangi bir tarayıcıda internet olmadan da açılan sayfalar yazıyor: tüm kayıtlar, yerlerine tıklanabilen haritalar, zaman çizelgesi ve hikâye; adlar kayıtlarına bağlı. **Oyun verisi** de bir oyun motoru ya da kendi araçlarınız için `world-snapshot.json` dosyasını, yanında resimler ve 3B modellerle yazıyor.
+- **Kitap dosyaları çift tıklamayla açılıyor** (Lore-Forge kuruluysa) ya da pencereye bırakılınca. Aynı dosya yeniden açılınca yeni bir kopya yapılmıyor, raftaki kopya açılıyor.
+- **Arama bölümleri ve haritaları da buluyor.** Ctrl+F, kayıtların altında eşleşen bölümleri (önce başlığa, sonra metne göre) ve haritaları listeliyor. Bir bölüm, bulunan sözcüklerde açılıyor.
+
+### Değişenler
+
+- Yeni bir sürümün yama notları, sürüm yayımlandığında numarasını ve tarihini alıyor; hem uygulamada hem sürüm sayfasında.
+
+### Düzeltilenler
+
+- Hakkında penceresi ile Dünya Kodeksi ve Hikâye Kitabı'nın künye satırları artık çalışan sürümü gösteriyor. 1.1.0'da hâlâ 1.0.0 yazıyordu.
+- Kenar çubuğundaki arama sonuçlarında artık başıboş noktalar görünmüyor; uzun bir ad da resminin yanında tek satırda kalıyor.
+- Bir bölümün daha uzun bir kısmını (bir satırdan uzun ya da paragraflar) seçince, seçimin yanında ve sağ tıklamada **Bu kısım hakkında yapay zekâya sor** çıkıyor. Önceden bir addan uzun seçimlerde hiçbir şey görünmüyordu.
+
 ## [1.1.0] - 2026-11-09
 
 ### Eklenenler
@@ -184,5 +209,6 @@ Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a C
 
 7 Kasım 2026'dan önce indirilen kopyalarda güncelleyici yok. Güncel sürümü README dosyasındaki bağlantılardan bir kez indirin; bundan sonra Lore-Forge kendi kendini güncelleyecek.
 
+[Unreleased]: https://github.com/kaharamamm/Lore-Forge/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/kaharamamm/Lore-Forge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kaharamamm/Lore-Forge/releases/tag/v1.0.0

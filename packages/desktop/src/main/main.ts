@@ -2,11 +2,11 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage, screen, session, shel
 import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { basename, extname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { strFromU8, unzipSync } from 'fflate';
 import { createWorld, deleteModel, duplicateWorld, importModel, listModels, loadWorld, MODEL_EXTS, moveModels, readModel, readWorldFiles, renameModel, worldSlug } from '@lore-forge/core/node';
-import { calendarProblems, cleanCoverSettings, DEFAULT_TRIM, localize, localizeDoc, recordMessages, storyBook, TRIMS, viewLabel, worldCodex, type BookSettings, type Calendar, type Doc, type ImageView, type TrimSize, type WorldCoverSettings, type WorldMap } from '@lore-forge/core';
+import { bookSite, calendarProblems, cleanCoverSettings, DEFAULT_TRIM, localize, localizeDoc, recordMessages, snapshot, storyBook, TRIMS, viewLabel, worldCodex, type BookSettings, type Calendar, type Doc, type ImageView, type TrimSize, type WorldCoverSettings, type WorldMap } from '@lore-forge/core';
 import { defaultFontDir, systemFontFamilies, writeDocx, writePublication } from '@lore-forge/pdf';
 import type { CoverImage, CreateWorldOptions, MapPicture, PdfKind, PublishOptions, Settings, SmokeMouse } from '../shared/api.ts';
 import { checkForUpdates, downloadUpdate, installUpdate, setupUpdater, updateState } from './updater.ts';
@@ -16,7 +16,7 @@ import { registerAi } from './ai.ts';
 import { registerAsk } from './ask.ts';
 import { bookOpened, historyOf, registerHistory } from './book-history.ts';
 import { registerPictures } from './pictures.ts';
-import { BOOK_FILE_EXT, packBook, unpackBook } from './share.ts';
+import { BOOK_FILE_EXT, bookFileArgs, openBook, packBook } from './share.ts';
 import { applySpelling, attachSpelling, forgetBookWords, registerSpelling } from './spelling.ts';
 import { defaultSpelling, SPELL_LANGUAGES } from '../shared/spelling.ts';
 import { cleanDisplay, storedDisplay, type DisplaySettings } from '../shared/display.ts';
@@ -60,6 +60,33 @@ function smokeExit(code: number): void {
   if (smokeTrash) rmSync(smokeTrash, { recursive: true, force: true });
   app.exit(code);
 }
+
+/**
+ * Book files (.loreforge) the file manager asked to open (double-click, Open with): they wait here until the window
+ * takes them (takeBookFiles). A second start with a book file hands it to the Lore-Forge that is already running and
+ * quits, so the book opens in that window; a second start without one still gets a window of its own.
+ */
+const bookFiles: string[] = [];
+function bookFilesArrived(files: string[]): void {
+  if (!files.length) return;
+  bookFiles.push(...files);
+  const w = win;
+  if (!w || w.isDestroyed()) return;
+  if (w.isMinimized()) w.restore();
+  w.focus();
+  w.webContents.send('book-files');
+}
+if (!SMOKE) bookFilesArrived(bookFileArgs(process.argv.slice(app.isPackaged ? 1 : 2)));
+if (!SMOKE && app.isPackaged) {
+  if (app.requestSingleInstanceLock()) app.on('second-instance', (_e, argv, cwd) => bookFilesArrived(bookFileArgs(argv.slice(1), cwd)));
+  else if (bookFiles.length) app.exit(0);
+}
+// macOS hands the files over as an event, also before the app is ready.
+app.on('open-file', (e, file) => {
+  if (!/\.loreforge$/i.test(file)) return;
+  e.preventDefault();
+  bookFilesArrived([resolve(file)]);
+});
 
 /** Resolve a path inside a world folder, refusing anything that escapes it. */
 function inside(dir: string, path: string): string {
@@ -607,6 +634,18 @@ function registerIpc(): void {
     await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
     return next;
   });
+  // How the book is written and drawn (World settings): world.json "writingStyle" and "artStyle"; empty removes them.
+  ipcMain.handle('saveStyle', async (_e, dir: string, style: { writingStyle?: unknown; artStyle?: unknown }) => {
+    const path = join(dir, 'world.json');
+    const raw = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    for (const k of ['writingStyle', 'artStyle'] as const) {
+      const v = typeof style?.[k] === 'string' ? (style[k] as string).trim() : '';
+      if (v) raw[k] = v;
+      else delete raw[k];
+    }
+    await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
+    return { ...(typeof raw['writingStyle'] === 'string' ? { writingStyle: raw['writingStyle'] } : {}), ...(typeof raw['artStyle'] === 'string' ? { artStyle: raw['artStyle'] } : {}) };
+  });
   ipcMain.handle('saveCalendar', async (_e, dir: string, calendar: Calendar) => {
     const problems = calendarProblems(calendar);
     if (problems.length) throw new Error(said(problems[0]!));
@@ -656,14 +695,77 @@ function registerIpc(): void {
     if (r.canceled || !r.filePath) return null;
     return { file: r.filePath, ...(await packBook(dir, r.filePath)) };
   });
-  ipcMain.handle('openBookFile', async () => {
-    const r = await dialog.showOpenDialog(win!, { title: t('Open a book file'), properties: ['openFile'], filters: [{ name: t('Lore-Forge book'), extensions: [BOOK_FILE_EXT, 'zip'] }] });
-    const file = r.filePaths[0];
-    if (r.canceled || !file) return null;
-    const book = await unpackBook(file, await worldsDir());
+  /** A folder for an export in `parent`, named `name` (made safe for a file name), or "name 2", "name 3"… when taken. */
+  const freeFolder = (parent: string, name: string): string => {
+    const base = name.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'book';
+    let folder = join(parent, base);
+    for (let n = 2; existsSync(folder); n++) folder = join(parent, `${base} ${n}`);
+    return folder;
+  };
+  /** Where an export goes: a folder the user picks, in which Lore-Forge makes its own folder. */
+  const exportParent = async (title: string): Promise<string | null> => {
+    const r = await dialog.showOpenDialog(win!, { title, defaultPath: app.getPath('documents'), properties: ['openDirectory', 'createDirectory'] });
+    return r.canceled ? null : (r.filePaths[0] ?? null);
+  };
+  // The book as a website: the World Codex (without art briefs and warnings) and the Story as pages any browser opens
+  // offline, with the pictures they show at the same paths as in the book.
+  ipcMain.handle('exportSite', async (_e, dir: string) => {
+    const world = await loadWorld(dir);
+    const parent = await exportParent(t('Choose where to put the website'));
+    if (!parent) return null;
+    const codex = inLanguage(worldCodex(world, { artBriefs: false, warnings: false, about: false, ids: false }));
+    const story = world.story?.length ? inLanguage(storyBook(world)) : undefined;
+    const site = bookSite(world, codex, story, { lang: language(), labels: { contents: t('Contents'), world: t('World'), story: t('Story'), footer: t('Made with Lore-Forge') }, icon: { svg: 'icon.svg', png: 'icon.png' } });
+    const folder = freeFolder(parent, t('{name} website', { name: world.manifest.name }));
+    await mkdir(folder, { recursive: true });
+    for (const page of site.pages) await writeFile(join(folder, page.file), page.html, 'utf8');
+    // Lore-Forge's icon for the browser tab: the SVG as it is, and a small PNG (180 px, a phone's home screen size).
+    await copyFile(join(__dirname, 'renderer', 'icon.svg'), join(folder, 'icon.svg'));
+    await writeFile(join(folder, 'icon.png'), nativeImage.createFromPath(join(__dirname, 'icon.png')).resize({ width: 180, height: 180, quality: 'best' }).toPNG());
+    let pictures = 0;
+    for (const file of site.files) {
+      let from: string;
+      try { from = inside(dir, file); } catch { continue; }
+      if (!existsSync(from)) continue;
+      const to = join(folder, ...file.split('/'));
+      await mkdir(dirname(to), { recursive: true });
+      await copyFile(from, to);
+      pictures++;
+    }
+    return { folder, index: join(folder, 'index.html'), pages: site.pages.length, pictures };
+  });
+  // Game data: the book as one JSON file (the snapshot `lore export` writes: entries, parsed dates, links, pins, the
+  // story and the check) with the pictures, maps and 3D models next to it at the paths the JSON names.
+  ipcMain.handle('exportGameData', async (_e, dir: string) => {
+    const world = await loadWorld(dir);
+    const parent = await exportParent(t('Choose where to put the game data'));
+    if (!parent) return null;
+    const folder = freeFolder(parent, t('{name} game data', { name: world.manifest.name }));
+    await mkdir(folder, { recursive: true });
+    const file = join(folder, 'world-snapshot.json');
+    await writeFile(file, JSON.stringify(snapshot(world), null, 2) + '\n', 'utf8');
+    for (const sub of ['images', 'maps', 'models']) {
+      if (existsSync(join(dir, sub))) await cp(join(dir, sub), join(folder, sub), { recursive: true, filter: (src) => !basename(src).startsWith('.') && !src.endsWith('.tmp') });
+    }
+    return { folder, file };
+  });
+  // From the button (a file dialog), or a book file the file manager opened or the user dropped on the window.
+  ipcMain.handle('openBookFile', async (_e, given?: unknown) => {
+    let file: string;
+    if (given === undefined) {
+      const r = await dialog.showOpenDialog(win!, { title: t('Open a book file'), properties: ['openFile'], filters: [{ name: t('Lore-Forge book'), extensions: [BOOK_FILE_EXT, 'zip'] }] });
+      if (r.canceled || !r.filePaths[0]) return null;
+      file = r.filePaths[0];
+    } else {
+      if (typeof given !== 'string' || !/\.loreforge$/i.test(given)) throw new Error(t('Only .loreforge book files open this way.'));
+      if (!existsSync(given)) throw new Error(t('The file is not there any more: {file}', { file: given }));
+      file = given;
+    }
+    const book = await openBook(file, await worldsDir(), join(dataDir(), 'book-files.json'));
     await remember(book.dir);
     return book;
   });
+  ipcMain.handle('takeBookFiles', () => bookFiles.splice(0));
   ipcMain.handle('saveMaps', async (_e, dir: string, maps: WorldMap[], picture?: MapPicture & { map: string }) => {
     const path = join(dir, 'world.json');
     const raw = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
@@ -935,7 +1037,7 @@ app.whenReady().then(async () => {
   registerIpc();
   registerAi(defaultWorldsDir);
   registerHistory(dataDir);
-  registerPictures(() => app.getPath('userData'));
+  registerPictures(() => app.getPath('userData'), (path) => picked.add(path));
   registerAsk(defaultWorldsDir, dataDir);
   // The smoke run leaves the spell checker's dictionary of this computer alone.
   if (SMOKE) {

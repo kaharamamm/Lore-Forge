@@ -2,11 +2,15 @@
 import { build, context } from 'esbuild';
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
 const watch = process.argv.includes('--watch');
-const common = { bundle: true, sourcemap: true, conditions: ['source'], logLevel: 'info', target: 'es2023' };
+// The version About, Updates and the exports name: the release being built (the release workflow sets APP_VERSION),
+// else the newest release tag of this checkout, else package.json.
+const version = process.env.APP_VERSION || tagVersion() || JSON.parse(await readFile('package.json', 'utf8')).version;
+const common = { bundle: true, sourcemap: true, conditions: ['source'], logLevel: 'info', target: 'es2023', define: { __LORE_FORGE_VERSION__: JSON.stringify(version) } };
 const configs = [
   // pdfkit stays external: its ESM build locates data files with import.meta.url, which a CJS bundle cannot provide.
   // @lore-forge/pdf itself only uses import.meta when `require` is missing, which never happens in CJS.
@@ -17,7 +21,7 @@ const configs = [
   // React Flow runs on Preact through preact/compat.
   // The changelogs (Patch notes in the library) come in as text.
   { ...common, entryPoints: ['src/renderer/main.tsx'], outfile: 'dist/renderer/app.js', platform: 'browser', format: 'iife', jsx: 'automatic', jsxImportSource: 'preact', loader: { '.md': 'text' },
-    alias: { react: 'preact/compat', 'react-dom': 'preact/compat', 'react/jsx-runtime': 'preact/jsx-runtime' }, define: { 'process.env.NODE_ENV': '"production"' } },
+    alias: { react: 'preact/compat', 'react-dom': 'preact/compat', 'react/jsx-runtime': 'preact/jsx-runtime' }, define: { ...common.define, 'process.env.NODE_ENV': '"production"' } },
   // The 3D viewer (three.js), loaded on first use of the 3D model tab, so the app starts without it.
   { ...common, entryPoints: ['src/renderer/viewer/viewer.ts'], outfile: 'dist/renderer/viewer.js', platform: 'browser', format: 'iife', minify: true, sourcemap: false },
 ];
@@ -30,6 +34,16 @@ await cp('src/renderer/icon.svg', 'dist/renderer/icon.svg');
 await cp('build/icon.png', 'dist/icon.png');
 await cp(createRequire(import.meta.url).resolve('@xyflow/react/dist/style.css'), 'dist/renderer/xyflow.css');
 await bundleFonts();
+
+/** The newest vX.Y.Z tag this checkout comes from, without the v; '' outside git or before the first release. */
+function tagVersion() {
+  try {
+    const tag = execFileSync('git', ['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*.[0-9]*.[0-9]*'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return /^v(\d+\.\d+\.\d+)\s*$/.exec(tag)?.[1] ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /** Cinzel (SIL OFL 1.1) headings: the woff2 files and their @font-face rules, from @fontsource/cinzel. */
 async function bundleFonts() {
