@@ -116,7 +116,7 @@ async function detectClaude(): Promise<Found> {
   // Tests: a script that answers like Claude Code.
   const fake = process.env['LORE_FORGE_ASK_SCRIPT'];
   if (fake) return { agent: { ...agent, installed: true, signedIn: true }, launcher: viaNode(fake), claude: { partial: true, dontAsk: true, settingSources: true } };
-  const path = findClaude();
+  const path = await findClaude();
   const launcher = path ? launcherFor(path, 'claude-code') : undefined;
   if (!launcher) return { agent };
   const [help, auth] = await Promise.all([quick(launcher, ['--help']), quick(launcher, ['auth', 'status'])]);

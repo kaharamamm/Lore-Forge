@@ -5,6 +5,9 @@ name: The Glass Compass
 summary: A compass that points to water, not north.
 created: "1750 XX"
 status: intact
+fields:
+  weight: heavy
+  rarity: legendary
 relations:
   - type: parent-of
     target: char-leyla

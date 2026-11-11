@@ -20,5 +20,12 @@
     "approxYears": 5
   },
   "rules": {},
+  "fields": {
+    "character": [{ "key": "playable", "name": "Playable", "kind": "yes-no" }],
+    "item": [
+      { "key": "weight", "name": "Weight", "kind": "number" },
+      { "key": "rarity", "name": "Rarity", "kind": "choice", "choices": ["common", "rare", "legendary"] }
+    ]
+  },
   "book": { "title": "Tales of the Shifting Sands", "author": "Ahmet Kadir Zengin", "chapterYears": 50 }
 }

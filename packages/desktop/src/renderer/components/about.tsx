@@ -11,13 +11,15 @@ const credits = (): [string, string, string, string][] => [
   [t('PDF fonts'), t('DejaVu Sans, Serif and Mono'), t('Bitstream Vera / DejaVu licence (free)'), 'https://dejavu-fonts.github.io'],
   [t('Relationship web'), t('React Flow (@xyflow/react), run through preact/compat'), 'MIT', 'https://reactflow.dev'],
   [t('Pan and zoom (family tree, timeline)'), t('d3-zoom and d3-selection'), 'ISC', 'https://d3js.org'],
-  [t('Motion'), t('@formkit/auto-animate and CSS View Transitions'), 'MIT', 'https://auto-animate.formkit.com'],
+  [t('Motion'), '@formkit/auto-animate', 'MIT', 'https://auto-animate.formkit.com'],
   [t('UI'), 'Preact', 'MIT', 'https://preactjs.com'],
   ['PDF', 'PDFKit', 'MIT', 'https://pdfkit.org'],
   [t('3D model viewer'), t('three.js (GLTF, OBJ and FBX loaders, OrbitControls), loaded only when a model is shown'), 'MIT', 'https://threejs.org'],
   [t('Self-update'), 'electron-updater (electron-builder)', 'MIT', 'https://www.electron.build/auto-update'],
   [t('AI apps (MCP server)'), t('MCP TypeScript SDK and zod'), 'MIT', 'https://modelcontextprotocol.io'],
   [t('Zip files (Word files, shared book files)'), 'fflate', 'MIT', 'https://github.com/101arrowz/fflate'],
+  [t('Built-in voices'), t('Kokoro-82M by hexgrad, run with ONNX Runtime'), 'Apache 2.0 / MIT', 'https://huggingface.co/hexgrad/Kokoro-82M'],
+  [t('Pronunciation'), t('Misaki dictionaries by hexgrad; letter-to-sound rules from NRL Report 7948, as written for HeadTTS by Mika Suominen'), 'Apache 2.0 / MIT', 'https://github.com/hexgrad/misaki'],
 ];
 
 /** About and credits: who made the icons and fonts, and their licences (CC BY needs the attribution). */

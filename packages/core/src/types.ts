@@ -112,6 +112,26 @@ export interface WorldManifest {
   cover?: WorldCoverSettings;
   /** Maps of the world: pictures with places pinned on them (each place's `pins`). */
   maps?: WorldMap[];
+  /** The book's own fields for each entry type (HP for characters, Damage for items...): see CustomField. */
+  fields?: Partial<Record<EntryType, CustomField[]>>;
+}
+
+/** What one of the book's own fields holds. */
+export type CustomFieldKind = 'text' | 'number' | 'yes-no' | 'choice';
+/** A value of one of the book's own fields: text, a number, or yes or no (true or false). */
+export type CustomFieldValue = string | number | boolean;
+
+/**
+ * A field of the book's own for one entry type (world.json "fields"), such as HP for characters or Rarity for items.
+ * Entries keep their values under "fields" in their files, by the key.
+ */
+export interface CustomField {
+  /** The value's name in the entry files and in game data. Made from the first name; it stays when the field is renamed. */
+  key: string;
+  name: string;
+  kind: CustomFieldKind;
+  /** The values a choice field can have. */
+  choices?: string[];
 }
 
 /**
@@ -379,6 +399,11 @@ interface EntryBase {
   id: string;
   name: string;
   aliases?: string[];
+  /**
+   * How the name is said, for Lore-Forge's voices and readers: syllables with hyphens, the stressed one in capitals
+   * ("KAM-eh-la-mam"), or IPA between slashes ("/ˈkæm.ə.lə.mæm/").
+   */
+  pronunciation?: string;
   tags?: string[];
   summary?: string;
   relations?: Relation[];
@@ -399,6 +424,8 @@ interface EntryBase {
    * front-matter keys. Text, or a list for list/refs fields. Missing means unknown.
    */
   details?: Record<string, string | string[]>;
+  /** Values of the book's own fields (world.json "fields"), by key: text, numbers, or true and false for yes or no. */
+  fields?: Record<string, CustomFieldValue>;
   /** Markdown body. May reference entries as [[id]], [[Name]], [[id|label]] or @id. */
   body: string;
   /** Front-matter keys Lore-Forge does not know. Kept as-is when the file is saved. */
@@ -482,6 +509,9 @@ export interface World {
 }
 
 /** One chapter of the story manuscript: story/NN-slug.md, YAML header (title, order, date) and Markdown prose. */
+/** A chapter's progress on the planning board. */
+export type ChapterStatus = 'idea' | 'draft' | 'revised' | 'done';
+
 export interface StoryChapter {
   /** Path inside the world folder. Chosen when the chapter is made; it stays put when the title or order changes. */
   file: string;
@@ -490,6 +520,12 @@ export interface StoryChapter {
   order: number;
   /** Optional in-world date the chapter is set at, written like any date ("1920", "312 OK"). */
   date?: DateText;
+  /** Whose point of view the chapter is told from: a character, by id or name. */
+  pov?: string;
+  /** How far the chapter is. Without one it counts as an idea while it has no text, and as a draft once it has. */
+  status?: ChapterStatus;
+  /** What happens in the chapter, in a line or two: the planning board shows it on the chapter's card. */
+  summary?: string;
   /** Markdown prose. Names of entries are linked automatically, like entry text. */
   body: string;
   /** Header keys Lore-Forge does not know. Kept as-is when the file is saved. */

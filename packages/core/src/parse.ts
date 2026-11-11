@@ -3,8 +3,9 @@ import {
   ENTRY_TYPES, RULE_SETTINGS, SCHEMA_VERSION, TYPE_FOLDERS,
   type Action, type Entry, type EntryType, type IntendedMark, type LoadIssue, type LocationSpan,
   type FactionStatus, type ItemStatus, type Look, type MapPin, type Participant, type Picture, type PlaceStatus, type Provenance, type RefImage, type Relation, type StoryChapter, type StoryIgnore, type World, type WorldManifest,
-  type WorldMap,
+  type WorldMap, type CustomFieldValue,
 } from './types.ts';
+import { parseCustomFields } from './fields.ts';
 import { isMonth } from './dates.ts';
 import { DETAIL_FIELDS } from './details.ts';
 import { HEX_COLOUR } from './color.ts';
@@ -99,7 +100,7 @@ const KNOWN_KEYS: Record<EntryType, string[]> = {
   event: ['date', 'end', 'place', 'participants', 'actions'],
   note: ['date'],
 };
-const BASE_KEYS = ['id', 'type', 'name', 'aliases', 'tags', 'summary', 'relations', 'images', 'picture', 'visual', 'looks', 'chapter', 'bookOrder'];
+const BASE_KEYS = ['id', 'type', 'name', 'aliases', 'pronunciation', 'tags', 'summary', 'relations', 'images', 'picture', 'visual', 'looks', 'chapter', 'bookOrder', 'fields'];
 
 /** Front-matter keys that hold dates: born, died, founded, ... at the top, and from/to inside relations and locations. */
 const DATE_KEYS = new Set(['born', 'died', 'founded', 'destroyed', 'dissolved', 'created', 'date', 'end']);
@@ -198,6 +199,20 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
     const pic = clean({ icon: m['icon']?.trim() || undefined, color: hex('color'), accent: hex('accent'), image: m['image']?.trim() || undefined });
     return Object.keys(pic).length ? pic : undefined;
   };
+  // The book's own fields: text, numbers and true or false, as written. Whether they fit their fields is the
+  // field-value rule's to say, since the fields are in world.json.
+  const fieldValues = (): Record<string, CustomFieldValue> | undefined => {
+    const v = o['fields'];
+    if (v === undefined || v === null) return undefined;
+    if (!isObj(v)) return void r.problems.push(msg`"fields" should be a set of "key: value" lines.`);
+    const out: Record<string, CustomFieldValue> = {};
+    for (const [k, x] of Object.entries(v)) {
+      if (x === null || x === undefined || x === '') continue;
+      if (typeof x === 'string' || typeof x === 'boolean' || (typeof x === 'number' && Number.isFinite(x))) out[k] = x;
+      else r.problems.push(msg`"fields.${verbatim(k)}" should be text, a number, or true or false.`);
+    }
+    return Object.keys(out).length ? out : undefined;
+  };
   const detailKeys = DETAIL_FIELDS[t].map((f) => f.key);
   const extraKeys = Object.keys(o).filter((k) => !BASE_KEYS.includes(k) && !KNOWN_KEYS[t].includes(k) && !detailKeys.includes(k));
   const details: Record<string, string | string[]> = {};
@@ -219,6 +234,7 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
   const base = clean({
     id, name,
     aliases: r.strList(o, 'aliases'),
+    pronunciation: r.str(o, 'pronunciation')?.trim() || undefined,
     tags: r.strList(o, 'tags'),
     summary: r.str(o, 'summary'),
     relations: r.list(o, 'relations', relation),
@@ -229,6 +245,7 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
     chapter: r.str(o, 'chapter'),
     bookOrder: r.num(o, 'bookOrder'),
     details: Object.keys(details).length ? details : undefined,
+    fields: fieldValues(),
     body: split.body,
     extra: extraKeys.length ? Object.fromEntries(extraKeys.map((k) => [k, o[k]])) : undefined,
   });
@@ -293,12 +310,12 @@ export function parseEntry(content: string): { entry?: Entry; problems: string[]
 
 /** Front-matter key order used when writing files, so diffs stay small. */
 const DETAIL_KEYS = [...new Set(Object.values(DETAIL_FIELDS).flatMap((fs) => fs.map((f) => f.key)))];
-const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'race', ...DETAIL_KEYS, 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'pins', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'relations', 'visual', 'looks', 'picture', 'images', 'chapter', 'bookOrder'];
+const KEY_ORDER = ['id', 'type', 'name', 'aliases', 'pronunciation', 'summary', 'tags', 'race', ...DETAIL_KEYS, 'born', 'died', 'status', 'founded', 'created', 'dissolved', 'destroyed', 'partOf', 'pins', 'date', 'end', 'place', 'participants', 'actions', 'locations', 'fields', 'relations', 'visual', 'looks', 'picture', 'images', 'chapter', 'bookOrder'];
 
 export function serializeEntry(entry: Entry): string {
-  const { body, extra, details, ...fields } = entry;
+  const { body, extra, details, ...rest } = entry;
   const data: Obj = {};
-  const all: Obj = { ...fields, ...details, ...extra };
+  const all: Obj = { ...rest, ...details, ...extra };
   for (const k of [...KEY_ORDER, ...Object.keys(all).filter((k) => !KEY_ORDER.includes(k))]) {
     const v = all[k];
     // The name is written even when empty, so the file still loads (with everything else in it) next time.
@@ -379,6 +396,9 @@ export function parseManifest(content: string): { manifest?: WorldManifest; prob
   const maps = parseMaps(o['maps'], issues);
   if (maps) manifest['maps'] = maps;
   else delete manifest['maps'];
+  const fields = parseCustomFields(o['fields'], issues);
+  if (fields) manifest['fields'] = fields;
+  else delete manifest['fields'];
   return { manifest: manifest as unknown as WorldManifest, problems, issues };
 }
 

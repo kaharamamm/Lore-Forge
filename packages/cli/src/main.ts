@@ -5,15 +5,15 @@ import { pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { check, report, snapshot, storyBook, TRIMS, worldCodex, WorldFormatError, type TrimSize, type Warning, type World } from '@lore-forge/core';
 import { duplicateWorld, loadWorld } from '@lore-forge/core/node';
-import { writeDocx, writePublication } from '@lore-forge/pdf';
+import { writeDocx, writeEpub, writePublication } from '@lore-forge/pdf';
 import { runStdio } from '@lore-forge/mcp';
 
 const USAGE = `Usage:
   lore check <worldDir> [--json]     Print consistency warnings. Exit 1 if there are errors.
   lore export <worldDir> [--out <file>]  Write one versioned JSON snapshot (stdout by default).
   lore codex <worldDir> [-o <file.pdf>]  World Codex PDF for artists and AI tools, plus a .md copy (alias: bible).
-  lore book <worldDir> [-o <file.pdf|file.docx>] [--trim 6x9|5.5x8.5|a5|a4|letter]
-                                         Print-ready Story Book: PDF plus a .md copy, or a Word .docx.
+  lore book <worldDir> [-o <file.pdf|file.docx|file.epub>] [--trim 6x9|5.5x8.5|a5|a4|letter]
+                                         Print-ready Story Book: PDF plus a .md copy, a Word .docx or an e-book .epub.
   lore duplicate <worldDir> [name] [--into <folder>]
                                          Copy a world to a new folder with a new name and id
                                          (default name "<name> (copy)", default folder next to the original).
@@ -89,6 +89,12 @@ export async function run(argv: string[], out: (s: string) => void = (s) => proc
     if (cmd === 'book' && file.toLowerCase().endsWith('.docx')) {
       await writeDocx(doc, resolve(dir), file);
       out(`Wrote ${file}\n`);
+      return 0;
+    }
+    if (cmd === 'book' && file.toLowerCase().endsWith('.epub')) {
+      const author = world.manifest.book?.author?.trim();
+      const r = await writeEpub(doc, resolve(dir), file, { id: world.manifest.id, ...(author ? { author } : {}) });
+      out(`Wrote ${r.epub} (${r.chapters} chapters, ${r.pictures} pictures)\n${r.notes.map((n) => `Note: ${n}\n`).join('')}`);
       return 0;
     }
     // The CLI that ships inside the app finds the app's bundled fonts through these (see the lore wrapper scripts).

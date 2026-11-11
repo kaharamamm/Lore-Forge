@@ -960,6 +960,7 @@ export async function writePublication(doc: Doc, worldDir: string, pdfPath: stri
 }
 
 export { renderDocx, writeDocx, type DocxOptions } from './docx.ts';
+export { renderEpub, writeEpub, type EpubOptions } from './epub.ts';
 export { BUNDLED_FONTS } from '@lore-forge/core';
 export { bundledFontFile, bundledFontPath, coverFont, systemFontFamilies, systemFonts, type SystemFont } from './fonts.ts';
 export { encodePng, gifFirstFrame, gifToPng, readPicture, type Frame, type Picture } from './gif.ts';

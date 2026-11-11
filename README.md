@@ -7,7 +7,7 @@
 **Write your game worlds. Catch the contradictions.**
 
 A free, offline desktop app for the worlds, lore, characters and stories of your games.
-Every world is a plain folder of Markdown and YAML, checked live for contradictions, laid out on a LegendKeeper-style timeline, and exported as a World Codex and a print-ready Story Book (PDF, Word or Markdown).
+Every world is a plain folder of Markdown and YAML, checked live for contradictions, laid out on a LegendKeeper-style timeline, and exported as a World Codex and a print-ready Story Book (PDF, Word, EPUB or Markdown), or read aloud into an audiobook.
 
 [![Latest release](https://img.shields.io/github/v/release/kaharamamm/Lore-Forge?label=release&color=c9963f)](https://github.com/kaharamamm/Lore-Forge/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/kaharamamm/Lore-Forge/total?color=c9963f)](https://github.com/kaharamamm/Lore-Forge/releases)
@@ -59,8 +59,8 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 - **Canon you can trust.** Consistency rules run while you type: a character acting after their death, a parent born after their child, a city visited before it was founded. Each warning points at the exact field and the fact it breaks; **Go to** jumps there, **Mark intended** keeps a contradiction on purpose.
 - **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. **Share…** packs a whole book into one file to send to a friend (a double-click opens it), or makes a website of it that opens in any browser, or game data for your engine. Nothing you write leaves your machine unless you connect an AI app or picture service yourself.
 - **Works with your AI.** Ask Claude, Codex, Cursor or another MCP app for a story and it writes the whole book in Lore-Forge: entries, relationships, chapters and pictures, checked for contradictions. Or ask from inside a book: the **Ask AI** tab runs Claude Code or Codex on your own plan and shows each change as it happens.
-- **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, maps with your places pinned on them, art briefs and reference images for artists and 3D tools. An entry can change its look over time (after a war, in old age), each look with its own pictures and 3D models.
-- **From notes to a book.** Write the story chapter by chapter; Lore-Forge proposes entries from your prose and exports a typeset Story Book (PDF, Word or Markdown), with A4 among the trim sizes and Word matching the PDF including the cover.
+- **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, maps with your places pinned on them, art briefs and reference images for artists and 3D tools. Fields of your own per entry type (HP, damage, rarity) go into game data with their values. An entry can change its look over time (after a war, in old age), each look with its own pictures and 3D models.
+- **From notes to a book.** Write the story chapter by chapter, or import a manuscript from Word, Markdown or plain text; Lore-Forge proposes entries from your prose and exports a typeset Story Book (PDF, Word, EPUB e-book or Markdown), with A4 among the trim sizes and Word matching the PDF including the cover.
 
 ## Features
 
@@ -79,7 +79,7 @@ The builds are not code-signed (signing needs paid certificates), so the first s
   </tr>
   <tr>
     <td width="50%" valign="top"><img src="docs/media/story.png" alt="The Story space with a chapter and proposals" width="100%"><br><b>Story.</b> A chapter-by-chapter manuscript that proposes entries from your text.</td>
-    <td width="50%" valign="top"><img src="docs/media/story-book-pdf.png" alt="Cover and first pages of the exported Story Book PDF" width="100%"><br><b>Story Book and World Codex.</b> PDF, Word and Markdown. A4 among the sizes; copyright page and drop-cap options; Word matches the PDF, cover included.</td>
+    <td width="50%" valign="top"><img src="docs/media/story-book-pdf.png" alt="Cover and first pages of the exported Story Book PDF" width="100%"><br><b>Story Book and World Codex.</b> PDF, Word, EPUB and Markdown. A4 among the sizes; copyright page and drop-cap options; Word matches the PDF, cover included.</td>
   </tr>
   <tr>
     <td width="50%" valign="top"><img src="docs/media/map.png" alt="The map of the Sunsea with Camelamamm, the Glass Dunes and the Hollow of Echoes pinned on it, and the card for Camelamamm" width="100%"><br><b>Maps.</b> Your places pinned on your own map pictures, or on one the AI draws from your places. Point at a pin to see who lives there and what happened there; move through the years to see events at their places, and draw someone's journey.</td>
@@ -105,7 +105,7 @@ Pictures for the entries and the cover use your own key for OpenAI, Google Gemin
 
 1. [Download](#download) and install Lore-Forge, then start it.
 2. The library opens with the sample world **Camelamamm**: a six-chapter story about Mr Camel and the Singing Well, with 23 entries, pictures and a map. On the first start a short tour walks you through it (**Take the tour** in the library brings it back). The installed sample is read-only: **Duplicate** puts an editable copy on the shelf next to it (same cover colours; it does not open by itself).
-3. Click **New book** (always first on the top shelf), give your world a name, colour and emblem.
+3. Click **New book** (always first on the top shelf), give your world a name, colour and emblem, and start blank or from a ready start such as Epic fantasy, Mystery or Game world.
 4. In the sidebar, choose **+ New** next to *Characters*, type a name and a birth date. The entry is saved as `characters/<id>.md` a moment after you stop typing.
 5. Set their status to *Dead* with a death date before the birth date, and watch the warnings panel flag it (`date-order`).
 6. To have an AI assistant write a book, choose **Connect AI** in the library (see [Write with an AI assistant](#write-with-an-ai-assistant)).
@@ -152,7 +152,7 @@ The installed app includes the `lore` command-line tool. It checks and exports w
 ```bash
 lore check ~/my-world                  # exit 1 when there are errors
 lore codex ~/my-world -o codex.pdf     # World Codex PDF
-lore book ~/my-world -o book.pdf       # Story Book PDF (or .docx)
+lore book ~/my-world -o book.pdf       # Story Book PDF (or .docx, .epub)
 lore duplicate ~/my-world "My copy"    # a copy with a new id, next to the original
 lore mcp                               # the MCP server AI apps start (see docs/MCP.md)
 ```
@@ -181,13 +181,11 @@ npm test
 
 Architecture, tests, packaging and releases: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-## Roadmap
+## Bug reports and ideas
 
-- Ideas and requests are welcome in [issues](https://github.com/kaharamamm/Lore-Forge/issues).
+Found a bug, or have an idea for Lore-Forge? [Open an issue](https://github.com/kaharamamm/Lore-Forge/issues/new/choose): there is a form for bug reports and one for ideas.
 
-## Contributing
-
-Bug reports, feature ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first; this project follows the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: see [SECURITY.md](SECURITY.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+Security problems: report them privately, as [SECURITY.md](SECURITY.md) explains. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence and credits
 
@@ -198,5 +196,6 @@ Lore-Forge is released under the [MIT License](LICENSE). Copyright (c) 2026 Ahme
 - Cover fonts: the Fontsource packages listed in `packages/pdf/package.json` and Liberation Sans and Serif, SIL Open Font License 1.1.
 - PDF fonts: DejaVu Sans, Serif and Mono, Bitstream Vera / DejaVu licence.
 - React Flow (MIT), d3 (ISC), Preact (MIT), PDFKit (MIT), auto-animate (MIT), three.js (MIT, the 3D model viewer), electron-updater (MIT), the MCP TypeScript SDK and zod (MIT, the server for AI apps), fflate (MIT, Word files and shared book files).
+- Built-in voices: Kokoro-82M by hexgrad (Apache 2.0) run with ONNX Runtime (MIT); pronunciation from the Misaki dictionaries by hexgrad (Apache 2.0) and the letter-to-sound rules of NRL Report 7948 as written for HeadTTS by Mika Suominen (MIT).
 
 The app lists the same credits under **About** in the library.

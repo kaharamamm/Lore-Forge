@@ -18,6 +18,7 @@ lore export <worldDir> --out world.snapshot.json   # versioned JSON snapshot of 
 lore codex <worldDir> -o codex.pdf   # World Codex PDF + codex.md (alias: lore bible)
 lore book <worldDir> -o book.pdf     # Story Book PDF + book.md
 lore book <worldDir> -o book.docx    # the same book for Word
+lore book <worldDir> -o book.epub    # the same book as an e-book (EPUB)
 lore book <worldDir> --trim a5       # trim: 6x9 (default, or book.trim), 5.5x8.5, a5, a4, letter
 lore duplicate <worldDir> [name] [--into <folder>]   # a copy with a new id; name defaults to "<name> (copy)",
                                                      # the folder to the original's parent folder

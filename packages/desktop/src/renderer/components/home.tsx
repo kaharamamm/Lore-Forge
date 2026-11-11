@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'preact/hooks';
+import { useContext, useMemo, useState } from 'preact/hooks';
 import { ENTRY_TYPES, isEnded, LIFECYCLE, raceLabel, racesOf, statusOf, TYPE_ICON, TYPE_LABELS, WorldIndex, type Entry, type IconName, type Warning, type World, type WorldCoverSettings } from '@lore-forge/core';
 import { Icon } from './icon.tsx';
-import { Portrait, WorldBookCover } from './cover.tsx';
+import { BookLang, Portrait, WorldBookCover } from './cover.tsx';
 import { PictureEditor } from './picture.tsx';
 import { CoverEditor } from './cover-editor.tsx';
 import { kindOf } from './severity.tsx';
@@ -46,6 +46,7 @@ function tagline(ix: WorldIndex, e: Entry): string {
 
 /** The world at a glance: its cover, what is in it, and a card for every entry. */
 export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCoverSave, onSettings, onAppSettings, onReload, onWarnings, onHistory, onLibrary, onDuplicate, onShare, sharing = false, sample = false }: Props) {
+  const bookLang = useContext(BookLang);
   const ix = useMemo(() => new WorldIndex(world), [world]);
   const [editing, setEditing] = useState<string | null>(null);
   const [coverOpen, setCoverOpen] = useState(false);
@@ -69,7 +70,7 @@ export function WorldHome({ dir, world, warnings, onOpen, onGo, onChange, onCove
         </button>
         <div class="home-intro">
           <button type="button" class="ghost small home-library" onClick={onLibrary} title={t('Close this world and go back to the shelf of worlds')}><Icon name="bookshelf" /> {t('Library')}</button>
-          <h2 id="home-title" class="home-title">{world.manifest.name}</h2>
+          <h2 id="home-title" class="home-title" lang={bookLang}>{world.manifest.name}</h2>
           {world.manifest.description && <p class="home-desc">{world.manifest.description}</p>}
           <ul class="home-stats" aria-label={t('What is in this world')}>
             {groups.map(([t, list]) => (

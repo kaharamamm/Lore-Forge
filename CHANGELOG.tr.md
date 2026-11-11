@@ -2,6 +2,36 @@
 
 Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) kurallarına, sürüm numaraları da [Anlamsal Sürümleme](https://semver.org/) kurallarına uyar.
 
+## [Unreleased]
+
+### Eklenenler
+
+- **Hikâye Kitabı e-kitap olarak.** Hikâye Kitabı önizlemesindeki **E-kitap olarak kaydet (EPUB)…** kitabı kapağı, içindekileri, bölümleri ve resimleriyle telefonlar ve e-kitap okuyucular için kaydediyor. Apple Books, Google Play Kitaplar, Kobo ve Calibre ile açılıyor; Send to Kindle da kabul ediyor. `lore book -o book.epub` ve Lore-Forge'a bağlı yapay zekâ uygulamaları da e-kitap yapabiliyor.
+- **Metin içe aktarma.** Word (.docx), Markdown ya da düz metin dosyasında yazılmış bir hikâye, bölüm başlıklarından ayrılarak Hikâye'ye bölüm bölüm geliyor ("Bölüm 3: Kuyu", "Birinci Bölüm", bir Word başlığı, "## Kuyu"). Kalın ve italik yazılar korunuyor; içindeki kişiler, yerler ve olaylar her bölümde olduğu gibi öneriliyor.
+- **Bölümü sesli okuma.** Hikâye'deki **Sesli oku** bölümü imlecin olduğu yerden ya da yalnızca seçtiğiniz kısmı okuyor. Lore-Forge kendi on üç doğal İngilizce sesiyle geliyor (Amerikan ve İngiliz); bu sesler bilgisayarınızda ücretsiz ve internet olmadan çalışıyor. Başka diller için bilgisayarınızın kendi sesleri de listede. Okunan cümle işaretleniyor; duraklatabilir, durdurabilir, sesi ve hızı seçebilirsiniz. Bir bölümü dinlemek, aksayan cümleleri bulmanın iyi bir yolu.
+- **Özel alanlar.** Dünya ayarlarında her kayıt türüne kendi alanlarınızı ekleyebilirsiniz: karakterler için Can ve Güç, eşyalar için Hasar ve Nadirlik gibi. Bir alan metin, sayı, evet ya da hayır, ya da bir listeden seçenek tutuyor. Düzenleyicide, Dünya Kodeksi'nde ve web sitesinde görünüyor, değerleriyle birlikte oyun verisine giriyor. Alanına uymayan bir değer uyarı veriyor. Lore-Forge'a bağlı yapay zekâ uygulamaları da alan ekleyip doldurabiliyor.
+- **Her yerde yeniden adlandırma.** Bir kaydın adı değişince Lore-Forge eski adı kitabın hâlâ kullandığı her yerde değiştirmeyi öneriyor: bölümlerde, öbür kayıtların metinlerinde ve alanlarında, haritalarda. Bir liste her yeri cümlesiyle gösteriyor; değiştirmek ya da olduğu gibi bırakmak sizin elinizde. Türkçe ekler yeni ada uyuyor (Kadir'in Murat'ın, Kadir'e Ayşe'ye oluyor) ve Geri al her şeyi eski hâline getiriyor.
+- **Hikâyede değiştirme.** Hikâye'deki **Değiştir…** (Ctrl+Shift+H) bir sözcüğü ya da sözü bütün bölümlerde buluyor, her birini cümlesiyle gösteriyor ve tek tek ya da hepsini birden değiştiriyor; Geri al da var. Büyük küçük harfe ve tam sözcüklere bakabiliyor, Türkçedeki ı ve İ harflerini de doğru tanıyor.
+- **Sesli kitap.** Hikâye Kitabı önizlemesindeki **Sesli kitap olarak kaydet…** ile bir Lore-Forge sesi bütün hikâyeyi tek bir ses dosyasına okuyor: başlık ve yazar, her bölümün başında bir işaret, paragraflar arasında ve sahne geçişlerinde duraklar, bir de kapak. Telaffuzu yazılmış adlar yazıldığı gibi söyleniyor. Dosya bilgisayarınızda, internet olmadan yapılıyor; o okurken çalışmaya devam edebilirsiniz. Dosya Ogg Opus biçiminde (.opus): VLC'de, Windows ve Android'de, web tarayıcılarında çalıyor.
+- **Planlama panosu.** Hikâye'deki **Pano** her bölümü tarihi, bakış açısı, içinde olanlar ve ne durumda olduğuyla (fikir, taslak, düzeltildi ya da bitti) bir kart olarak gösteriyor. Kartları sürükleyerek bölümlerin sırasını değiştirebilir, henüz yazmadığınız bölümler için kart ekleyebilirsiniz. Kartların altındaki tablo hangi bölümde kimin olduğunu gösteriyor ve uzun süre ortadan kaybolan bir karakteri belirtiyor. Lore-Forge'a bağlı yapay zekâ uygulamaları da bölümleri bu şekilde planlayabiliyor.
+- **Adın okunuşu.** Bir kaydın **Telaffuz** alanı ("ka-me-LA-mam": heceler kısa çizgiyle, vurgulu hece büyük harfle), Lore-Forge'un seslerinin sesli okurken adı nasıl söyleyeceğini belirliyor. **Dinle** düğmesi adı okuyor; telaffuz Dünya Kodeksi'nde ve web sitesinde de görünüyor. Lore-Forge'a bağlı yapay zekâ uygulamaları da bu alanı doldurabiliyor.
+- **Yeni kitap için hazır başlangıçlar.** **Yeni kitap** penceresinde **Şununla başla** var: Boş'un yanında Destansı fantastik, Masal, Gizem, Korku, Bilimkurgu ve Oyun dünyası. Her biri uygun bir takvim (çağlar ya da on iki ayıyla bildiğimiz takvim), bir yazı üslubu, bir resim üslubu ve bir kapak getiriyor; Oyun dünyası ayrıca oyun verisi için özel alanlar da getiriyor. Dünya ayarlarındaki hazır üsluplara Bilimkurgu yazı üslubu da eklendi.
+
+### Değişenler
+
+- **Kitapta gezinmek daha hızlı.** Yeni bir görünüm, kayıt ya da bölüm bir sonraki tıklamayı bekletmeden beliriyor (bir değişikliğin hemen ardından yapılan tıklama eskiden boşa gidiyordu); büyük bir kitapta görünümler iki üç kat daha hızlı değişiyor.
+- Uyarılar panelindeki sayılar paneli boydan boya yan yana gösteriliyor; **Tümü** ve **Bu kayıt** da panelin genişliğini paylaşıyor.
+- Hikâye'nin bölüm listesinde **Yeni bölüm** düğmesi, yeni bölümün ekleneceği yerde, bölümlerin altında; **İçe aktar…** ise en üstte. Açık bölümün okları ve silme düğmesi kendi kartında duruyor.
+- Sesli okuma bir ses hazırlanırken **Ses yükleniyor…** yazıyor; yeni bir ses ya da hız seçildiğinde eski sesle yapılan cümleler artık beklenmiyor.
+- Hikâye'de **Değiştir…**, **Yapay zekâya sor** ve **Sesli oku** düğmeleri, başlık ne kadar uzun olursa olsun, her zaman bölüm başlığının altında kendi satırlarında duruyor.
+
+### Düzeltilenler
+
+- Adı hâlâ "Bölüm 1" olan bir bölüm (yeni bölümün aldığı ad) Hikâye Kitabı'nda artık "Bölüm 1. Bölüm 1" değil, "Bölüm 1" olarak çıkıyor.
+- Hikâyede değiştirme penceresindeki **Büyük küçük harf aynı olsun** ve **Yalnızca tam sözcükler** artık kutularının yanında tek satırda duruyor.
+- Uygulama Türkçeyken İngilizce bir kitabın adı, bölüm başlıkları ve adları başlık yazı tipinde İngilizce "I" harfini koruyor (artık "HUMMİNG" değil); uygulama İngilizceyken de Türkçe bir kitabınkiler "İ" harfini koruyor. Dil, kitabın kendi metninden anlaşılıyor.
+- Windows'ta `lore` komutu ve VS Code ya da Cursor terminalinden başlatılan Lore-Forge artık bir çökme raporlama hatası (`registration_protocol_win.cc ... CreateFile`) yazmıyor.
+
 ## [1.2.0] - 2026-11-09
 
 ### Eklenenler

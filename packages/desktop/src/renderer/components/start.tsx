@@ -17,6 +17,7 @@ import { moveBook, removeKind, type RemoveKind } from '../../shared/library.ts';
 import { AppSettings, reopenSettings } from './settings.tsx';
 import { PatchNotes } from './patch-notes.tsx';
 import { t, tj, tm, tx } from '../i18n.tsx';
+import { bookTemplates, type BookTemplate } from '../templates.ts';
 
 /** Shelf key of the blank "New book". */
 /** Changes when the window size changes the book scale, so titles are fitted again. */
@@ -679,8 +680,15 @@ function CreateBook({ worldsDir, onClose, onCreated }: { worldsDir: string; onCl
   const [parent, setParent] = useState(worldsDir);
   const [problem, setProblem] = useState<string | null>(null);
   const [uploads, setUploads] = useState(0);
+  const templates = useMemo(bookTemplates, []);
+  const [template, setTemplate] = useState<BookTemplate>(templates[0]!);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => input.current?.focus(), []);
+  /** A template brings its cover colour and emblem too; both can still be changed. */
+  const chooseTemplate = (tp: BookTemplate): void => {
+    setTemplate(tp);
+    if (tp.cover) setCover((c) => ({ ...c, color: tp.cover!.color, icon: tp.cover!.icon }));
+  };
   const set = (patch: Partial<WorldCoverSettings>) => setCover((c) => Object.fromEntries(Object.entries({ ...c, ...patch }).filter(([, v]) => v !== undefined)) as WorldCoverSettings);
   const use = async (p: string) => {
     setImage(p);
@@ -699,7 +707,9 @@ function CreateBook({ worldsDir, onClose, onCreated }: { worldsDir: string; onCl
     if (!name.trim()) return;
     try {
       const { color, ...rest } = cover;
-      const dir = await window.lore.createWorld({ name: name.trim(), parent, ...(color ? { color } : {}), ...(image ? { image } : {}), cover: rest });
+      const { calendar, writingStyle, artStyle, fields } = template;
+      const start = { ...(calendar ? { calendar } : {}), ...(writingStyle ? { writingStyle } : {}), ...(artStyle ? { artStyle } : {}), ...(fields ? { fields } : {}) };
+      const dir = await window.lore.createWorld({ name: name.trim(), parent, ...(color ? { color } : {}), ...(image ? { image } : {}), cover: rest, ...(Object.keys(start).length ? { template: start } : {}) });
       if (dir) onCreated(dir);
     } catch (err) {
       setProblem((err as Error).message.replace(/^Error invoking remote method '\w+': (Error: )?/, ''));
@@ -722,6 +732,13 @@ function CreateBook({ worldsDir, onClose, onCreated }: { worldsDir: string; onCl
             <span class="field-label">{t('Name')}</span>
             <input ref={input} id="new-world-name" type="text" value={name} placeholder={t('e.g. The Shifting Sands')} onInput={(e) => setName(e.currentTarget.value)} />
           </label>
+          <div class="field create-template">
+            <span class="field-label" id="create-template-label">{t('Start from')}</span>
+            <div class="ws-presets create-templates" role="group" aria-labelledby="create-template-label">
+              {templates.map((tp) => <button key={tp.id} type="button" class="ws-preset" aria-pressed={template.id === tp.id} title={tp.about} onClick={() => chooseTemplate(tp)}>{tp.name}</button>)}
+            </div>
+            <p class="hint create-template-about">{template.about}{template.id !== 'blank' && ` ${t('All of it can be changed later in World settings.')}`}</p>
+          </div>
           <div class="field create-look">
             <div class="create-look-row">
               <ColorField label={t('Cover colour')} value={cover.color ?? art.top} swatches={SWATCHES} onChange={(c) => set({ color: c })} class="create-colour" />

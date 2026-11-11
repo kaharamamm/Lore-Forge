@@ -5,7 +5,7 @@ import { LIFECYCLE, TYPE_ICON, TYPE_LABELS, TYPE_SINGULAR, monthTicks, packRows,
 import { CountBadge } from './severity.tsx';
 import { Icon } from './icon.tsx';
 import { SEVERITY_ICON } from './severity.tsx';
-import { portraitFile, useImage, WorldDir } from './cover.tsx';
+import { BookLang, portraitFile, useImage, WorldDir } from './cover.tsx';
 import { t, tm, tx } from '../i18n.tsx';
 
 const ZOOM_MIN = 0.05;
@@ -31,6 +31,7 @@ const clampN = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, 
  * first or last year. Lanes scroll up and down natively.
  */
 export function TimelineView({ world, warnings, selectedId, onOpen, onOpenLook }: { world: World; warnings: Warning[]; selectedId: string | null; onOpen: (id: string) => void; onOpenLook: (id: string, look: string) => void }) {
+  const bookLang = useContext(BookLang);
   const model = useMemo(() => timelineModel(world, warnings), [world, warnings]);
   const cal = world.manifest.calendar;
   const scroller = useRef<HTMLDivElement>(null);
@@ -195,7 +196,7 @@ export function TimelineView({ world, warnings, selectedId, onOpen, onOpenLook }
                       const left = xOf(era.from), w = Math.max(2, (era.to - era.from) * ppd);
                       return (
                         <div key={era.id} class="tl-era" style={{ left: `${left}px`, width: `${w}px`, ...(era.color ? { '--era': era.color } : {}) }}>
-                          <span class="tl-era-name" style={{ marginLeft: `${inset(left, w, 140)}px` }}>{era.name}</span>
+                          <span class="tl-era-name" lang={bookLang} style={{ marginLeft: `${inset(left, w, 140)}px` }}>{era.name}</span>
                         </div>
                       );
                     })}

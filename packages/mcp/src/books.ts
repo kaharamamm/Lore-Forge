@@ -8,17 +8,17 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import YAML from 'yaml';
 import {
-  analyzeStory, applyFields, bodyLinks, calendarProblems, chapterDate, chapterPath, check, cleanCoverSettings, DATE_FORMATS_HINT,
+  analyzeStory, applyFields, bodyLinks, calendarProblems, chapterDate, chapterPath, chapterStatus, check, cleanCoverSettings, customFields, DATE_FORMATS_HINT, fieldKey, parseCustomFields,
   DEFAULT_STATUS, DETAIL_FIELDS, ENTRY_TYPES, entryPath, findMap, isStoryFact, LIFECYCLE, lookAt, lookImages, lookVisual, lookWhen, mapModel, newEntryId, newLookId, newMapId, PICTURE_VIEW, picturePrompt, pinNumber, withoutPin,
   normalizeName, parseEntry, proposalEntry, relationFits, relationKind, serializeEntry, slugify, sortChapters, splitFrontMatter, storyBook, TRIMS,
   TYPE_LABELS, TYPE_SINGULAR, wordCount, WorldIndex, worldCodex,
-  type Calendar, type Entry, type EntryType, type FactRef, type Look, type MapPin, type ParsedDate, type Place, type Proposal, type Relation, type StoryChapter,
+  type Calendar, type ChapterStatus, type CustomField, type Entry, type EntryType, type FactRef, type Look, type MapPin, type ParsedDate, type Place, type Proposal, type Relation, type StoryChapter,
   type TrimSize, type Warning, type World, type WorldCoverSettings, type WorldMap,
 } from '@lore-forge/core';
 import {
   createWorld, duplicateWorld, listModels, loadWorld, moveModels, saveChapter, saveEntry, saveIntended, saveStoryIgnored, uniqueWorldDir,
 } from '@lore-forge/core/node';
-import { writeDocx, writePublication } from '@lore-forge/pdf';
+import { writeDocx, writeEpub, writePublication } from '@lore-forge/pdf';
 import type { Library } from './library.ts';
 
 export type Obj = Record<string, unknown>;
@@ -39,6 +39,8 @@ export interface BookPatch {
   book?: Obj;
   /** Cover look on the shelf (colours, emblem, title colour and font). null removes a field. */
   cover?: Obj;
+  /** The book's own fields per entry type: a type given replaces its list; null or [] removes it. */
+  fields?: Record<string, unknown[] | null>;
 }
 
 async function readManifestRaw(dir: string): Promise<Obj> {
@@ -95,6 +97,28 @@ export async function patchBook(dir: string, patch: BookPatch): Promise<void> {
     if (Object.keys(c).length) raw['cover'] = c;
     else delete raw['cover'];
   }
+  if (patch.fields) {
+    const all: Obj = { ...(isObj(raw['fields']) ? raw['fields'] : {}) };
+    for (const [type, list] of Object.entries(patch.fields)) {
+      if (!list?.length) {
+        delete all[type];
+        continue;
+      }
+      // A field given without a key gets one made from its name, as in the app.
+      const taken = list.flatMap((f) => (isObj(f) && typeof f['key'] === 'string' && f['key'].trim() ? [f['key'].trim()] : []));
+      all[type] = list.map((f) => {
+        if (!isObj(f) || (typeof f['key'] === 'string' && f['key'].trim()) || typeof f['name'] !== 'string') return f;
+        const key = fieldKey(f['name'], taken);
+        taken.push(key);
+        return { key, ...f };
+      });
+    }
+    const issues: string[] = [];
+    const fields = parseCustomFields(all, issues);
+    if (issues.length) throw new Error(`The fields do not work: ${issues.join(' ')}`);
+    if (fields) raw['fields'] = fields;
+    else delete raw['fields'];
+  }
   await writeManifestRaw(dir, raw);
 }
 
@@ -137,10 +161,11 @@ export async function bookOverview(lib: Library, dir: string): Promise<Obj> {
     calendar: { defaultEra: m.calendar.defaultEra, eras: m.calendar.eras.map((e) => `${e.id} = ${e.name} (starts at absolute year ${e.start}${e.end !== undefined ? `, ends ${e.end}` : ''})`), months: m.calendar.months?.map((x) => `${x.name} (${x.days} days)`) },
     book: m.book,
     cover: m.cover,
+    fields: m.fields,
     counts: Object.fromEntries(ENTRY_TYPES.map((t) => [TYPE_LABELS[t].toLowerCase(), world.entries.filter((e) => e.type === t).length])),
     entries: world.entries.map(entrySummary),
     ...(m.maps?.length ? { maps: m.maps.map((x) => mapSummary(world, x)) } : {}),
-    chapters: sortChapters(world.story ?? []).map((c, i) => ({ number: i + 1, title: c.title, date: chapterDate(c), words: wordCount(c.body), file: c.file })),
+    chapters: sortChapters(world.story ?? []).map(chapterLine),
     warnings: { errors: open.filter((w) => w.severity === 'error').length, warnings: open.filter((w) => w.severity === 'warning').length, info: open.filter((w) => w.severity === 'info').length, intended: warnings.length - open.length },
   };
 }
@@ -189,7 +214,7 @@ export function entryJson(world: World, e: Entry): Obj {
   return { ...data, body: e.body, file: world.files[e.id] };
 }
 
-const COMMON_KEYS = ['id', 'type', 'name', 'aliases', 'summary', 'tags', 'relations', 'images', 'picture', 'visual', 'looks', 'chapter', 'bookOrder', 'body'];
+const COMMON_KEYS = ['id', 'type', 'name', 'aliases', 'pronunciation', 'summary', 'tags', 'relations', 'images', 'picture', 'visual', 'looks', 'chapter', 'bookOrder', 'body', 'fields'];
 const TYPE_KEYS: Record<EntryType, readonly string[]> = {
   character: ['race', 'born', 'died', 'status', 'locations'],
   place: ['status', 'founded', 'destroyed', 'partOf', 'pins'],
@@ -212,7 +237,7 @@ const kebab = (s: string): string => s.trim().toLowerCase().replace(/[\s_]+/g, '
 function normalizeFields(input: Obj, type: EntryType, ref: (s: unknown) => unknown): Obj {
   const out: Obj = {};
   for (const [k, v] of Object.entries(input)) {
-    if (['id', 'type', 'body', 'looks', 'pins'].includes(k)) continue;
+    if (['id', 'type', 'body', 'looks', 'pins', 'fields'].includes(k)) continue;
     if (v === null) { out[k] = null; continue; }
     if ((DATE_KEYS as readonly string[]).includes(k)) out[k] = asText(v);
     else if (k === 'aliases' || k === 'tags') out[k] = asList(v).map(asText);
@@ -237,6 +262,37 @@ function normalizeFields(input: Obj, type: EntryType, ref: (s: unknown) => unkno
   }
   // Undefined dates inside relations etc. are dropped by YAML; keep objects tidy.
   return JSON.parse(JSON.stringify(out)) as Obj;
+}
+
+/**
+ * An entry's values for the book's own fields after save_entries: merged into the ones it has, null removing one. A
+ * field is found by its key or its name; numbers and yes or no given as text become numbers and true or false where
+ * the field wants them, and a choice takes the spelling of the list. Values for fields the book does not have stay,
+ * with a note.
+ */
+function mergeCustomValues(have: unknown, input: unknown, defs: readonly CustomField[], notes: string[], who: string, type: EntryType): Obj | undefined {
+  if (input === null) return undefined;
+  if (!isObj(input)) throw new Error('"fields" must be an object of field: value, such as {"hp": 30}');
+  const out: Obj = { ...(isObj(have) ? have : {}) };
+  const unknown: string[] = [];
+  for (const [k, raw] of Object.entries(input)) {
+    const def = defs.find((f) => f.key === k) ?? defs.find((f) => f.key.toLowerCase() === k.toLowerCase() || normalizeName(f.name) === normalizeName(k));
+    const key = def?.key ?? k;
+    if (raw === null || raw === undefined || raw === '') {
+      delete out[key];
+      continue;
+    }
+    if (!def) unknown.push(k);
+    let v: unknown = raw;
+    const text = typeof raw === 'string' ? raw.trim() : undefined;
+    if (def?.kind === 'number' && text && Number.isFinite(Number(text))) v = Number(text);
+    else if (def?.kind === 'yes-no' && text) v = ['yes', 'true'].includes(text.toLowerCase()) ? true : ['no', 'false'].includes(text.toLowerCase()) ? false : raw;
+    else if (def?.kind === 'choice') v = def.choices?.find((c) => c.toLowerCase() === String(raw).trim().toLowerCase()) ?? raw;
+    else if (def?.kind === 'text' && (typeof raw === 'number' || typeof raw === 'boolean')) v = String(raw);
+    out[key] = v;
+  }
+  if (unknown.length) notes.push(`${who}: ${unknown.map((k) => `"${k}"`).join(', ')} ${unknown.length === 1 ? 'is' : 'are'} not one of the book's ${type} fields (get_book lists them); kept in the file.`);
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** The fields of a look in the file. */
@@ -394,6 +450,11 @@ export async function saveEntries(dir: string, items: EntryInput[]): Promise<Sav
       const unknown = Object.keys(p.item).filter((k) => !knownKeys(p.type).includes(k));
       const said: string[] = [];
       if (unknown.length) said.push(`${p.name}: ${unknown.map((k) => `"${k}"`).join(', ')} ${unknown.length === 1 ? 'is' : 'are'} not a ${p.type} field; kept in the file but not shown in Lore-Forge. Use lore_forge_guide for the field names.`);
+      if (p.item['fields'] !== undefined) {
+        const values = mergeCustomValues(base['fields'], p.item['fields'], customFields(world.manifest, p.type), said, p.name, p.type);
+        if (values) fm['fields'] = values;
+        else delete fm['fields'];
+      }
       let gone: Look[] = [];
       let gonePictures = 0;
       if (p.item['looks'] !== undefined) {
@@ -559,6 +620,10 @@ export interface ChapterInput {
   title: string;
   text: string;
   date?: string;
+  /** Planning: whose point of view (a character, by name or id), how far it is, and what happens in it. '' removes one. */
+  pov?: string;
+  status?: ChapterStatus;
+  summary?: string;
   /** Reading position: 1 = first chapter. A chapter with this number and another title is replaced only with replace. */
   number?: number;
   /** Replace this existing chapter (its number or title) instead of matching by title. */
@@ -591,6 +656,12 @@ export async function writeChapter(dir: string, input: ChapterInput): Promise<Ob
     const order = input.number ?? (sorted.length ? Math.max(...sorted.map((c) => c.order)) + 1 : 1);
     chapter = { file: chapterPath(order, title, chapters.map((c) => c.file)), title, order, body: input.text, ...(input.date ? { date: input.date } : {}) };
   }
+  for (const key of ['pov', 'status', 'summary'] as const) {
+    const value = input[key]?.trim();
+    if (value === undefined) continue;
+    if (value) Object.assign(chapter, { [key]: value });
+    else delete chapter[key];
+  }
   await saveChapter(dir, chapter);
   world = await loadWorld(dir);
   const analysis = analyzeStory(world);
@@ -598,7 +669,7 @@ export async function writeChapter(dir: string, input: ChapterInput): Promise<Ob
   const number = sortChapters(world.story ?? []).findIndex((c) => c.file === chapter.file) + 1;
   const looks = chapterLooks(world, world.story?.find((c) => c.file === chapter.file) ?? chapter);
   return {
-    chapter: { number, title, file: chapter.file, words: wordCount(chapter.body), replaced: !!old },
+    chapter: { number, title, file: chapter.file, words: wordCount(chapter.body), status: chapterStatus(chapter), replaced: !!old },
     proposals: analysis.proposals.filter(here).map(proposalJson),
     storyWarnings: analysis.warnings.filter((w) => !w.intended && w.offending.chapter === chapter.file).map((w) => formatWarning(world, w)),
     ...(looks.length ? { looks } : {}),
@@ -665,11 +736,25 @@ export async function readStory(dir: string, ref?: string | number): Promise<Obj
   const world = await loadWorld(dir);
   const sorted = sortChapters(world.story ?? []);
   if (ref === undefined || ref === '') {
-    return { chapters: sorted.map((c, i) => ({ number: i + 1, title: c.title, date: chapterDate(c), words: wordCount(c.body), file: c.file })) };
+    return { chapters: sorted.map((c, i) => chapterLine(c, i)) };
   }
   const c = findChapter(sorted, ref);
   if (!c) throw new Error(`No chapter "${ref}". Chapters: ${sorted.map((x, i) => `${i + 1}. ${x.title}`).join('; ') || 'none yet'}.`);
-  return { number: sorted.indexOf(c) + 1, title: c.title, date: chapterDate(c), file: c.file, text: c.body };
+  return { ...chapterLine(c, sorted.indexOf(c)), text: c.body };
+}
+
+/** A chapter in a list: its place, title, date, plan (point of view, status, what happens) and length. */
+export function chapterLine(c: StoryChapter, i: number): Obj {
+  return {
+    number: i + 1,
+    title: c.title,
+    date: chapterDate(c),
+    ...(c.pov ? { pov: c.pov } : {}),
+    status: chapterStatus(c),
+    ...(c.summary ? { summary: c.summary } : {}),
+    words: wordCount(c.body),
+    file: c.file,
+  };
 }
 
 function proposalJson(p: Proposal): Obj {
@@ -1001,12 +1086,12 @@ export async function mapView(dir: string, ref?: string): Promise<{ info: Obj; i
 
 // ------------------------------------------------------------------------------------------------ export
 
-export interface ExportOptions { kind: 'story-book' | 'codex'; format: 'pdf' | 'docx'; output?: string; trim?: TrimSize; fontDir?: string; coverFontDir?: string }
+export interface ExportOptions { kind: 'story-book' | 'codex'; format: 'pdf' | 'docx' | 'epub'; output?: string; trim?: TrimSize; fontDir?: string; coverFontDir?: string }
 
 /** The Story Book or World Codex as a file, into <book>/exports/ unless another path is given. */
 export async function exportBook(dir: string, o: ExportOptions): Promise<Obj> {
   const world = await loadWorld(dir);
-  if (o.kind === 'codex' && o.format === 'docx') throw new Error('The World Codex is made as a PDF; only the Story Book can also be a Word file.');
+  if (o.kind === 'codex' && o.format !== 'pdf') throw new Error('The World Codex is made as a PDF; only the Story Book can also be a Word file or an e-book.');
   const name = `${world.manifest.id}-${o.kind === 'codex' ? 'codex' : 'book'}.${o.format}`;
   let file = o.output?.trim() ? resolve(o.output.trim()) : join(dir, 'exports', name);
   if (o.output?.trim() && !extname(file)) file = join(file, name);
@@ -1015,6 +1100,11 @@ export async function exportBook(dir: string, o: ExportOptions): Promise<Obj> {
   if (o.format === 'docx') {
     const r = await writeDocx(doc, dir, file);
     return { file: r.docx };
+  }
+  if (o.format === 'epub') {
+    const author = world.manifest.book?.author?.trim();
+    const r = await writeEpub(doc, dir, file, { id: world.manifest.id, ...(author ? { author } : {}) });
+    return { file: r.epub, chapters: r.chapters, pictures: r.pictures, ...(r.notes.length ? { notes: r.notes } : {}) };
   }
   const r = await writePublication(doc, dir, file, o.fontDir, o.coverFontDir);
   return { file: r.pdf, markdownCopy: r.md, pages: r.pages, ...(r.notes.length ? { notes: r.notes } : {}) };

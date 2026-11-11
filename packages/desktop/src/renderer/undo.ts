@@ -4,7 +4,7 @@
  * without the app (test/undo.test.ts).
  *
  * A step keeps only what it changed: the paths it touched (top-level fields, and single fields inside details,
- * visual, picture and extra) with their values before and after. Undo puts back a path only while it still holds
+ * visual, picture, extra and the book's own fields) with their values before and after. Undo puts back a path only while it still holds
  * the value the step left, so a change made since, by an AI assistant or an editor outside the app, is never undone
  * by accident. Typing in one field is one step until a pause.
  */
@@ -37,7 +37,7 @@ export const MERGE_MAX_MS = 8000;
 export const MAX_STEPS = 200;
 
 /** Fields whose values are plain objects of single fields: their fields are undone one by one. */
-const NESTED = new Set(['details', 'visual', 'picture', 'extra']);
+const NESTED = new Set(['details', 'visual', 'picture', 'extra', 'fields']);
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);

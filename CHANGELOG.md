@@ -2,6 +2,36 @@
 
 All notable changes to Lore-Forge are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **The Story Book as an e-book.** **Save e-book (EPUB)…** in the Story Book preview writes the book for phones and e-readers, with its cover, contents, chapters and pictures. It opens in Apple Books, Google Play Books, Kobo and Calibre, and Send to Kindle takes it too. `lore book -o book.epub` and the AI apps connected to Lore-Forge can make it as well.
+- **Import a manuscript.** A story written in Word (.docx), Markdown or a plain text file comes into the Story as chapters, split at its chapter headings ("Chapter 3: The Well", a Word heading, "## The Well"). Bold and italic stay, and the people, places and events in it are proposed as in any chapter.
+- **Read a chapter aloud.** **Read aloud** in the Story reads the chapter from the caret, or only the part you chose. Lore-Forge brings thirteen natural English voices of its own, American and British, that run on your computer for free and without the internet; your computer's own voices are there too, for other languages. The sentence being read is marked; you can pause, stop, and pick the voice and the speed. Hearing a chapter is a good way to find clumsy sentences.
+- **Custom fields.** World settings can give each type of entry fields of your own, such as HP and Strength for characters or Damage and Rarity for items: text, a number, yes or no, or one of a list. They show in the editor, the World Codex and the website, and go into game data with their values. A value that does not fit its field is a warning. The AI apps connected to Lore-Forge can add fields and fill them in.
+- **Rename everywhere.** When an entry gets a new name, Lore-Forge offers to change the old one where the book still uses it: in the chapters, in the other entries' text and fields, and on the maps. A list shows each place in its sentence, to change or leave as it is. Turkish endings follow the new name (Kadir'in becomes Murat'ın, Kadir'e becomes Ayşe'ye), and Undo puts everything back.
+- **Replace in the story.** **Replace…** in the Story (Ctrl+Shift+H) finds a word or phrase in every chapter, shows each in its sentence, and replaces them one at a time or all at once, with Undo. It can match case and whole words, and knows the Turkish ı and İ.
+- **Audiobook.** **Save audiobook…** in the Story Book preview has a Lore-Forge voice read the whole story into one sound file, with the title and author, a mark at each chapter, pauses between paragraphs and at scene breaks, and the cover. Names with a pronunciation are said the way it is written. It is made on your computer without the internet, and you can keep working while it reads. The file is Ogg Opus (.opus): it plays in VLC, on Windows and Android, and in web browsers.
+- **Planning board.** **Board** in the Story shows every chapter as a card with its date, point of view, what happens in it and how far it is (idea, draft, revised or done). Drag the cards to reorder the chapters, and add cards for chapters you have not written yet. Under the cards, a grid shows who is in which chapter and points out a character who goes missing for a long stretch. The AI apps connected to Lore-Forge can plan chapters this way too.
+- **How a name is said.** An entry's **Pronunciation** ("KAM-eh-la-mam": syllables with hyphens, the stressed one in capitals) is how Lore-Forge's voices say the name when they read aloud. **Hear it** plays it, and it shows in the World Codex and on the website. The AI apps connected to Lore-Forge can fill it in.
+- **Ready starts for a new book.** **New book** has **Start from**: Epic fantasy, Fairy tale, Mystery, Horror, Science fiction and Game world, besides Blank. Each brings a calendar that fits (ages, or the everyday calendar with its twelve months), a writing style, a picture style and a cover; Game world also brings custom fields for game data. A Science fiction writing style joins the ready styles in World settings.
+
+### Changed
+
+- **Moving around a book is quicker.** A new view, entry or chapter fades in without holding up the next click (a click right after a change used to be lost), and a big book changes views two to three times faster.
+- The Warnings panel shows its counts side by side across the panel, and **All** and **This entry** share its width.
+- In the Story's chapter list, **New chapter** is under the chapters, where the new one goes, and **Import…** is at the top. The open chapter's arrows and delete button sit in its card.
+- Read aloud shows **Loading the voice…** while a voice gets ready, and a new voice or speed no longer waits for sentences made in the old one.
+- In the Story, **Replace…**, **Ask AI** and **Read aloud** always sit on their own line under the chapter title, whatever its length.
+
+### Fixed
+
+- A chapter still called "Chapter 1" (the name a new chapter gets) is "Chapter 1" in the Story Book, no longer "Chapter 1. Chapter 1".
+- **Match case** and **Whole words** in Replace in the story sit on one line beside their boxes.
+- With the app in Turkish, an English book's title, chapter titles and names keep their English "I" in the title font (no longer "HUMMİNG"), and with the app in English a Turkish book's keep their "İ". The language is read from the book's own text.
+- On Windows, the `lore` command and Lore-Forge started from a terminal in VS Code or Cursor no longer print a crash reporter error (`registration_protocol_win.cc ... CreateFile`).
+
 ## [1.2.0] - 2026-11-09
 
 ### Added

@@ -17,6 +17,23 @@
       "type": "string",
       "description": "Optional in-world date the chapter is set at, e.g. \"1920\" or \"12.03.1920\" or \"~200 OK\"."
     },
+    "pov": {
+      "type": "string",
+      "description": "Optional: whose point of view the chapter is told from, a character by id or name."
+    },
+    "status": {
+      "enum": [
+        "idea",
+        "draft",
+        "revised",
+        "done"
+      ],
+      "description": "Optional: how far the chapter is. Without it, a chapter counts as an idea while it has no text and as a draft once it has."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Optional: what happens in the chapter, in a line or two, shown on its card on the planning board."
+    },
     "era": {
       "type": "string",
       "description": "Optional era code, kept as an extra key."

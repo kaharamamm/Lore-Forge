@@ -154,7 +154,21 @@ test('an assistant writes a whole book: entries, links, chapters, proposals, che
     const story = (await call('read_story', { book: book.id })).json();
     assert.deepEqual(story.chapters.map((c: any) => c.title), ['The Storm', 'The Salt Sea']);
     assert.match((await call('read_story', { book: book.id, chapter: 1 })).json().text, /Leyla beside him/);
-    for (const c of (await loadWorld(book.dir)).story!) valid('story-chapter.schema.json', { title: c.title, order: c.order, ...(c.date ? { date: c.date } : {}) });
+    // A chapter planned before it is written: a card on the planning board, written later under the same title.
+    const plan = await call('write_chapter', { book: book.id, title: 'The Oasis', text: '', summary: 'Leyla finds the hidden oasis.', pov: 'Leyla', status: 'idea' });
+    assert.ok(!plan.error, plan.text);
+    assert.equal(plan.json().chapter.status, 'idea');
+    const planned = (await call('read_story', { book: book.id })).json().chapters[2];
+    assert.deepEqual([planned.title, planned.pov, planned.status, planned.summary, planned.words], ['The Oasis', 'Leyla', 'idea', 'Leyla finds the hidden oasis.', 0]);
+    const written = await call('write_chapter', { book: book.id, title: 'The Oasis', text: 'Leyla found the oasis behind the dunes.', status: 'draft' });
+    assert.deepEqual([written.json().chapter.replaced, written.json().chapter.status], [true, 'draft']);
+    const oasis = (await loadWorld(book.dir)).story!.find((c) => c.title === 'The Oasis')!;
+    assert.deepEqual([oasis.pov, oasis.summary], ['Leyla', 'Leyla finds the hidden oasis.']);
+    await call('write_chapter', { book: book.id, title: 'The Oasis', text: oasis.body, pov: '' });
+    assert.equal((await loadWorld(book.dir)).story!.find((c) => c.title === 'The Oasis')!.pov, undefined);
+    for (const c of (await loadWorld(book.dir)).story!) {
+      valid('story-chapter.schema.json', { title: c.title, order: c.order, ...(c.date ? { date: c.date } : {}), ...(c.pov ? { pov: c.pov } : {}), ...(c.status ? { status: c.status } : {}), ...(c.summary ? { summary: c.summary } : {}) });
+    }
 
     // A contradiction is reported, then kept on purpose.
     const dead = await call('save_entries', { book: book.id, entries: [{ id: 'char-hadi', status: 'dead', died: '510' }] });
@@ -192,11 +206,15 @@ test('an assistant writes a whole book: entries, links, chapters, proposals, che
     // The book overview and a PDF.
     const overview = (await call('get_book', { book: 'the salt caravans' })).json();
     assert.equal(overview.counts.characters, 3);
-    assert.equal(overview.chapters.length, 2);
+    assert.equal(overview.chapters.length, 3);
+    assert.equal(overview.chapters[2].summary, 'Leyla finds the hidden oasis.');
     const pdf = await call('export_book', { book: book.id });
     assert.ok(!pdf.error, pdf.text);
     assert.ok(existsSync(pdf.json().file));
     assert.ok(readFileSync(pdf.json().file).subarray(0, 4).toString() === '%PDF');
+    const epub = await call('export_book', { book: book.id, format: 'epub' });
+    assert.ok(!epub.error && epub.json().file.endsWith('.epub') && epub.json().chapters === 4, epub.text);
+    assert.ok((await call('export_book', { book: book.id, kind: 'codex', format: 'epub' })).error, 'the World Codex is a PDF only');
 
     // The world is still clean apart from the warnings the test made on purpose.
     world = await loadWorld(book.dir);
@@ -487,6 +505,40 @@ test('writing: the writing style of a book, a chapter brief before writing, and 
     await call('update_book', { book, writingStyle: null });
     assert.equal((await call('get_book', { book })).json().writingStyle, undefined);
     valid('world-manifest.schema.json', { ...JSON.parse(readFileSync(join(book, 'world.json'), 'utf8')), writingStyle: 'Any text.' });
+  } finally {
+    await rm(h.root, { recursive: true, force: true });
+  }
+});
+
+test('custom fields: an assistant gives a book fields of its own, sets their values, and they go into game data', async () => {
+  const h = await home();
+  try {
+    const { call } = await connect({ dataDir: h.dataDir, defaultWorldsDir: h.worlds, sampleDir: null });
+    const book = (await call('create_book', { name: 'Dungeon', fields: { character: [{ name: 'Hit points', kind: 'number' }, { name: 'Playable', kind: 'yes-no' }], item: [{ key: 'rarity', name: 'Rarity', kind: 'choice', choices: ['common', 'rare'] }] } })).json().book.dir as string;
+    const fields = (await call('get_book', { book })).json().fields;
+    assert.deepEqual(fields.character.map((f: any) => [f.key, f.kind]), [['hitPoints', 'number'], ['playable', 'yes-no']]);
+    // By key or by name; numbers and yes or no given as text become numbers and true or false; a choice takes the list's spelling.
+    const saved = await call('save_entries', { book, entries: [
+      { type: 'character', name: 'Aras', fields: { 'Hit points': '30', playable: 'yes', mood: 'grim' } },
+      { type: 'item', name: 'Crown', fields: { rarity: 'Rare' } },
+    ] });
+    assert.ok(!saved.error, saved.text);
+    assert.match(saved.json().notes.join(' '), /"mood" is not one of the book's character fields/);
+    const aras = (await call('get_entry', { book, entry: 'Aras' })).json();
+    assert.deepEqual(aras.entry?.fields ?? aras.fields, { hitPoints: 30, playable: true, mood: 'grim' });
+    // Only the values given change; null removes one.
+    await call('save_entries', { book, entries: [{ id: 'char-aras', fields: { mood: null, hitPoints: 25 } }] });
+    assert.match(readFileSync(join(book, 'characters', 'char-aras.md'), 'utf8'), /fields:\n {2}hitPoints: 25\n {2}playable: true\n/);
+    // A value that does not fit its field is a warning.
+    await call('save_entries', { book, entries: [{ id: 'char-aras', fields: { hitPoints: 'lots' } }] });
+    assert.match((await call('check_book', { book })).json().warnings.map((w: any) => w.message).join(' | '), /"Hit points" should be a number, not "lots"/);
+    // A type given replaces its list; the manifest stays valid.
+    await call('update_book', { book, fields: { item: null, place: [{ name: 'Danger', kind: 'number' }] } });
+    const after = JSON.parse(readFileSync(join(book, 'world.json'), 'utf8'));
+    assert.deepEqual(Object.keys(after.fields), ['character', 'place']);
+    valid('world-manifest.schema.json', after);
+    const bad = await call('update_book', { book, fields: { item: [{ name: 'Size', kind: 'choice' }] } });
+    assert.ok(bad.error && /needs its "choices"/.test(bad.text), bad.text);
   } finally {
     await rm(h.root, { recursive: true, force: true });
   }

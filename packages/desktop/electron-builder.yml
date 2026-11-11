@@ -15,6 +15,15 @@ publish:
 files:
   - dist/**/*
   - package.json
+  # Read aloud's built-in voices run on ONNX Runtime: only this system's library goes in, without the graphics-card
+  # parts (DirectML) the voices do not use, and one copy of the Mac library (the package holds it under two names).
+  - "!node_modules/onnxruntime-node/bin/**"
+  - node_modules/onnxruntime-node/bin/napi-v6/${platform}/${arch}/**
+  - "!node_modules/onnxruntime-node/bin/napi-v6/*/*/{DirectML.dll,dxcompiler.dll,libonnxruntime.*.*.*.dylib}"
+# A native library cannot be loaded from inside the app archive.
+asarUnpack:
+  - node_modules/onnxruntime-node/bin/**
+afterPack: build/after-pack.cjs
 # .loreforge book files (Share this book) open in Lore-Forge: double-click, Open with, the file's icon.
 fileAssociations:
   - ext: loreforge
@@ -42,6 +51,11 @@ extraResources:
   # The lore command-line tool: small wrappers that run dist/cli.cjs with the app's own Electron in Node mode.
   - from: build/bin
     to: bin
+  # The built-in voices (scripts/fetch-voices.mjs) and their pronunciation dictionaries, with their licences.
+  - from: voices
+    to: voices
+  - from: voice-data
+    to: voice-data
 win:
   target: nsis
   icon: build/icon.ico

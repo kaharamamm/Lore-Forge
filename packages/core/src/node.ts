@@ -3,7 +3,9 @@ import { chmod, copyFile, cp, mkdir, readdir, readFile, rename, rm, rmdir, stat,
 import { existsSync } from 'node:fs';
 import { basename, extname, join, relative, sep } from 'node:path';
 import { INTENDED_FILE, MANIFEST_FILE, parseWorld, serializeEntry, serializeIntended, serializeManifest, entryPath, type WorldFile } from './parse.ts';
-import { SCHEMA_VERSION, TYPE_FOLDERS, type Entry, type IntendedMark, type StoryChapter, type StoryIgnore, type World, type WorldManifest, type WorldCoverSettings } from './types.ts';
+import { SCHEMA_VERSION, TYPE_FOLDERS, type Calendar, type Entry, type IntendedMark, type StoryChapter, type StoryIgnore, type World, type WorldManifest, type WorldCoverSettings } from './types.ts';
+import { calendarProblems } from './calendar.ts';
+import { parseCustomFields } from './fields.ts';
 import { serializeChapter, serializeStoryIgnored, STORY_FOLDER, STORY_IGNORED_FILE } from './story.ts';
 import { coverSeed } from './cover.ts';
 import { msg } from './i18n.ts';
@@ -59,13 +61,32 @@ export async function saveIntended(dir: string, intended: IntendedMark[]): Promi
 }
 
 /** Create a new, empty world folder with a default calendar. */
-export async function createWorld(dir: string, name: string, opts: { cover?: WorldCoverSettings } = {}): Promise<WorldManifest> {
+/** How a new world starts: its cover, and from a template (New book, Start from) its calendar, styles and fields. */
+export interface NewWorldOptions {
+  cover?: WorldCoverSettings;
+  /** Default: plain years ("Year", from 0). */
+  calendar?: Calendar;
+  writingStyle?: string;
+  artStyle?: string;
+  fields?: WorldManifest['fields'];
+}
+
+export async function createWorld(dir: string, name: string, opts: NewWorldOptions = {}): Promise<WorldManifest> {
   const id = worldSlug(name);
+  const calendar = opts.calendar ?? { eras: [{ id: 'Y', name: 'Year', start: 0 }], defaultEra: 'Y' };
+  const problems = calendarProblems(calendar);
+  if (problems.length) throw new Error(problems[0]);
+  const issues: string[] = [];
+  const fields = parseCustomFields(opts.fields, issues);
+  if (issues.length) throw new Error(issues[0]);
   const manifest: WorldManifest = {
     schemaVersion: SCHEMA_VERSION,
     id,
     name,
-    calendar: { eras: [{ id: 'Y', name: 'Year', start: 0 }], defaultEra: 'Y' },
+    ...(opts.artStyle?.trim() ? { artStyle: opts.artStyle.trim() } : {}),
+    ...(opts.writingStyle?.trim() ? { writingStyle: opts.writingStyle.trim() } : {}),
+    calendar,
+    ...(fields ? { fields } : {}),
     ...(opts.cover && Object.keys(opts.cover).length ? { cover: opts.cover } : {}),
   };
   await mkdir(dir, { recursive: true });

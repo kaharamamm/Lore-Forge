@@ -2,9 +2,13 @@
 import { Document, isScalar, visit } from 'yaml';
 import { msg, verbatim } from './i18n.ts';
 import { splitFrontMatter } from './parse.ts';
-import { SCHEMA_VERSION, type StoryChapter, type StoryIgnore } from './types.ts';
+import { SCHEMA_VERSION, type ChapterStatus, type StoryChapter, type StoryIgnore } from './types.ts';
 
 export const STORY_FOLDER = 'story';
+/** A chapter's progress, in order: planned, written, gone over, finished. */
+export const CHAPTER_STATUSES: readonly ChapterStatus[] = ['idea', 'draft', 'revised', 'done'];
+/** The header keys Lore-Forge reads; any other key is kept as it is. */
+const CHAPTER_KEYS = ['title', 'order', 'date', 'pov', 'status', 'summary'];
 export const STORY_IGNORED_FILE = 'story-ignored.json';
 
 type Obj = Record<string, unknown>;
@@ -51,9 +55,18 @@ export function parseChapter(content: string, file: string): { chapter: StoryCha
   }
   const title = str('title')?.trim() || titleFromFile(file);
   const date = str('date');
-  const extraKeys = Object.keys(data).filter((k) => !['title', 'order', 'date'].includes(k));
+  const pov = str('pov')?.trim();
+  const summary = str('summary')?.trim();
+  const status = str('status')?.trim();
+  // A status Lore-Forge does not know stays in the file as it is, and is said once.
+  const known = status !== undefined && (CHAPTER_STATUSES as readonly string[]).includes(status);
+  if (status && !known) problems.push(msg`"status" should be idea, draft, revised or done.`);
+  const extraKeys = Object.keys(data).filter((k) => !CHAPTER_KEYS.includes(k) || (k === 'status' && status && !known));
   const chapter: StoryChapter = { file, title, order, body };
   if (date !== undefined && date.trim() !== '') chapter.date = date;
+  if (pov) chapter.pov = pov;
+  if (known) chapter.status = status as ChapterStatus;
+  if (summary) chapter.summary = summary;
   if (extraKeys.length) chapter.extra = Object.fromEntries(extraKeys.map((k) => [k, data[k]]));
   return { chapter, problems };
 }
@@ -61,6 +74,9 @@ export function parseChapter(content: string, file: string): { chapter: StoryCha
 export function serializeChapter(ch: StoryChapter): string {
   const data: Obj = { title: ch.title, order: ch.order };
   if (ch.date) data['date'] = ch.date;
+  if (ch.pov?.trim()) data['pov'] = ch.pov.trim();
+  if (ch.status) data['status'] = ch.status;
+  if (ch.summary?.trim()) data['summary'] = ch.summary.trim();
   Object.assign(data, ch.extra);
   const doc = new Document(data);
   visit(doc, { Scalar: (_k, node) => { if (isScalar(node) && typeof node.value === 'string' && /^[~?\d-]/.test(node.value)) node.type = 'QUOTE_DOUBLE'; } });

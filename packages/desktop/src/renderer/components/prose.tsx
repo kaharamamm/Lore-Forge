@@ -216,7 +216,8 @@ export function ProseEditor({ id, world, value, exclude, onInput, onOpen, fill, 
     if (popup?.pick) return;
     if (!hit) return popup && setPopup(null);
     if (hit.m && popup?.mention?.start !== hit.m.start) setPopup({ mention: hit.m, ...place(hit.rect), pick: false });
-    if (hit.mark && popup?.mark !== hit.mark) setPopup({ mark: hit.mark, ...place(hit.rect), pick: false });
+    // A mark with nothing to say (the sentence being read aloud) has no card.
+    if (hit.mark?.title && popup?.mark !== hit.mark) setPopup({ mark: hit.mark, ...place(hit.rect), pick: false });
   };
   const onDown = (e: MouseEvent) => {
     if (!(e.ctrlKey || e.metaKey)) return;

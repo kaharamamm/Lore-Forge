@@ -45,6 +45,8 @@ export const APP: Readonly<Record<string, string>> = {
   '{label} saved: {pages} pages (plus a .md copy)': '{label} kaydedildi: {pages} sayfa (ayrıca bir .md kopyası)',
   'Show in folder': 'Klasörde göster',
   '{label} failed: {error}': '{label} dışa aktarılamadı: {error}',
+  'Story Book saved as an e-book. It opens in Apple Books, Google Play Books, Kobo and Calibre, and Send to Kindle takes it too.': 'Hikâye Kitabı e-kitap olarak kaydedildi. Apple Books, Google Play Kitaplar, Kobo ve Calibre ile açılır; Send to Kindle da kabul eder.',
+  'E-book export failed: {error}': 'E-kitap kaydedilemedi: {error}',
   'Story Book saved for Word. Word fills in the contents page numbers when it opens the file.': 'Hikâye Kitabı Word için kaydedildi. Word, dosyayı açtığında içindekiler sayfasındaki sayfa numaralarını doldurur.',
   'Word export failed: {error}': "Word'e aktarılamadı: {error}",
   'Could not save the book details: {error}': 'Kitap bilgileri kaydedilemedi: {error}',
@@ -65,11 +67,11 @@ export const APP: Readonly<Record<string, string>> = {
   'Views': 'Görünümler',
   'Export': 'Dışa aktar',
   'World Codex: preview every entry with facts, visual description, reference images and art briefs; then save as PDF': 'Dünya Kodeksi: her kaydı bilgileri, görsel tanımı, referans görselleri ve çizim yönergeleriyle önizleyin; sonra PDF olarak kaydedin',
-  'Story Book: preview your events and notes in story order as a book; then save as PDF or Word': 'Hikâye Kitabı: olaylarınızı ve notlarınızı hikâye sırasına göre bir kitap olarak önizleyin; sonra PDF ya da Word olarak kaydedin',
+  'Story Book: preview your story (or your events and notes, in story order) as a book; then save it as a PDF, a Word file or an e-book': 'Hikâye Kitabı: hikâyenizi (ya da olaylarınızı ve notlarınızı, hikâye sırasıyla) bir kitap olarak önizleyin; sonra PDF, Word dosyası ya da e-kitap olarak kaydedin',
   'Settings': 'Ayarlar',
   'Settings: language, display and the library': 'Ayarlar: dil, görüntü ve kütüphane',
   'World settings': 'Dünya ayarları',
-  'World settings: calendar, eras and months': 'Dünya ayarları: takvim, çağlar ve aylar',
+  'World settings: writing and picture style, calendar, custom fields': 'Dünya ayarları: yazı ve resim üslubu, takvim, özel alanlar',
 
   // app.tsx: empty editor, delete dialogs
   'Pick an entry on the left to edit it.': 'Düzenlemek için soldan bir kayıt seçin.',
@@ -83,4 +85,20 @@ export const APP: Readonly<Record<string, string>> = {
   "Removes this chapter's file from the story folder. Entries added from it stay.": 'Bu bölümün dosyası hikâye klasöründen silinir. Bu bölümden eklenen kayıtlar yerinde kalır.',
   // New chapters: the start of the user's own text, so in their language.
   'Chapter {n}': 'Bölüm {n}',
+  // A manuscript into the story.
+  '“{file}” has no text to import.': '“{file}” içinde içe aktarılacak metin yok.',
+  'Imported one chapter from “{file}”. People, places and events new to the book are under Proposals.': '“{file}” dosyasından bir bölüm içe aktarıldı. Kitapta henüz olmayan kişiler, yerler ve olaylar Öneriler bölümünde.',
+  'Imported {n} chapters from “{file}”. People, places and events new to the book are under Proposals.': '“{file}” dosyasından {n} bölüm içe aktarıldı. Kitapta henüz olmayan kişiler, yerler ve olaylar Öneriler bölümünde.',
+  'Could not import the manuscript: {error}': 'Metin içe aktarılamadı: {error}',
+  // Changes to many files at once: renaming everywhere, replacing in the story
+  'Some changes could not be saved first, so nothing was changed. Try again in a moment.': 'Bazı değişiklikler önce kaydedilemedi, bu yüzden hiçbir şey değiştirilmedi. Birazdan yeniden deneyin.',
+  'It could not be undone: {error}': 'Geri alınamadı: {error}',
+  'Before “{from}” was renamed “{to}”': '“{from}” adı “{to}” yapılmadan önce',
+  '“{from}” is back where it was changed to “{to}”.': '“{to}” yapılan yerlerde yine “{from}” yazıyor.',
+  'Changed “{from}” to “{to}” in one place.': '“{from}”, bir yerde “{to}” oldu.',
+  'Changed “{from}” to “{to}” in {n} places.': '“{from}”, {n} yerde “{to}” oldu.',
+  'Before “{find}” was replaced with “{by}”': '“{find}” yerine “{by}” yazılmadan önce',
+  '“{find}” is back where it was replaced.': 'Değiştirilen yerlerde yine “{find}” yazıyor.',
+  'Replaced once.': 'Bir yerde değiştirildi.',
+  'Replaced {n} times.': '{n} yerde değiştirildi.',
 };

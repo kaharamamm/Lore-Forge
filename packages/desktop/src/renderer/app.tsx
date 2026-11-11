@@ -1,7 +1,7 @@
 import { Fragment } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
-  aiPhrasingRule, analyzeStory, applyFields, builtinRules, imageLook, chapterPath, check, checkWorld, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, isStoryFact, newEntryId, normalizeName, parseWorld,
+  aiPhrasingRule, analyzeStory, applyFields, applyRename, builtinRules, imageLook, chapterPath, check, checkWorld, DEFAULT_STATUS, entryPath, LIFECYCLE, familyTree, INTENDED_FILE, isStoryFact, newEntryId, normalizeName, parseWorld,
   proposalEntry, relationWeb, searchEntries, eraUsage, worldCoverArt, serializeChapter, serializeEntry, serializeIntended, serializeStoryIgnored, sortChapters, sortWarnings, STORY_IGNORED_FILE, storyFact, timelineModel, TYPE_SINGULAR, WorldIndex,
   type BookSettings, type Calendar, type Entry, type EntryType, type FactRef, type IconName, type Proposal, type ProposalFields, type StoryAnalysis, type StoryChapter, type StoryIgnore, type Warning, type World, type WorldCoverSettings, type WorldMap,
 } from '@lore-forge/core';
@@ -23,7 +23,7 @@ import { HistoryDialog } from './components/history.tsx';
 import { ShareDialog, type ShareKind } from './components/share.tsx';
 import { Icon } from './components/icon.tsx';
 import { Aura } from './components/aura.tsx';
-import { ErasLink, WorldSettings, type BookStyle } from './components/world-settings.tsx';
+import { ErasLink, WorldSettings, type BookFields, type BookStyle } from './components/world-settings.tsx';
 import { AppSettings } from './components/settings.tsx';
 import { lower, t, tm, useLanguage } from './i18n.tsx';
 import { transition } from './motion.ts';
@@ -34,10 +34,17 @@ import { SHOW_IMAGES } from './components/images.tsx';
 import { SHOW_LOOK } from './components/looks.tsx';
 import { bookWords } from './spelling.ts';
 import { WorldHome } from './components/home.tsx';
-import { forgetImageFiles, forgetImages, Portrait, portraitFile, WorldBookCover, WorldDir } from './components/cover.tsx';
+import { BookLang, forgetImageFiles, forgetImages, Portrait, portraitFile, WorldBookCover, WorldDir } from './components/cover.tsx';
 import { ConfirmDialog } from './components/confirm.tsx';
 import { PaneResizer, SaveIndicator, sidebarMax, useSidebarWidth, type SaveState } from './components/chrome.tsx';
 import { ChapterList, StoryView, type StoryActions } from './components/story.tsx';
+import { StoryBoard } from './components/board.tsx';
+import { AudiobookChip, AudiobookDialog } from './components/audiobook.tsx';
+import { audiobookBusy, clearAudiobook, makeAudiobook } from './audiobook.ts';
+import { bookTextLanguage, spokenNamesOf } from './components/read-aloud.tsx';
+import type { BuiltInVoice } from '../shared/voices.ts';
+import { ReplaceDialog } from './components/replace.tsx';
+import { setNameInBook } from './components/rename.tsx';
 
 type View = 'home' | 'editor' | 'timeline' | 'relations' | 'story' | 'map';
 
@@ -55,7 +62,7 @@ const FACT_RULES = builtinRules.filter((r) => r.id !== aiPhrasingRule.id);
 
 const SMOKE = new URLSearchParams(location.search).has('smoke');
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
-/** Smoke only: wait until a check holds (a View Transition defers its update to the next rendered frame). */
+/** Smoke only: wait until a check holds (a change shows once Preact has rendered it, and some views load in steps). */
 const until = async (ok: () => boolean, ms = 3000) => { for (let t = 0; t < ms && !ok(); t += 50) await tick(50); return ok(); };
 const count = (sel: string) => document.querySelectorAll(sel).length;
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel);
@@ -134,15 +141,17 @@ interface Place {
   preview: PdfKind | null;
   relMode: RelationMode | null;
   chapter: string | null;
+  /** The Story view shows the planning board. */
+  board: boolean;
 }
 
-const samePlace = (a: Place, b: Place) => a.dir === b.dir && (a.dir === null || (a.view === b.view && a.id === b.id && a.preview === b.preview && a.relMode === b.relMode && a.chapter === b.chapter));
+const samePlace = (a: Place, b: Place) => a.dir === b.dir && (a.dir === null || (a.view === b.view && a.id === b.id && a.preview === b.preview && a.relMode === b.relMode && a.chapter === b.chapter && a.board === b.board));
 
 /**
  * A back/forward stack of places: the library, and views and entries of any world opened from it. Every change
  * of place is pushed (dropping any forward places); going back or forward restores a place without pushing it
  * again (opening its world first, or closing the world for the library).
- * A restore renders later (it runs inside a View Transition), so until the target place shows up,
+ * A restore renders later (Preact draws a change after the code that made it), so until the target place shows up,
  * the places rendered on the way are not new history: two quick Backs must not cut off Forward.
  */
 function useHistory(here: Place, restore: (p: Place) => void): { go: (step: -1 | 1) => void; cancel: () => void; canBack: boolean; canForward: boolean } {
@@ -158,7 +167,7 @@ function useHistory(here: Place, restore: (p: Place) => void): { go: (step: -1 |
     s.stack = [...s.stack.slice(0, s.i + 1), here].slice(-200);
     s.i = s.stack.length - 1;
     setVersion((v) => v + 1);
-  }, [here.dir, here.view, here.id, here.preview, here.relMode, here.chapter]);
+  }, [here.dir, here.view, here.id, here.preview, here.relMode, here.chapter, here.board]);
   const go = (step: -1 | 1) => {
     const s = h.current;
     const place = s.stack[s.i + step];
@@ -199,11 +208,14 @@ export function App() {
   const [sidebarW, setSidebarW] = useSidebarWidth();
   const [preview, setPreview] = useState<PdfKind | null>(null);
   const [relMode, setRelMode] = useState<RelationMode | null>(null);
-  const [settings, setSettings] = useState(false);
+  /** World settings open: true, or 'fields' to open it at the custom fields. */
+  const [settings, setSettings] = useState<boolean | 'fields'>(false);
   /** Settings (language, display, library) opened from inside the world. */
   const [appSettings, setAppSettings] = useState(false);
   const [creating, setCreating] = useState<EntryType | null>(null);
   const [chapterFile, setChapterFile] = useState<string | null>(null);
+  /** The Story view shows the planning board in place of the chapter. */
+  const [board, setBoard] = useState(false);
   // The side panel shows Warnings or Ask AI (kept for next time); both stay alive, so nothing is lost by switching.
   const [side, setSideState] = useState<'warnings' | 'ask'>(() => { try { return localStorage.getItem('lore:side') === 'ask' ? 'ask' : 'warnings'; } catch { return 'warnings'; } });
   const setSide = (next: 'warnings' | 'ask'): void => {
@@ -233,10 +245,11 @@ export function App() {
   const [reveal, setReveal] = useState<{ start: number; end: number; n: number } | undefined>(undefined);
   /** Bumped to open the Map again on the map a search result asked for. */
   const [mapTurn, setMapTurn] = useState(0);
-  const history = useHistory({ dir: world ? dir : null, view, id: selectedId, preview, relMode, chapter: chapterFile }, (loc) => {
+  const history = useHistory({ dir: world ? dir : null, view, id: selectedId, preview, relMode, chapter: chapterFile, board: view === 'story' && board }, (loc) => {
     const apply = () => transition(() => {
       setView(loc.view);
       setChapterFile(loc.chapter);
+      if (loc.view === 'story') setBoard(loc.board);
       setReveal(undefined);
       setSelectedId(loc.id);
       setPreview(loc.preview);
@@ -481,6 +494,8 @@ export function App() {
           const current = (id: string) => () => !!$(`[data-entry-id="${CSS.escape(id)}"][aria-current="page"]`) && !!$('.editor');
           mouse(3);
           expect(await until(current(other.id)), 'mouse back returns to the previous entry');
+          // A second Back within 120 ms counts as the same press (Windows can report one twice), so wait a little.
+          await tick(150);
           window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true, bubbles: true }));
           expect(await until(current(leyla.id)), 'Alt+Left returns to the first entry');
           await tick(150);
@@ -720,7 +735,7 @@ export function App() {
           const ew = $('.editor')?.getBoundingClientRect().width ?? 0;
           expect(ew >= main.clientWidth - pad - 2, `the editor fills the centre pane (${Math.round(ew)} of ${Math.round(main.clientWidth - pad)}px)`);
         }
-        // Motion: a tab click goes through a View Transition of the main pane and still lands on the view.
+        // Motion: a tab click fades the main pane in and lands on the view.
         {
           // The ambient aura sits behind every world view, pauses while the window is hidden and stops under reduced motion.
           const aura = $('.app > .aura.is-calm');
@@ -730,9 +745,11 @@ export function App() {
           const css = [...document.styleSheets].flatMap((sh) => [...sh.cssRules]).filter((r) => r instanceof CSSMediaRule && r.conditionText.includes('prefers-reduced-motion')).map((r) => r.cssText).join(' ');
           expect(/\.mote\s*\{\s*display: none/.test(css), 'no motes under reduced motion');
         }
-        dom['viewTransitions'] = typeof document.startViewTransition === 'function' && getComputedStyle($('.main')!).viewTransitionName === 'main-pane' ? 1 : 0;
-        expect(dom['viewTransitions'] === 1, 'View Transitions available for the main pane');
         $<HTMLButtonElement>('.tabs button:nth-child(3)')!.click();
+        await tick(0);
+        // The fade is a plain animation: it never holds the next click (a View Transition sent clicks to the page root).
+        dom['viewFade'] = matchMedia('(prefers-reduced-motion: reduce)').matches || $('.main')!.getAnimations().some((a) => a.id === 'view-fade') ? 1 : 0;
+        expect(dom['viewFade'] === 1, 'a view switch fades the main pane in');
         await until(() => !!$('.tl-scroll'));
         await tick(300);
         expect(!!$('.tl-scroll') && $('.tabs button:nth-child(3)')?.getAttribute('aria-pressed') === 'true', 'Timeline tab opens the timeline');
@@ -1073,10 +1090,10 @@ export function App() {
         expect(count('.story .prose-mirror .warn-line') > 0, 'story warnings are underlined in the sample chapter');
         expect(emojiIn($('.story')).length === 0 && emojiIn($('.story-chapters')).length === 0, `emoji in the story view: ${emojiIn($('.story'))}`);
         // A new chapter: type a sentence and a contradicting one.
-        $<HTMLButtonElement>('.story-chapters .pane-head button')!.click();
+        $<HTMLButtonElement>('.story-chapters .chapters-new')!.click();
         expect(await until(() => count('.story-chapters .chapter-link') === dom['chapters']! + 1 && ($<HTMLTextAreaElement>('#story-text')?.value ?? 'x') === ''), 'New chapter adds an empty chapter');
         {
-          const cur = $('.story-chapters .chapter-link[aria-current="page"]');
+          const cur = $('.story-chapters .chapter-row.is-current:has(.chapter-link[aria-current="page"])');
           expect(!!cur && !getComputedStyle(cur).boxShadow.includes('inset') && getComputedStyle(cur).borderTopColor === getComputedStyle(cur).borderLeftColor, `the open chapter is a tile without an edge rail (${cur ? getComputedStyle(cur).boxShadow : 'none open'})`);
         }
         const area = $<HTMLTextAreaElement>('#story-text')!;
@@ -2202,7 +2219,7 @@ export function App() {
           {
             // The credits are folded away but still there (the licences require them); the head stays put while the body scrolls.
             const box = $<HTMLDetailsElement>('.about .credits-box')!;
-            expect(!!box && !box.open && /Credits and licences/.test(box.querySelector('summary')?.textContent ?? '') && count('.about .credits-box .credit') === 12, 'About folds the twelve credits into a closed "Credits and licences" section');
+            expect(!!box && !box.open && /Credits and licences/.test(box.querySelector('summary')?.textContent ?? '') && count('.about .credits-box .credit') === 14, 'About folds the fourteen credits into a closed "Credits and licences" section');
             const firstInBody = $('.about .dialog-body')!.firstElementChild;
             expect(!!firstInBody?.classList.contains('updates') && !!$('.about .about-tour') && ($('.about .about-tour')!.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0, 'Updates and the tour come first in About, the credits after');
             box.open = true;
@@ -2650,14 +2667,17 @@ export function App() {
   // chapter does not run them again (the story analysis checks the text, after a pause). While they are quick they
   // follow every keystroke; in a world big enough that they take longer than RULES_INSTANT_MS, typing in an entry
   // waits for a pause (CHECK_DELAY_MS) before they run, like the story check, so a keystroke never waits for them.
+  // It takes two slow runs in a row: the first run after a book opens is slow while the code warms up, in any world.
   const slowRules = useRef(false);
+  const slowRuns = useRef(0);
   const ruleWorld = slowRules.current ? checked : world;
   const storyDates = ruleWorld?.story?.map((c) => `${c.file}\u0001${c.date ?? ''}`).join('\u0000');
   const ruleWarnings = useMemo(() => {
     if (!ruleWorld) return [];
     const t0 = performance.now();
     const found = checkWorld(ruleWorld, FACT_RULES);
-    slowRules.current = performance.now() - t0 > RULES_INSTANT_MS;
+    slowRuns.current = performance.now() - t0 > RULES_INSTANT_MS ? slowRuns.current + 1 : 0;
+    slowRules.current = slowRuns.current >= 2;
     return found;
   }, [ruleWorld?.entries, ruleWorld?.manifest, ruleWorld?.intended, ruleWorld?.issues, ruleWorld?.files, storyDates]);
   // How the entries' text reads (ai-phrasing) after a pause, like the story check: it reads every text, not facts.
@@ -2972,6 +2992,83 @@ export function App() {
     for (const c of changed) schedule(`story:${c.file}`, writer(dir, c.file, serializeChapter(c)), c.file);
   };
 
+  /** What a change to many files says: its history label, the note after Undo, and what else Undo puts back. */
+  type ChangeWords = { label: string; undone: string; after?: () => void };
+  /**
+   * A change Lore-Forge makes to many files at once (a rename everywhere, a Replace all): the book is kept in its
+   * history first, the files are written at once, and a note offers Undo, which puts those files back as they were.
+   */
+  const changeMany = async (words: ChangeWords, change: () => Promise<{ paths: string[]; done: string }>): Promise<void> => {
+    const d = dirRef.current;
+    if (!d) return;
+    if (!(await flush())) throw new Error(t('Some changes could not be saved first, so nothing was changed. Try again in a moment.'));
+    const kept = await window.lore.historyKeep(d, words.label).catch(() => null);
+    const { paths, done } = await change();
+    if (!paths.length) return;
+    await flush();
+    toasts.push({ tone: 'ok', text: done, ...(kept ? { action: { label: t('Undo'), run: () => void undoMany(d, kept.id, paths, words) } } : {}) });
+  };
+  const undoMany = async (d: string, id: string, paths: string[], words: ChangeWords): Promise<void> => {
+    try {
+      await flush();
+      const changed = await window.lore.historyRestore(d, id, paths, words.label);
+      toasts.push({ tone: 'ok', text: words.undone });
+      words.after?.();
+      if (changed.length && dirRef.current === d) void open(d, changed);
+    } catch (e) {
+      toasts.push({ tone: 'error', text: t('It could not be undone: {error}', { error: (e as Error).message }) });
+    }
+  };
+
+  /** An entry's old name becomes its new one where the book still uses it (the editor's rename offer): all but `skip`. */
+  const renameEverywhere = (entryId: string, from: string, to: string, skip: Set<string>, keepOldName: boolean): Promise<void> =>
+    changeMany({ label: t('Before “{from}” was renamed “{to}”', { from, to }), undone: t('“{from}” is back where it was changed to “{to}”.', { from, to }), after: () => { if (dirRef.current) setNameInBook(dirRef.current, entryId, from); } }, async () => {
+      const w = worldRef.current;
+      if (!w) return { paths: [], done: '' };
+      const r = applyRename(w, entryId, from, to, { skip, keepOldName });
+      if (r.entries.length) writeEntries(r.entries);
+      if (r.chapters.length) saveChapters(r.chapters);
+      if (r.maps) await saveMaps(r.maps);
+      return {
+        paths: [...r.entries.map((e) => w.files[e.id] ?? entryPath(e)), ...r.chapters.map((c) => c.file), ...(r.maps ? ['world.json'] : [])],
+        done: r.count === 1 ? t('Changed “{from}” to “{to}” in one place.', { from, to }) : t('Changed “{from}” to “{to}” in {n} places.', { from, to, n: r.count }),
+      };
+    });
+
+  /** Replace in the story (Ctrl+Shift+H). A Replace all is kept in the history first and offers Undo. */
+  const [replacing, setReplacing] = useState(false);
+
+  /** The audiobook dialog (from the Story Book); the audiobook goes on when it closes, and says how it ended. */
+  const [audiobookOpen, setAudiobookOpen] = useState(false);
+  const audiobookShown = useRef(false);
+  audiobookShown.current = audiobookOpen;
+  const startAudiobook = (voice: BuiltInVoice): void => {
+    const w = worldRef.current;
+    const d = dirRef.current;
+    if (!w || !d || audiobookBusy()) return;
+    const ix = new WorldIndex(w);
+    void flush()
+      .then(() => makeAudiobook({ dir: d, world: w, voice, names: spokenNamesOf(w), nameOf: (ref) => ix.resolve(ref)?.name ?? ref }))
+      .then((job) => {
+        // With the dialog open, it shows how it ended; otherwise a note does.
+        if (!job || audiobookShown.current) return;
+        if (job.state === 'done') toasts.push({ tone: 'ok', text: t('The audiobook “{title}” is saved.', { title: job.title }), action: { label: t('Show in folder'), run: () => void window.lore.showInFolder(job.file) } });
+        if (job.state === 'failed') toasts.push({ tone: 'error', text: t('The audiobook could not be made: {error}', { error: job.error ?? '' }) });
+        clearAudiobook();
+      }, (e: Error) => toasts.push({ tone: 'error', text: t('The audiobook could not be made: {error}', { error: e.message }) }));
+  };
+  const replaceInStory = async (changed: StoryChapter[], count: number, all: boolean, find: string, by: string): Promise<void> => {
+    if (!all) {
+      saveChapters(changed);
+      await flush();
+      return;
+    }
+    await changeMany({ label: t('Before “{find}” was replaced with “{by}”', { find, by }), undone: t('“{find}” is back where it was replaced.', { find }) }, async () => {
+      saveChapters(changed);
+      return { paths: changed.map((c) => c.file), done: count === 1 ? t('Replaced once.') : t('Replaced {n} times.', { n: count }) };
+    });
+  };
+
   const createChapter = (): void => {
     const order = Math.max(0, ...story.map((c) => c.order)) + 1;
     // In the app's language: it is the start of the user's own text ("Bölüm 3" in Turkish), and of its file name.
@@ -2982,15 +3079,59 @@ export function App() {
     setTimeout(() => document.querySelector<HTMLInputElement>('.story-title')?.select(), 50);
   };
 
-  /** Swap a chapter with its neighbour; orders are renumbered 1..n, file names stay. */
-  const moveChapter = (file: string, step: -1 | 1): void => {
+  /** A manuscript from elsewhere: its chapters go after the ones the story has, and the first of them opens. */
+  const importManuscript = async (): Promise<void> => {
+    try {
+      const r = await window.lore.importManuscript();
+      if (!r) return;
+      if (!r.chapters.length) {
+        toasts.push({ tone: 'error', text: t('“{file}” has no text to import.', { file: r.name }) });
+        return;
+      }
+      const now = sortChapters(worldRef.current?.story ?? []);
+      const start = Math.max(0, ...now.map((c) => c.order));
+      const taken = now.map((c) => c.file);
+      const added = r.chapters.map((c, i): StoryChapter => {
+        const order = start + i + 1;
+        const title = c.title || t('Chapter {n}', { n: now.length + i + 1 });
+        const file = chapterPath(order, title, taken);
+        taken.push(file);
+        return { file, title, order, body: c.body };
+      });
+      saveChapters(added);
+      transition(() => { setChapterFile(added[0]!.file); setReveal(undefined); setView('story'); });
+      toasts.push({ tone: 'ok', text: added.length === 1
+        ? t('Imported one chapter from “{file}”. People, places and events new to the book are under Proposals.', { file: r.name })
+        : t('Imported {n} chapters from “{file}”. People, places and events new to the book are under Proposals.', { n: added.length, file: r.name }) });
+    } catch (e) {
+      toasts.push({ tone: 'error', text: t('Could not import the manuscript: {error}', { error: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }) });
+    }
+  };
+
+  /** Put a chapter at a place in the reading order (0 is first); orders are renumbered 1..n, file names stay. */
+  const moveChapterTo = (file: string, index: number): void => {
     const list = [...story];
     const i = list.findIndex((c) => c.file === file);
-    const j = i + step;
-    if (i < 0 || j < 0 || j >= list.length) return;
-    [list[i], list[j]] = [list[j]!, list[i]!];
+    if (i < 0 || index < 0 || index >= list.length || index === i) return;
+    const [ch] = list.splice(i, 1);
+    list.splice(index, 0, ch!);
     const renumbered = list.map((c, k) => ({ ...c, order: k + 1 }));
     saveChapters(renumbered.filter((c) => story.find((x) => x.file === c.file)!.order !== c.order), renumbered);
+  };
+  /** Swap a chapter with its neighbour. */
+  const moveChapter = (file: string, step: -1 | 1): void => moveChapterTo(file, story.findIndex((c) => c.file === file) + step);
+
+  /** A card on the planning board for a chapter not written yet; its title is chosen, ready to type over. */
+  const planChapter = (): void => {
+    const order = Math.max(0, ...story.map((c) => c.order)) + 1;
+    const title = t('Chapter {n}', { n: story.length + 1 });
+    const ch: StoryChapter = { file: chapterPath(order, title, story.map((c) => c.file)), title, order, body: '' };
+    saveChapters([ch]);
+    setTimeout(() => {
+      const box = document.querySelector<HTMLTextAreaElement>(`.board-card[data-file="${CSS.escape(ch.file)}"] .board-title`);
+      box?.scrollIntoView({ block: 'nearest' });
+      box?.select();
+    }, 50);
   };
 
   const deleteChapter = async (file: string): Promise<void> => {
@@ -3178,6 +3319,9 @@ export function App() {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
         showWarnings();
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        if (worldRef.current?.story?.length) setReplacing(true);
       } else if (mod && !e.shiftKey && e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setSide('ask');
@@ -3377,6 +3521,18 @@ export function App() {
       toasts.push({ tone: 'error', text: t('Word export failed: {error}', { error: (e as Error).message }) });
     }
   };
+  const saveEpub = async (options: PublishOptions) => {
+    try {
+      await flush();
+      const r = await window.lore.exportEpub(dir, options);
+      if (!r) return;
+      setPreview(null);
+      toasts.push({ tone: 'ok', text: t('Story Book saved as an e-book. It opens in Apple Books, Google Play Books, Kobo and Calibre, and Send to Kindle takes it too.'), action: { label: t('Show in folder'), run: () => void window.lore.showInFolder(r.epub) } });
+      if (r.notes.length) toasts.push({ tone: 'info', text: r.notes.join(' ') });
+    } catch (e) {
+      toasts.push({ tone: 'error', text: t('E-book export failed: {error}', { error: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }) });
+    }
+  };
   const saveBook = async (book: BookSettings) => {
     try {
       const saved = await window.lore.saveBook(dir, book);
@@ -3389,15 +3545,16 @@ export function App() {
       toasts.push({ tone: 'error', text: t('Could not save the book details: {error}', { error: (e as Error).message }) });
     }
   };
-  /** World settings: the calendar, then the writing and picture style. */
-  const saveWorldSettings = async (calendar: Calendar, style: BookStyle): Promise<boolean> => {
+  /** World settings: the calendar, then the writing and picture style, then the book's own fields. */
+  const saveWorldSettings = async (calendar: Calendar, style: BookStyle, fields: BookFields): Promise<boolean> => {
     try {
       const saved = await window.lore.saveCalendar(dir, calendar);
       const styles = await window.lore.saveStyle(dir, style);
+      const savedFields = await window.lore.saveFields(dir, fields);
       setWorld((w) => {
         if (!w) return w;
-        const { writingStyle: _w, artStyle: _a, ...manifest } = w.manifest;
-        return { ...w, manifest: { ...manifest, ...styles, calendar: saved } };
+        const { writingStyle: _w, artStyle: _a, fields: _f, ...manifest } = w.manifest;
+        return { ...w, manifest: { ...manifest, ...styles, calendar: saved, ...(Object.keys(savedFields).length ? { fields: savedFields } : {}) } };
       });
       toasts.push({ tone: 'ok', text: t('World settings saved') });
       return true;
@@ -3442,13 +3599,16 @@ export function App() {
   const goView = (v: View, mode?: RelationMode) => transition(() => { if (mode) setRelMode(mode); setReveal(undefined); setView(v); });
 
   const selected = world.entries.find((e) => e.id === selectedId);
+  // The book's own words (its title, names, chapter titles) are marked with the language its text is in.
+  const bookLang = bookTextLanguage(world);
   const goHome = (to: 'timeline' | 'tree' | 'web' | 'codex' | 'book') => (to === 'codex' || to === 'book' ? setPreview(to) : to === 'timeline' ? goView('timeline') : goView('relations', to));
   const tabs: [View, IconName, string][] = [['home', 'house', t('Home')], ['editor', 'quill-ink', t('Editor')], ['timeline', 'hourglass', t('Timeline')], ['relations', 'spider-web', t('Relationships')], ['story', 'feather', t('Story')], ['map', 'treasure-map', t('Map')]];
   // The overlays sit second in both returns (library and world), so the tour keeps its place when a world opens.
   return (
     <Fragment key={lang}>
     <WorldDir.Provider value={dir}>
-    <ErasLink.Provider value={() => setSettings(true)}>
+    <BookLang.Provider value={bookLang}>
+    <ErasLink.Provider value={(at) => setSettings(at ?? true)}>
     <div class="app" style={{ '--sidebar-w': `${sidebarW}px` }}>
       <Aura calm />
       <header class="topbar">
@@ -3461,7 +3621,7 @@ export function App() {
                 <span class="mini-page" />
                 <span class="mini-cover"><WorldBookCover dir={dir} world={world} /></span>
               </span>
-              <span class="world-name">{world.manifest.name}</span>
+              <span class="world-name" lang={bookLang}>{world.manifest.name}</span>
             </button>
           </h1>
         </div>
@@ -3473,18 +3633,19 @@ export function App() {
         <div class="top-end">
           <div class="publish-actions" role="group" aria-label={t('Export')}>
             <button type="button" class="publish p-codex has-label" onClick={() => setPreview('codex')} aria-label={t('World Codex')} title={t('World Codex: preview every entry with facts, visual description, reference images and art briefs; then save as PDF')}><Icon name="book-cover" /><span class="btn-label">{t('World Codex')}</span></button>
-            <button type="button" class="publish p-book has-label" onClick={() => setPreview('book')} aria-label={t('Story Book')} title={t('Story Book: preview your events and notes in story order as a book; then save as PDF or Word')}><Icon name="open-book" /><span class="btn-label">{t('Story Book')}</span></button>
+            <button type="button" class="publish p-book has-label" onClick={() => setPreview('book')} aria-label={t('Story Book')} title={t('Story Book: preview your story (or your events and notes, in story order) as a book; then save it as a PDF, a Word file or an e-book')}><Icon name="open-book" /><span class="btn-label">{t('Story Book')}</span></button>
           </div>
           <div class="top-actions">
+            <AudiobookChip onOpen={() => setAudiobookOpen(true)} />
             <SaveIndicator save={save} />
             <button type="button" class="ghost small icon-only top-app-settings" aria-haspopup="dialog" onClick={() => setAppSettings(true)} aria-label={t('Settings')} title={t('Settings: language, display and the library')}><Icon name="cog" /></button>
-            <button type="button" class="ghost small top-settings has-label" aria-haspopup="dialog" onClick={() => setSettings(true)} aria-label={t('World settings')} title={t('World settings: calendar, eras and months')}><Icon name="calendar" /><span class="btn-label">{t('World settings')}</span></button>
+            <button type="button" class="ghost small top-settings has-label" aria-haspopup="dialog" onClick={() => setSettings(true)} aria-label={t('World settings')} title={t('World settings: writing and picture style, calendar, custom fields')}><Icon name="calendar" /><span class="btn-label">{t('World settings')}</span></button>
           </div>
         </div>
       </header>
       {view === 'story' ? (
-        <ChapterList chapters={story} current={chapterFile} warnings={warnings} onCreate={createChapter} onMove={moveChapter} onDelete={(f) => setDoomed({ kind: 'chapter', file: f })}
-          onSelect={(f) => transition(() => { setChapterFile(f); setReveal(undefined); })} />
+        <ChapterList chapters={story} current={chapterFile} warnings={warnings} board={board} onBoard={(on) => transition(() => setBoard(on))} onCreate={() => { setBoard(false); createChapter(); }} onImport={() => { setBoard(false); void importManuscript(); }} onMove={moveChapter} onDelete={(f) => setDoomed({ kind: 'chapter', file: f })}
+          onSelect={(f) => transition(() => { setBoard(false); setChapterFile(f); setReveal(undefined); })} />
       ) : (
       <Sidebar entries={world.entries} story={world.story} maps={world.manifest.maps} warnings={warnings} selectedId={selectedId} query={query} onQuery={setQuery} onCreate={createEntry} creating={creating} onCreating={setCreating}
         onChapter={(file, span) => transition(() => { setChapterFile(file); setView('story'); setReveal(span ? { start: span[0], end: span[1], n: performance.now() } : undefined); })}
@@ -3499,7 +3660,7 @@ export function App() {
       <main class={`main${view === 'story' ? ' main-story' : view === 'timeline' || view === 'map' ? ' main-fill' : ''}`} id="main">
         {view === 'editor' &&
           (selected ? (
-            <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={editEntry} onDelete={() => setDoomed({ kind: 'entry', entry: selected })} onHistory={() => setHistoryFor({ entryId: selected.id })} onAsk={() => askAboutThis({ kind: 'entry', id: selected.id, name: selected.name || selected.id })} onOpen={openEntry} />
+            <EntryEditor key={selected.id} dir={dir} world={world} entry={selected} warnings={warnings.filter((w) => involves(w, selected.id))} actions={actions} onChange={editEntry} onDelete={() => setDoomed({ kind: 'entry', entry: selected })} onHistory={() => setHistoryFor({ entryId: selected.id })} onAsk={() => askAboutThis({ kind: 'entry', id: selected.id, name: selected.name || selected.id })} onOpen={openEntry} onRename={renameEverywhere} />
           ) : (
             <div class="empty-state">
               <Icon class="empty-icon" name={world.entries.length ? 'pointing' : 'world'} />
@@ -3509,11 +3670,16 @@ export function App() {
         {view === 'home' && <WorldHome dir={dir} world={world} warnings={warnings} onOpen={openEntry} onGo={goHome} onWarnings={showWarnings} onHistory={() => setHistoryFor({ entryId: null })} onChange={editEntry} onCoverSave={saveCover} onSettings={() => setSettings(true)} onAppSettings={() => setAppSettings(true)} onReload={() => void flush().then(() => open(dir))} onLibrary={() => void closeWorld()} onDuplicate={() => void flush().then(() => setCopying(true))} onShare={() => setShareOpen(true)} sharing={sharing} sample={dir === bundled} />}
         {view === 'timeline' && <TimelineView world={world} warnings={warnings} selectedId={selectedId} onOpen={openEntry} onOpenLook={openLook} />}
         {view === 'map' && <MapView key={mapTurn} dir={dir} world={world} selectedId={selectedId} onOpen={openEntry} onPins={writeEntries} onSaveMaps={saveMaps} />}
-        {view === 'story' && (() => {
+        {view === 'story' && board && (
+          <StoryBoard world={world} chapters={story} warnings={warnings} onChange={(ch) => saveChapters([ch])} onMoveTo={moveChapterTo} onPlan={planChapter} onDelete={(f) => setDoomed({ kind: 'chapter', file: f })} onEntry={openEntry}
+            onWrite={(file, span) => transition(() => { setBoard(false); setChapterFile(file); setReveal(span ? { start: span[0], end: span[1], n: performance.now() } : undefined); })} />
+        )}
+        {view === 'story' && !board && (() => {
           const chapter = story.find((c) => c.file === chapterFile) ?? story[0];
           const empty: StoryAnalysis = { proposals: [], ignored: [], links: [], extraction: { proposals: [], appearances: [] }, warnings: [] };
-          return <StoryView key={chapter?.file ?? 'none'} world={world} chapter={chapter} analysis={analysis ?? empty} warnings={warnings} reveal={reveal} actions={storyActions} onCreate={createChapter}
-            onAsk={(quote) => { if (chapter) askAboutThis({ kind: 'chapter', file: chapter.file, title: chapter.title.trim() || chapter.file, ...(quote?.trim() ? { quote } : {}) }); }} />;
+          return <StoryView key={chapter?.file ?? 'none'} world={world} chapter={chapter} analysis={analysis ?? empty} warnings={warnings} reveal={reveal} actions={storyActions} onCreate={createChapter} onImport={() => void importManuscript()}
+            onAsk={(quote) => { if (chapter) askAboutThis({ kind: 'chapter', file: chapter.file, title: chapter.title.trim() || chapter.file, ...(quote?.trim() ? { quote } : {}) }); }}
+            onReplace={() => setReplacing(true)} />;
         })()}
         {view === 'relations' && <RelationsView world={world} entry={selected} mode={relMode} onMode={setRelMode} onOpen={(id) => setSelectedId(id)} onWrite={writeEntries} />}
       </main>
@@ -3544,10 +3710,11 @@ export function App() {
         </div>
       </div>
       <p class="sr-only undo-status" role="status">{undone}</p>
-      {preview && <PreviewDialog dir={dir} world={world} kind={preview} onClose={() => setPreview(null)} onSave={savePdf} onSaveDocx={saveDocx} onSaveBook={saveBook} />}
+      {preview && <PreviewDialog dir={dir} world={world} kind={preview} onClose={() => setPreview(null)} onSave={savePdf} onSaveDocx={saveDocx} onSaveEpub={saveEpub} onSaveBook={saveBook} onSaveAudiobook={() => { setPreview(null); setAudiobookOpen(true); }} />}
+      {audiobookOpen && <AudiobookDialog world={world} onStart={startAudiobook} onClose={() => setAudiobookOpen(false)} />}
       {doomed?.kind === 'entry' && (
         <ConfirmDialog title={t('Delete “{name}”?', { name: doomed.entry.name })} confirmLabel={t('Delete entry')} onClose={() => setDoomed(null)} onConfirm={() => deleteEntry(doomed.entry).then(() => setDoomed(null))}
-          subject={<div class="confirm-world"><Portrait entry={doomed.entry} size="md" /><div><strong class="confirm-name">{doomed.entry.name}</strong><span class="muted">{tm(TYPE_SINGULAR[doomed.entry.type])} · {world.files[doomed.entry.id]}</span></div></div>}>
+          subject={<div class="confirm-world"><Portrait entry={doomed.entry} size="md" /><div><strong class="confirm-name" lang={bookLang}>{doomed.entry.name}</strong><span class="muted">{tm(TYPE_SINGULAR[doomed.entry.type])} · {world.files[doomed.entry.id]}</span></div></div>}>
           <p>{t("Removes this entry's file from the world folder. Links to it from other entries will show as warnings.")}</p>
         </ConfirmDialog>
       )}
@@ -3555,22 +3722,30 @@ export function App() {
         const ch = story.find((c) => c.file === doomed.file);
         return ch && (
           <ConfirmDialog title={t('Delete “{name}”?', { name: ch.title })} confirmLabel={t('Delete chapter')} onClose={() => setDoomed(null)} onConfirm={() => deleteChapter(ch.file).then(() => setDoomed(null))}
-            subject={<div class="confirm-world"><span class="confirm-chapter" aria-hidden="true"><Icon name="feather" /></span><div><strong class="confirm-name">{ch.title}</strong><span class="muted">{ch.body.trim() ? t('{n} words', { n: ch.body.trim().split(/\s+/).length }) : t('Empty')} · {ch.file}</span></div></div>}>
+            subject={<div class="confirm-world"><span class="confirm-chapter" aria-hidden="true"><Icon name="feather" /></span><div><strong class="confirm-name" lang={bookLang}>{ch.title}</strong><span class="muted">{ch.body.trim() ? t('{n} words', { n: ch.body.trim().split(/\s+/).length }) : t('Empty')} · {ch.file}</span></div></div>}>
             <p>{t("Removes this chapter's file from the story folder. Entries added from it stay.")}</p>
           </ConfirmDialog>
         );
       })()}
-      {settings && <WorldSettings world={world} onSave={saveWorldSettings} onClose={() => setSettings(false)} />}
+      {settings && <WorldSettings world={world} at={settings === 'fields' ? 'fields' : undefined} onSave={saveWorldSettings} onClose={() => setSettings(false)} />}
       {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}
       {historyFor && (
         <HistoryDialog dir={dir} world={world} entryId={historyFor.entryId} busy={asking} onClose={() => setHistoryFor(null)} onOpen={openEntry}
           beforeChange={() => flush()} onRestored={(files) => { if (files.length) void open(dir, files); }} />
       )}
       {shareOpen && <ShareDialog onChoose={(kind) => void shareAs(kind)} onClose={() => setShareOpen(false)} />}
+      {replacing && (
+        <ReplaceDialog chapters={story} onClose={() => setReplacing(false)} onReplace={replaceInStory}
+          onGo={(file, start, end) => {
+            setReplacing(false);
+            transition(() => { setChapterFile(file); setView('story'); setReveal({ start, end, n: performance.now() }); });
+          }} />
+      )}
       {copying && <DuplicateBook dir={dir} name={world.manifest.name} onClose={() => setCopying(false)} onDone={(copy) => { setCopying(false); setFresh(copy); void closeWorld(); }} />}
       <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
     </div>
     </ErasLink.Provider>
+    </BookLang.Provider>
     </WorldDir.Provider>
     {overlays}
     </Fragment>

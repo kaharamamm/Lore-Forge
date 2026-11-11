@@ -254,6 +254,10 @@ The caravan left Qarim before dawn. ...
 - `title` (text) and `order` (number; reading order, then file name) are written by the app. `date` is
   optional and uses the normal date syntax. `year` and `era` are accepted instead of `date`. Other keys are
   kept. Without `order`, the `NN-` prefix of the file name is used; without `title`, the file name.
+- `pov`, `status` and `summary` are optional, for the planning board: whose point of view the chapter is told
+  from (a character, by id or name), how far it is (`idea`, `draft`, `revised` or `done`; without it, an idea
+  while the chapter has no text and a draft once it has) and what happens in it. Another `status` is kept as
+  written and reported as a problem with the file.
 - New chapters are named `story/NN-slug.md`. Reordering changes `order`, not file names.
 - `story-ignored.json` is `{ "schemaVersion": 1, "ignored": [{ "key", "name"?, "ignoredAt"? }] }`. Keys are
   `create:<type>:<name>` or `update:<entryId>:<fields>`, so an ignored proposal stays ignored after edits
@@ -330,7 +334,10 @@ of the title page. `lore book <worldDir> -o out.docx` (or `renderDocx(doc, world
 `writeDocx(doc, worldDir, path)` in `@lore-forge/pdf`) writes the same book as a Word file: one section per
 chapter (starting on an odd page with right-hand chapters), different first page, even/odd headers, page
 numbers from the first chapter, mirrored margins with a gutter, widow control and automatic hyphenation. Its table of contents is a
-Word field that Word updates on opening.
+Word field that Word updates on opening. `lore book <worldDir> -o out.epub` (or `renderEpub(doc, worldDir, options)` /
+`writeEpub(doc, worldDir, path, options)`) writes it as an EPUB 3 e-book: one XHTML file per front page and chapter,
+a navigation document and an NCX table of contents, the cover as a picture when given (`options.cover`, PNG bytes),
+and PNG, JPEG, GIF and WebP pictures; other pictures are left out with a note.
 
 Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral `Doc`; `toMarkdown(doc)` is in
 `@lore-forge/core` and `renderPdf(doc, {worldDir})` / `writePublication(...)` in `@lore-forge/pdf`.
@@ -349,7 +356,7 @@ Library use: `worldCodex(world)` / `storyBook(world)` return a renderer-neutral 
   0.4 (`story/`, `story-ignored.json`, snapshot `story`, fact `chapter`/`span`, the `story-contradiction`
   rule, detail fields, `picture`, several races, manifest `cover` and the new `book` keys) and 1.0 (`models/`, manifest
   `artStyle`), and so is what came after it (entry `looks`, manifest `maps`, place `pins`, the `look-*` and `map-pin`
-  rules), so worlds stay at version 1. Older files load unchanged and are never migrated.
+  rules, manifest and entry `fields` with the `field-value` rule), so worlds stay at version 1. Older files load unchanged and are never migrated.
   Consumers should ignore fields they don't know.
 - **Breaking changes** bump the version: removing or renaming fields, or changing the meaning of a field or
   of the date syntax. Lore-Forge will migrate older worlds when it opens them. Consumers should check

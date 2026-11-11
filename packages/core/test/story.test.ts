@@ -435,7 +435,8 @@ test('Story Book: manuscript chapters as prose, the chronicle as appendix', () =
   const ev: Draft = { id: 'evt-a', type: 'event', name: 'The Toll Dispute', date: '1900', body: 'Chronicle text.' };
   const doc = storyBook(world([ev], { story: ['The road was long.', ''] }));
   const heads = doc.blocks.filter((b) => b.kind === 'heading').map((b) => (b as { text: string }).text);
-  assert.deepEqual(heads, ['Chapter 1. Chapter 1', 'Appendix: Chronicle', 'After the Sundering', 'The Toll Dispute']);
+  // The chapter is titled "Chapter 1" (the app's name for a new one): the heading is that number once.
+  assert.deepEqual(heads, ['Chapter 1', 'Appendix: Chronicle', 'After the Sundering', 'The Toll Dispute']);
   const noAppendix = storyBook(world([ev], { story: 'The road was long.' }), { appendix: false });
   assert.equal(noAppendix.blocks.some((b) => b.kind === 'heading' && b.text === 'Appendix: Chronicle'), false);
   const old = storyBook(world([ev]));

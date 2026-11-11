@@ -1,5 +1,6 @@
 import { Fragment } from 'preact';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { BookLang } from './cover.tsx';
 import {
   chapterDate, ENTRY_TYPES, entryIcon, guessEntry, sentences, type Guess, relationLabel, TYPE_ICON, TYPE_SINGULAR, wordCount, WorldIndex,
   type Entry, type EntryType, type Proposal, type ProposalFields, type SourceSpan, type StoryAnalysis, type StoryChapter, type Warning, type World,
@@ -9,6 +10,9 @@ import { Select } from './select.tsx';
 import { kindOf } from './severity.tsx';
 import { EntryLabel, TypeBadge } from './type.tsx';
 import { ProseEditor, type SpanMark, type TextPick } from './prose.tsx';
+import { addVoicesHint, useReadAloud } from './read-aloud.tsx';
+import { readParts, readRange } from '../reading.ts';
+import { worldIndex } from '../hooks.ts';
 import type { Spelling } from '../../shared/api.ts';
 import { lower, num, t, tj, tm, tx } from '../i18n.tsx';
 
@@ -29,18 +33,23 @@ export interface StoryActions {
 
 /** Words per chapter, counted once per chapter version: typing in one chapter does not count the others again. */
 const counted = new WeakMap<StoryChapter, number>();
-const wordsOf = (c: StoryChapter): number => {
+export const wordsOf = (c: StoryChapter): number => {
   let n = counted.get(c);
   if (n === undefined) counted.set(c, (n = wordCount(c.body)));
   return n;
 };
 
-export function ChapterList({ chapters, current, warnings, onSelect, onCreate, onMove, onDelete }: {
+export function ChapterList({ chapters, current, warnings, board, onBoard, onSelect, onCreate, onImport, onMove, onDelete }: {
   chapters: readonly StoryChapter[];
   current: string | null;
   warnings: readonly Warning[];
+  /** The planning board is showing in place of the chapter. */
+  board: boolean;
+  onBoard: (on: boolean) => void;
   onSelect: (file: string) => void;
   onCreate: () => void;
+  /** Bring in a manuscript (Word, Markdown or text): its chapters go after these. */
+  onImport: () => void;
   onMove: (file: string, step: -1 | 1) => void;
   onDelete: (file: string) => void;
 }) {
@@ -49,30 +58,38 @@ export function ChapterList({ chapters, current, warnings, onSelect, onCreate, o
     <aside class="sidebar story-chapters" aria-labelledby="chapters-title">
       <div class="pane-head">
         <h2 id="chapters-title"><Icon name="scroll-quill" /> {t('Chapters')}</h2>
-        <button type="button" class="small" onClick={onCreate}><Icon name="feather" /> {t('New chapter')}</button>
+        <button type="button" class="small chapters-import" onClick={onImport} title={t('Import a manuscript (Word, Markdown or plain text): its chapters go after these')}><Icon name="box-unpacking" /> {t('Import…')}</button>
+      </div>
+      <div class="segmented story-modes" role="group" aria-label={t('Story view')}>
+        <button type="button" class="small" aria-pressed={!board} onClick={() => onBoard(false)} title={t('Write the chapter chosen below')}><Icon name="feather" /> {t('Write')}</button>
+        <button type="button" class="small story-board-tab" aria-pressed={board} onClick={() => onBoard(true)} title={t('Planning board: every chapter as a card, and who is in which chapter')}><Icon name="files" /> {t('Board')}</button>
       </div>
       <p class="muted small">{chapters.length === 1 ? t('{n} chapter · {words} words', { n: chapters.length, words: num(total) }) : t('{n} chapters · {words} words', { n: chapters.length, words: num(total) })}</p>
       <ol class="chapter-list">
         {chapters.map((c, i) => {
           const n = warnings.filter((w) => !w.intended && w.offending.chapter === c.file).length;
+          const open = !board && c.file === current;
           return (
-            <li key={c.file} class="chapter-row">
-              <button type="button" class="chapter-link" aria-current={c.file === current ? 'page' : undefined} onClick={() => onSelect(c.file)}>
+            <li key={c.file} class={`chapter-row${open ? ' is-current' : ''}`}>
+              <button type="button" class="chapter-link" aria-current={open ? 'page' : undefined} onClick={() => onSelect(c.file)}>
                 <span class="chapter-n">{i + 1}</span>
                 <span class="chapter-name">{c.title || t('Untitled')}</span>
                 {n > 0 && <span class="count count-warning" title={n === 1 ? t('{n} warning', { n }) : t('{n} warnings', { n })}><Icon name="hazard-sign" /> {n}</span>}
               </button>
-              {c.file === current && (
+              {open && (
                 <span class="chapter-tools">
-                  <button type="button" class="ghost small icon-only" disabled={i === 0} onClick={() => onMove(c.file, -1)} aria-label={t('Move chapter up')} title={t('Move up')}><Icon class="rot-up" name="play-button" /></button>
-                  <button type="button" class="ghost small icon-only" disabled={i === chapters.length - 1} onClick={() => onMove(c.file, 1)} aria-label={t('Move chapter down')} title={t('Move down')}><Icon class="rot-down" name="play-button" /></button>
-                  <button type="button" class="ghost small icon-only danger" onClick={() => onDelete(c.file)} aria-label={t('Delete chapter')} title={t('Delete chapter')}><Icon name="trash-can" /></button>
+                  <span class="chapter-move" role="group" aria-label={t('Move chapter')}>
+                    <button type="button" class="ghost small icon-only" disabled={i === 0} onClick={() => onMove(c.file, -1)} aria-label={t('Move chapter up')} title={t('Move up')}><Icon class="arrow-up" name="plain-arrow" /></button>
+                    <button type="button" class="ghost small icon-only" disabled={i === chapters.length - 1} onClick={() => onMove(c.file, 1)} aria-label={t('Move chapter down')} title={t('Move down')}><Icon name="plain-arrow" /></button>
+                  </span>
+                  <button type="button" class="ghost small icon-only chapter-delete" onClick={() => onDelete(c.file)} aria-label={t('Delete chapter')} title={t('Delete chapter')}><Icon name="trash-can" /></button>
                 </span>
               )}
             </li>
           );
         })}
       </ol>
+      <button type="button" class="chapters-new" onClick={onCreate}><Icon name="feather" /> {t('New chapter')}</button>
     </aside>
   );
 }
@@ -85,9 +102,13 @@ function chosenText(): string | undefined {
   return el && el.selectionEnd > el.selectionStart ? el.value.slice(el.selectionStart, el.selectionEnd) : undefined;
 }
 
-export function StoryView({ world, chapter, analysis, warnings, reveal, actions, onCreate, onAsk }: {
+export function StoryView({ world, chapter, analysis, warnings, reveal, actions, onCreate, onImport, onAsk, onReplace }: {
   /** Ask AI about this chapter, or the part of it chosen. */
   onAsk: (quote?: string) => void;
+  /** Find and replace in every chapter (Ctrl+Shift+H). */
+  onReplace: () => void;
+  /** Bring in a manuscript written elsewhere. */
+  onImport: () => void;
   world: World;
   chapter: StoryChapter | undefined;
   analysis: StoryAnalysis;
@@ -97,6 +118,7 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
   actions: StoryActions;
   onCreate: () => void;
 }) {
+  const bookLang = useContext(BookLang);
   const [pick, setPick] = useState<TextPick | null>(null);
   const [manual, setManual] = useState<{ p: Proposal; mode: 'edit' | 'merge' } | null>(null);
   // The spelling of the word under a right-click, for the menu (main/spelling.ts sends it just after the menu opens):
@@ -110,6 +132,28 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
     const s = sentences(chapter.body).find((x) => x.start <= pick.start && x.start + x.text.length >= pick.end);
     return guessEntry(world, pick.text, s?.text ?? pick.text);
   }, [pick?.start, pick?.end, pick?.text, world]);
+  // Read aloud: from the caret (or the part chosen) to the end; it stops when the chapter or its text changes. Names
+  // with a pronunciation are said the way it is written.
+  const names = useMemo(() => world.entries.filter((e) => e.pronunciation?.trim() && e.name.trim()).map((e) => ({ name: e.name, say: e.pronunciation! })), [world.entries]);
+  const reader = useReadAloud(chapter ? `${chapter.file}\n${chapter.body}` : '', names);
+  const startReading = (): void => {
+    if (!chapter) return;
+    const box = document.getElementById('story-text') as HTMLTextAreaElement | null;
+    const { from, to } = readRange(chapter.body, box?.selectionStart ?? 0, box?.selectionEnd ?? 0);
+    const ix = worldIndex(world);
+    reader.start(readParts(chapter.body, from, to, (ref) => ix.resolve(ref)?.name ?? ref), chapter.body);
+  };
+  // The sentence being read stays in view.
+  useEffect(() => {
+    if (!reader.part) return;
+    requestAnimationFrame(() => {
+      const box = document.getElementById('story-text');
+      const line = document.querySelector<HTMLElement>('.story-write .prose-mirror .reading-line');
+      if (!box || !line) return;
+      const top = line.offsetTop;
+      if (top < box.scrollTop + 24 || top + line.offsetHeight > box.scrollTop + box.clientHeight - 24) box.scrollTop = Math.max(0, top - box.clientHeight / 3);
+    });
+  }, [reader.part?.start]);
   const onPick = (pk: TextPick | null) => {
     if (pk?.how === 'menu') pickedAt.current = performance.now();
     if (!pk || pk.how !== 'quick' || !chapter) return setPick(pk);
@@ -127,7 +171,10 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
       <div class="empty-state">
         <Icon class="empty-icon" name="feather" />
         <p>{t('Write the whole story here, chapter by chapter. Names you use are linked to your entries, new people, places and events are offered as proposals, and contradictions are flagged as you type.')}</p>
-        <button type="button" class="primary" onClick={onCreate}>{t('Start the first chapter')}</button>
+        <div class="row-actions story-start">
+          <button type="button" class="primary" onClick={onCreate}>{t('Start the first chapter')}</button>
+          <button type="button" class="story-import" onClick={onImport} title={t('Word, Markdown or plain text, split into chapters at its chapter headings')}><Icon name="box-unpacking" /> {t('Import a manuscript…')}</button>
+        </div>
       </div>
     );
   }
@@ -137,6 +184,7 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
       if (f?.chapter === chapter.file && f.span) marks.push({ start: f.span[0], end: f.span[1], cls: `warn-line warn-${kindOf(w)}`, title: kindOf(w) === 'error' ? t('Error') : kindOf(w) === 'intended' ? t('Intended') : kindOf(w) === 'info' ? t('Info') : t('Warning'), detail: tm(w.message) });
     }
   }
+  if (reader.part) marks.push({ start: reader.part.start, end: reader.part.end, cls: 'reading-line', title: '' });
   const words = wordsOf(chapter);
   /** A spelling suggestion takes the place of the misspelled word in the picked text, and the caret goes after it. */
   const fixSpelling = (pk: TextPick, word: string, to: string): void => {
@@ -161,16 +209,24 @@ export function StoryView({ world, chapter, analysis, warnings, reveal, actions,
     <div class="story">
       <section class="story-write" aria-label={t('Manuscript')}>
         <div class="story-head">
-          <input class="story-title" aria-label={t('Chapter title')} value={chapter.title} placeholder={t('Chapter title')} onInput={(e) => actions.onChange({ ...chapter, title: e.currentTarget.value })} />
+          <input class="story-title" lang={bookLang} aria-label={t('Chapter title')} value={chapter.title} placeholder={t('Chapter title')} onInput={(e) => actions.onChange({ ...chapter, title: e.currentTarget.value })} />
           <label class="story-date">
             <span>{t('Date')}</span>
             <input value={chapter.date ?? ''} placeholder={chapterDate(chapter) ?? t('e.g. 1872 OK')} onInput={(e) => { const v = e.currentTarget.value; const { date: _d, ...rest } = chapter; actions.onChange(v.trim() ? { ...rest, date: v } : rest); }} />
           </label>
           <span class="muted small story-count" role="status">{words === 1 ? t('{n} word', { n: num(words) }) : t('{n} words', { n: num(words) })}</span>
-          <button type="button" class="ghost small story-ask" onClick={() => onAsk(chosenText())} title={t('Ask AI about this chapter, or about the text you chose in it')}><Icon name="magic-lamp" /> {t('Ask AI')}</button>
+          <div class="story-tools">
+            <button type="button" class="ghost small story-replace" onClick={onReplace} title={t('Find a word or phrase in every chapter and replace it (Ctrl+Shift+H)')}><Icon name="magnifying-glass" /> {t('Replace…')}</button>
+            <button type="button" class="ghost small story-ask" onClick={() => onAsk(chosenText())} title={t('Ask AI about this chapter, or about the text you chose in it')}><Icon name="magic-lamp" /> {t('Ask AI')}</button>
+            <button type="button" class="ghost small story-read" aria-pressed={!!reader.part} disabled={!reader.available && !reader.part} onClick={() => (reader.part ? reader.stop() : startReading())}
+              title={reader.available ? t('Read this chapter aloud from the caret, or the part you chose. The voices work without the internet.') : `${t('This computer has no voices for reading aloud.')} ${addVoicesHint()}`}>
+              <Icon name="speaker" /> {reader.part ? t('Stop reading') : t('Read aloud')}
+            </button>
+          </div>
         </div>
         <ProseEditor id="story-text" world={world} value={chapter.body} fill marks={marks} reveal={reveal} label={chapter.title ? t('Text of {title}', { title: chapter.title }) : t('Text of this chapter')}
           onInput={(body) => actions.onChange({ ...chapter, body })} onOpen={actions.onOpen} onPick={onPick} />
+        {reader.bar}
         {pick && (guess || pick.passage) && (
           <PickMenu pick={pick} guess={guess} onClose={() => setPick(null)}
             spelling={pick.how === 'menu' && spelling && pick.text.includes(spelling.word) ? spelling : null}
@@ -210,6 +266,7 @@ function PickMenu({ pick, guess, spelling, onSpell, onDictionary, onClose, onOpe
   onLink: () => void;
   onSearch: () => void;
 }) {
+  const bookLang = useContext(BookLang);
   const [full, setFull] = useState(pick.how === 'menu');
   const box = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState({ x: pick.x, y: pick.y });
@@ -251,7 +308,7 @@ function PickMenu({ pick, guess, spelling, onSpell, onDictionary, onClose, onOpe
     return (
       <div ref={box} class={`pick-menu pick-passage${full ? ' is-full' : ''}`} style={{ left: `${at.x}px`, top: `${at.y}px` }} onKeyDown={onKey}
         role={full ? 'menu' : 'toolbar'} aria-label={t('The part you chose')}>
-        {full && <p class="pick-title" aria-hidden="true">“{short}”</p>}
+        {full && <p class="pick-title" lang={bookLang} aria-hidden="true">“{short}”</p>}
         {full && spelling && (
           <div class="pick-spelling" role="group" aria-label={t('Spelling of “{word}”', { word: spelling.word })}>
             {spelling.suggestions.map((s) => (
@@ -284,7 +341,7 @@ function PickMenu({ pick, guess, spelling, onSpell, onDictionary, onClose, onOpe
       )}
       {full && (
         <>
-          <p class="pick-title" aria-hidden="true">“{short}”</p>
+          <p class="pick-title" lang={bookLang} aria-hidden="true">“{short}”</p>
           {spelling && (
             <div class="pick-spelling" role="group" aria-label={t('Spelling of “{word}”', { word: spelling.word })}>
               {spelling.suggestions.map((s) => (
@@ -396,6 +453,7 @@ function ProposalCard({ p, ix, world, actions, otherChapter, initial, onDone }: 
   initial?: 'edit' | 'merge';
   onDone?: () => void;
 }) {
+  const bookLang = useContext(BookLang);
   const [mode, setModeRaw] = useState<'view' | 'edit' | 'merge'>(initial ?? 'view');
   const setMode = (m: 'view' | 'edit' | 'merge') => (m === 'view' && onDone ? onDone() : setModeRaw(m));
   const target = p.matchedExistingId ? ix.byIdOf(p.matchedExistingId) : undefined;
@@ -404,7 +462,7 @@ function ProposalCard({ p, ix, world, actions, otherChapter, initial, onDone }: 
     <li class={`proposal t-${p.entryType}${onDone ? ' is-picked' : ''}`} data-key={p.key}>
       <div class="proposal-head">
         <TypeBadge type={p.entryType} short />
-        <span class="proposal-name">{p.name}</span>
+        <span class="proposal-name" lang={bookLang}>{p.name}</span>
         <span class="proposal-kind">{onDone ? t('From your selection') : p.kind === 'create' ? t('New {type}', { type: lower(tm(TYPE_SINGULAR[p.entryType])) }) : tx('proposal', 'Update')}</span>
       </div>
       {target && <p class="proposal-target">{tj('Changes {entry}', { entry: <button type="button" class="link" onClick={() => actions.onOpen(target.id)}><EntryLabel entry={target} /></button> })}</p>}

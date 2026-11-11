@@ -1,6 +1,8 @@
 ---
 id: char-kadir
 type: character
+fields:
+  playable: true
 name: Kadir Humpback
 aliases:
   - The Red Wind

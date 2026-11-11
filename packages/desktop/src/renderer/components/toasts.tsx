@@ -19,7 +19,8 @@ export function useToasts() {
   const push = useCallback((t: Omit<Toast, 'id'>) => {
     const id = next.current++;
     setToasts((ts) => [...ts.slice(-3), { ...t, id }]);
-    setTimeout(() => dismiss(id), t.tone === 'error' ? 9000 : 5000);
+    // A note with a button (Undo) stays longer, so there is time to use it.
+    setTimeout(() => dismiss(id), t.action ? 12000 : t.tone === 'error' ? 9000 : 5000);
   }, [dismiss]);
   return { toasts, push, dismiss };
 }

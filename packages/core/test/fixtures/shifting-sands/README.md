@@ -23,6 +23,7 @@ A small desert world used to test Lore-Forge (the sample world on the shelf is `
 | look-outside-life | Sefa's look "Young novice" starts in 1890, before she was born (1910) |
 | look-overlap | Sefa's looks "Pilgrim cloak" and "Mourning veil" apply at the same time |
 | map-pin | The Shifting Dunes is pinned on the map "old-caravan-chart", which the world does not have |
+| field-value | The Glass Compass's Weight is "heavy", but the book's Weight field (world.json `fields`) holds a number |
 | ai-phrasing | "The First Caravan" calls the crossing "a testament to" patience, a stock AI phrase (a note) |
 | story-contradiction | The story chapter "The Salt Road" says Orsan the Grey was born in 1745; his page says 1740 |
 

@@ -59,6 +59,16 @@ export const MAIN: Readonly<Record<string, string>> = {
 
   // packages/pdf (the PDF and Word writers), through main's t(): their own notes in the exported files and the toast.
   '[Image not embedded: {file}. PDF export embeds PNG, JPEG and GIF only.]': '[Görsel eklenmedi: {file}. PDF dışa aktarımı yalnızca PNG, JPEG ve GIF ekler.]',
+  '[Image not embedded: {file}. The e-book takes PNG, JPEG, GIF and WebP pictures.]': '[Görsel eklenmedi: {file}. E-kitap PNG, JPEG, GIF ve WebP resimleri alır.]',
+  // The Story Book as an e-book (main.ts).
+  'Save Story Book as an e-book': 'Hikâye Kitabı: e-kitap olarak kaydet',
+  'E-book (EPUB)': 'E-kitap (EPUB)',
+  // A manuscript into the story (main.ts, manuscript.ts).
+  'Import a manuscript': 'Metin içe aktar',
+  'Manuscripts (Word, Markdown, text)': 'Metinler (Word, Markdown, düz metin)',
+  'This is not a Word file (.docx), or it is damaged.': 'Bu bir Word dosyası (.docx) değil ya da bozuk.',
+  'Lore-Forge imports Word (.docx), Markdown and plain text files.': 'Lore-Forge; Word (.docx), Markdown ve düz metin dosyalarını içe aktarır.',
+  'This file is too large to import.': 'Bu dosya içe aktarılamayacak kadar büyük.',
   '[Image not embedded: {file}. Export embeds PNG, JPEG and GIF only.]': '[Görsel eklenmedi: {file}. Dışa aktarım yalnızca PNG, JPEG ve GIF ekler.]',
   '[Image file missing: {file}]': '[Görsel dosyası yok: {file}]',
   '[Image could not be read: {file}]': '[Görsel okunamadı: {file}]',
@@ -110,4 +120,6 @@ export const MAIN: Readonly<Record<string, string>> = {
   'A map can be a PNG, JPEG, WebP or GIF picture.': 'Harita PNG, JPEG, WebP ya da GIF biçiminde bir resim olabilir.',
   'The picture is not there any more: {file}': 'Resim artık orada değil: {file}',
   'A map needs a picture.': 'Haritanın bir resmi olmalı.',
+  'Save the story as an audiobook': 'Hikâyeyi sesli kitap olarak kaydet',
+  'Audiobook (Opus)': 'Sesli kitap (Opus)',
 };

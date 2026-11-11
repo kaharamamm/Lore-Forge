@@ -166,6 +166,22 @@
           "date": {
             "type": "string"
           },
+          "pov": {
+            "type": "string",
+            "description": "Whose point of view the chapter is told from: a character, by id or name."
+          },
+          "status": {
+            "enum": [
+              "idea",
+              "draft",
+              "revised",
+              "done"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "What happens in the chapter, in a line or two."
+          },
           "body": {
             "type": "string",
             "description": "Markdown prose."

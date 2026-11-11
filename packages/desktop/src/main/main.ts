@@ -6,8 +6,8 @@ import { basename, dirname, extname, isAbsolute, join, normalize, relative, reso
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { strFromU8, unzipSync } from 'fflate';
 import { createWorld, deleteModel, duplicateWorld, importModel, listModels, loadWorld, MODEL_EXTS, moveModels, readModel, readWorldFiles, renameModel, worldSlug } from '@lore-forge/core/node';
-import { bookSite, calendarProblems, cleanCoverSettings, DEFAULT_TRIM, localize, localizeDoc, recordMessages, snapshot, storyBook, TRIMS, viewLabel, worldCodex, type BookSettings, type Calendar, type Doc, type ImageView, type TrimSize, type WorldCoverSettings, type WorldMap } from '@lore-forge/core';
-import { defaultFontDir, systemFontFamilies, writeDocx, writePublication } from '@lore-forge/pdf';
+import { bookSite, calendarProblems, cleanCoverSettings, parseCustomFields, DEFAULT_TRIM, localize, localizeDoc, recordMessages, snapshot, storyBook, TRIMS, viewLabel, worldCodex, type BookSettings, type Calendar, type Doc, type ImageView, type TrimSize, type WorldCoverSettings, type WorldMap } from '@lore-forge/core';
+import { defaultFontDir, systemFontFamilies, writeDocx, writeEpub, writePublication } from '@lore-forge/pdf';
 import type { CoverImage, CreateWorldOptions, MapPicture, PdfKind, PublishOptions, Settings, SmokeMouse } from '../shared/api.ts';
 import { checkForUpdates, downloadUpdate, installUpdate, setupUpdater, updateState } from './updater.ts';
 import { cleanOrder, orderShelf, placeAfter, planShelf } from '../shared/library.ts';
@@ -17,12 +17,20 @@ import { registerAsk } from './ask.ts';
 import { bookOpened, historyOf, registerHistory } from './book-history.ts';
 import { registerPictures } from './pictures.ts';
 import { BOOK_FILE_EXT, bookFileArgs, openBook, packBook } from './share.ts';
+import { MANUSCRIPT_EXTS, readManuscript } from './manuscript.ts';
+import { builtInVoices, dropSpeech, speakBuiltIn, spokenNamesFrom, stopVoices } from './voice.ts';
+import { addAudio, audiobookInfo, cancelAudiobook, dropAudiobooks, finishAudiobook, startAudiobook } from './audiobook.ts';
 import { applySpelling, attachSpelling, forgetBookWords, registerSpelling } from './spelling.ts';
 import { defaultSpelling, SPELL_LANGUAGES } from '../shared/spelling.ts';
 import { cleanDisplay, storedDisplay, type DisplaySettings } from '../shared/display.ts';
 import { attachDisplay, windowSize, type WindowDisplay } from './display.ts';
 import { isLang, langFor, language, lower, setLanguage, t, type Lang } from '../shared/i18n.ts';
 import { TR, TR_CORE } from '../shared/locales/tr/index.ts';
+
+// A terminal in VS Code or Cursor passes on the editor's crash report pipe. This app's helper processes would hand their
+// crashes to the editor, or print "registration_protocol_win.cc ... CreateFile" once the editor's crash handler has
+// closed. Lore-Forge has no crash reporter, so its processes never need the variable.
+delete process.env['CHROME_CRASHPAD_PIPE_NAME'];
 
 const SMOKE = process.env['LORE_FORGE_SMOKE'] === '1';
 // Core remembers how it made its texts, so the exports and its errors can be written in the app's language.
@@ -499,7 +507,14 @@ function registerIpc(): void {
       await mkdir(join(dir, 'images'), { recursive: true });
       await copyFile(o.image, join(dir, image));
     }
-    await createWorld(dir, o.name, { cover: cleanCover({ ...o.cover, ...(o.color ? { color: o.color } : {}), ...(image ? { image } : {}) }) });
+    const tp = o.template ?? {};
+    await inLang(() => createWorld(dir, o.name, {
+      cover: cleanCover({ ...o.cover, ...(o.color ? { color: o.color } : {}), ...(image ? { image } : {}) }),
+      ...(tp.calendar ? { calendar: tp.calendar } : {}),
+      ...(typeof tp.writingStyle === 'string' ? { writingStyle: tp.writingStyle } : {}),
+      ...(typeof tp.artStyle === 'string' ? { artStyle: tp.artStyle } : {}),
+      ...(tp.fields ? { fields: tp.fields } : {}),
+    }));
     return dir;
   });
   // A copy always goes into the worlds folder, so the read-only bundled world can be copied and edited.
@@ -613,6 +628,60 @@ function registerIpc(): void {
     if (r.canceled || !r.filePath) return null;
     return publish(dir, kind, r.filePath, options);
   });
+  // A manuscript into the story: Word, Markdown or plain text, split into chapters at its chapter headings. The
+  // window adds the chapters, like new ones.
+  // Read aloud with the built-in voices: which ones this computer has, and speech for one sentence.
+  ipcMain.handle('builtInVoices', () => builtInVoices());
+  ipcMain.handle('speakBuiltIn', (_e, text: unknown, voice: unknown, speed: unknown, names: unknown, batch: unknown) =>
+    speakBuiltIn(String(text ?? ''), String(voice ?? ''), Number(speed) || 1, spokenNamesFrom(names), typeof batch === 'string' ? batch.slice(0, 100) : undefined));
+  ipcMain.on('dropSpeech', (_e, batch: unknown) => { if (typeof batch === 'string') dropSpeech(batch.slice(0, 100)); });
+  ipcMain.handle('importManuscript', async () => {
+    const r = await dialog.showOpenDialog(win!, { title: t('Import a manuscript'), properties: ['openFile'], filters: [{ name: t('Manuscripts (Word, Markdown, text)'), extensions: [...MANUSCRIPT_EXTS] }] });
+    const file = r.filePaths[0];
+    if (r.canceled || !file) return null;
+    return readManuscript(file);
+  });
+  // The Story Book as an e-book: the same document and cover as the PDF, for phones and e-readers.
+  ipcMain.handle('exportEpub', async (_e, dir: string, options: PublishOptions) => {
+    const world = await loadWorld(dir);
+    const r = await dialog.showSaveDialog(win!, {
+      title: t('Save Story Book as an e-book'),
+      defaultPath: join(app.getPath('documents'), `${world.manifest.id}-book.epub`),
+      filters: [{ name: t('E-book (EPUB)'), extensions: ['epub'] }],
+    });
+    if (r.canceled || !r.filePath) return null;
+    const doc = inLanguage(storyBook(world, options));
+    const cover = await renderCoverPng(dir, doc.print?.trim ?? DEFAULT_TRIM);
+    const author = world.manifest.book?.author?.trim();
+    return writeEpub(doc, dir, r.filePath, { ...(cover ? { cover } : {}), lang: language(), id: world.manifest.id, ...(author ? { author } : {}), t });
+  });
+  // The audiobook: the window makes the speech and sends it as it goes; the file is written at the end.
+  ipcMain.handle('audiobookStart', async (_e, dir: string) => {
+    const world = await loadWorld(dir);
+    const r = await dialog.showSaveDialog(win!, {
+      title: t('Save the story as an audiobook'),
+      defaultPath: join(app.getPath('documents'), `${world.manifest.id}-audiobook.opus`),
+      filters: [{ name: t('Audiobook (Opus)'), extensions: ['opus'] }],
+    });
+    if (r.canceled || !r.filePath) return null;
+    return { id: await startAudiobook(r.filePath), file: r.filePath };
+  });
+  ipcMain.handle('audiobookAdd', (_e, id: unknown, data: unknown, sizes: unknown, samples: unknown) => addAudio(String(id), data as Uint8Array, sizes as number[], samples as number[]));
+  ipcMain.handle('audiobookFinish', async (_e, id: unknown, dir: string, info: unknown) => {
+    const tags = audiobookInfo(info);
+    // The book's cover, as on the e-book, made smaller: players show it next to the chapters.
+    const world = await loadWorld(dir).catch(() => null);
+    const png = world ? await renderCoverPng(dir, world.manifest.book?.trim ?? DEFAULT_TRIM).catch(() => undefined) : undefined;
+    let cover: { mime: string; data: Uint8Array; width: number; height: number } | undefined;
+    if (png) {
+      const image = nativeImage.createFromBuffer(Buffer.from(png));
+      const small = image.getSize().width > 800 ? image.resize({ width: 800, quality: 'best' }) : image;
+      const size = small.getSize();
+      if (!small.isEmpty()) cover = { mime: 'image/jpeg', data: small.toJPEG(88), width: size.width, height: size.height };
+    }
+    return finishAudiobook(String(id), { ...tags, ...(cover ? { cover } : {}) });
+  });
+  ipcMain.handle('audiobookCancel', (_e, id: unknown) => cancelAudiobook(String(id)));
   ipcMain.handle('exportDocx', async (_e, dir: string, options: PublishOptions) => {
     const world = await loadWorld(dir);
     const r = await dialog.showSaveDialog(win!, {
@@ -645,6 +714,18 @@ function registerIpc(): void {
     }
     await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
     return { ...(typeof raw['writingStyle'] === 'string' ? { writingStyle: raw['writingStyle'] } : {}), ...(typeof raw['artStyle'] === 'string' ? { artStyle: raw['artStyle'] } : {}) };
+  });
+  // The book's own fields (World settings): world.json "fields", checked like a hand-written file; none removes the key.
+  ipcMain.handle('saveFields', async (_e, dir: string, fields: unknown) => {
+    const issues: string[] = [];
+    const next = parseCustomFields(fields, issues);
+    if (issues.length) throw new Error(said(issues[0]!));
+    const path = join(dir, 'world.json');
+    const raw = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    if (next) raw['fields'] = next;
+    else delete raw['fields'];
+    await writeOwn(path, JSON.stringify(raw, null, 2) + '\n');
+    return next ?? {};
   });
   ipcMain.handle('saveCalendar', async (_e, dir: string, calendar: Calendar) => {
     const problems = calendarProblems(calendar);
@@ -1015,6 +1096,8 @@ async function createWindow(): Promise<void> {
 if (process.env['LORE_FORGE_NO_SANDBOX'] === '1') app.commandLine.appendSwitch('no-sandbox');
 // The smoke run renders a 3D model under xvfb, whose software GL Chromium blocklists for WebGL.
 if (SMOKE) app.commandLine.appendSwitch('ignore-gpu-blocklist');
+// Read aloud on Linux: Chromium speaks with the system's voices (speech-dispatcher) only when asked to.
+if (process.platform === 'linux') app.commandLine.appendSwitch('enable-speech-dispatcher');
 
 app.whenReady().then(async () => {
   const dir = SMOKE ? initialWorld() : null;
@@ -1056,4 +1139,8 @@ app.whenReady().then(async () => {
 });
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+app.on('will-quit', () => {
+  stopVoices();
+  dropAudiobooks();
 });

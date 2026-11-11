@@ -5,3 +5,6 @@ out/
 *.tsbuildinfo
 .DS_Store
 *.log
+
+# The built-in voices: downloaded by packages/desktop/scripts/fetch-voices.mjs, shipped by electron-builder.
+packages/desktop/voices/

@@ -4,7 +4,7 @@
  * API keys stay in the main process; the window only ever sees their last four characters.
  */
 import { app, clipboard, ipcMain } from 'electron';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -32,14 +32,17 @@ function mcpLaunch(defaultWorldsDir: string): { launch: McpLaunch | null; unavai
   return { launch: serverLaunch(defaultWorldsDir) };
 }
 
-/** The `claude` command of Claude Code, if installed (GUI apps on macOS do not see the shell's PATH: known places too). */
-export function findClaude(): string | null {
-  try {
-    const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', ['claude'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
-    const found = out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && existsSync(s));
-    const best = found.find((s) => /\.exe$/i.test(s)) ?? found.find((s) => /\.(cmd|bat)$/i.test(s)) ?? (process.platform === 'win32' ? undefined : found[0]);
-    if (best) return best;
-  } catch { /* not on PATH */ }
+/**
+ * The `claude` command of Claude Code, if installed (GUI apps on macOS do not see the shell's PATH: known places too).
+ * The PATH lookup runs without holding up the app's main process (`where` takes a moment on Windows).
+ */
+export async function findClaude(): Promise<string | null> {
+  const out = await new Promise<string>((done) => {
+    execFile(process.platform === 'win32' ? 'where' : 'which', ['claude'], { encoding: 'utf8', timeout: 5000, windowsHide: true }, (err, stdout) => done(err ? '' : String(stdout ?? '')));
+  });
+  const found = out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && existsSync(s));
+  const best = found.find((s) => /\.exe$/i.test(s)) ?? found.find((s) => /\.(cmd|bat)$/i.test(s)) ?? (process.platform === 'win32' ? undefined : found[0]);
+  if (best) return best;
   const home = homedir();
   const places = process.platform === 'win32'
     ? [join(home, '.local', 'bin', 'claude.exe'), join(process.env['APPDATA'] ?? '', 'npm', 'claude.cmd')]
@@ -101,9 +104,9 @@ function picturesState(): AiPictures {
 }
 
 export function registerAi(defaultWorldsDir: () => string): void {
-  ipcMain.handle('aiState', (): AiState => {
+  ipcMain.handle('aiState', async (): Promise<AiState> => {
     const { launch, unavailable } = mcpLaunch(defaultWorldsDir());
-    const claude = findClaude();
+    const claude = await findClaude();
     return {
       clients: clientDefs().map((d) => clientState(d, launch, claude)),
       pictures: picturesState(),
@@ -112,12 +115,12 @@ export function registerAi(defaultWorldsDir: () => string): void {
     };
   });
 
-  ipcMain.handle('aiConnect', (_e, id: string, on: boolean): AiClient => {
+  ipcMain.handle('aiConnect', async (_e, id: string, on: boolean): Promise<AiClient> => {
     const def = clientDefs().find((d) => d.id === id);
     if (!def) throw new Error(t('Unknown AI app {id}.', { id }));
     const { launch, unavailable } = mcpLaunch(defaultWorldsDir());
     if (on && !launch) throw new Error(unavailable);
-    const claude = def.format === 'cli' ? findClaude() : null;
+    const claude = def.format === 'cli' ? await findClaude() : null;
     if (def.format === 'json') (on ? connectJson(def.file, launch!) : disconnectJson(def.file));
     else if (def.format === 'toml') (on ? connectToml(def.file, launch!) : disconnectToml(def.file));
     else {

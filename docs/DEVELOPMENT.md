@@ -203,6 +203,12 @@ To try the server with a client without touching any app's settings, Claude Code
 
 `packages/desktop/build/bin/lore` and `lore.cmd` are copied to `resources/bin` and run `resources/app.asar/dist/cli.cjs` with the app's own Electron (`ELECTRON_RUN_AS_NODE=1`). The `.deb` scripts in `packages/desktop/build/linux/` are electron-builder's defaults plus the `/usr/bin/lore` link; compare them with `node_modules/app-builder-lib/templates/linux/` after upgrading electron-builder.
 
+## Built-in voices
+
+Read aloud's English voices are Kokoro-82M (Apache 2.0) run with ONNX Runtime (`onnxruntime-node`) in a process of their own (`src/voice/voice-process.ts`, an Electron utility process). The model and the voice packs (about 100 MB) are not in git: `node packages/desktop/scripts/fetch-voices.mjs` downloads them into `packages/desktop/voices/` from a pinned revision and checks their checksums; the release workflow does the same before packaging. Without them the app reads with the system's voices only. The pronunciation dictionaries (`packages/desktop/voice-data/`, from Misaki, Apache 2.0) are in git; `scripts/build-lexicons.mjs` makes them again. English text becomes phonemes in `src/voice/english.ts`: the dictionaries, word stems, numbers, and the NRL letter-to-sound rules for names nobody has listed. No GPL component is involved. ONNX Runtime has no build for Intel Macs, so that build leaves the voices out (`build/after-pack.cjs`).
+
+Voices made from someone's recordings with the Voice Studio (`tools/voice-studio`, see its README) are Piper models, each in a folder of `packages/desktop/voices/piper/` with `model.onnx`, Piper's `config.json` and a `lore-forge.json` (name, language, gender); the app lists every such folder. They read English through the same dictionaries, written as IPA (`src/voice/ipa.ts`), and Turkish through `src/voice/turkish.ts`, the same phonemes their training used.
+
 ## Troubleshooting
 
 ### Electron aborts on Ubuntu 23.10+ / 24.04
@@ -254,7 +260,7 @@ The shelf lists the worlds folder (Settings), the worlds you opened from elsewhe
 | Build | esbuild 0.28, electron-builder 26 |
 | Relationship web | React Flow (`@xyflow/react` 12) through `preact/compat` |
 | Pan and zoom | d3-zoom and d3-selection 3 |
-| Motion | `@formkit/auto-animate`, CSS transitions and View Transitions |
+| Motion | `@formkit/auto-animate`, CSS transitions and the Web Animations API |
 | World files | `yaml` 2 |
 | PDF | PDFKit 0.20, DejaVu fonts, `hyphen` (en-US patterns) |
 | Word | `docx` 9, `fflate` |

@@ -18,18 +18,19 @@ export function animated(el: Element | null): void {
 }
 
 /**
- * Run a state change as a CSS View Transition: the old view fades out while the new one rises in.
- * Preact renders on the next microtask, so the update callback waits one task for the new DOM.
+ * A change of view or entry, with the main pane's new content fading in. A plain animation on the pane, not a View
+ * Transition: Chromium sends every click to the page root while one plays, so a quick second click after a switch
+ * was lost, and it pictured the whole window before each change. Preact renders on a microtask, so the fade starts
+ * on the one after it, before the new content is first drawn.
  */
 export function transition(update: () => void): void {
-  if (!document.startViewTransition || reduced()) return update();
-  const vt = document.startViewTransition(() => {
-    update();
-    return new Promise<void>((done) => setTimeout(done, 0));
+  update();
+  if (reduced()) return;
+  void Promise.resolve().then(() => {
+    const main = document.querySelector<HTMLElement>('.main');
+    if (!main?.animate) return;
+    for (const a of main.getAnimations()) if (a.id === 'view-fade') a.cancel();
+    // Opacity only: a moving pane would give wrong positions to anything measured while it plays.
+    main.animate([{ opacity: 0.35 }, { opacity: 1 }], { id: 'view-fade', duration: 160, easing: 'ease-out' });
   });
-  // A quick second change skips the first animation (its update still runs); that is not an error.
-  const ignore = () => {};
-  vt.ready.catch(ignore);
-  vt.finished.catch(ignore);
-  vt.updateCallbackDone.catch(ignore);
 }

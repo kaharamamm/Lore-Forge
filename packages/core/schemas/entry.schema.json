@@ -30,6 +30,7 @@
     "type": { "enum": ["character", "place", "faction", "item", "event", "note"] },
     "name": { "type": "string", "minLength": 1 },
     "aliases": { "type": "array", "items": { "type": "string" } },
+    "pronunciation": {"type": "string", "description": "How the name is said, for Lore-Forge's voices and readers: syllables with hyphens and the stressed one in capitals (\"KAM-eh-la-mam\"), or IPA between slashes (\"/ˈkæm.ə.lə.mæm/\")."},
     "tags": {"type": "array", "items": {"type": "string"}, "description": "Old free-form labels. Still read, kept when the file is saved, searchable in the sidebar and listed in the World Codex; the editor no longer shows them."},
     "summary": { "type": "string" },
     "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } },
@@ -77,6 +78,11 @@
     },
     "chapter": { "type": "string", "description": "Story Book chapter title override (events and notes)." },
     "bookOrder": { "type": "number", "description": "Story Book order inside the chapter; default 0, lower first, ties by date then name." },
+    "fields": {
+      "type": "object",
+      "description": "Values of the book's own fields (world.json fields), by key: text, a number, or true or false for a yes-no field.",
+      "additionalProperties": { "type": ["string", "number", "boolean"] }
+    },
     "images": {
       "type": "array",
       "description": "Reference images, on any entry type.",

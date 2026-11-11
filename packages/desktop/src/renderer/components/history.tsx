@@ -4,7 +4,7 @@
  * versions, the fields that differ from now, and putting one back.
  */
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { DETAIL_FIELDS, parseEntry, VISUAL_FIELDS, type Entry, type World } from '@lore-forge/core';
+import { customFields, DETAIL_FIELDS, parseEntry, VISUAL_FIELDS, type Entry, type World } from '@lore-forge/core';
 import type { HistoryChange, HistorySnapshot, HistoryVersion } from '../../shared/api.ts';
 import { localeOf } from '../../shared/i18n.ts';
 import { describeFile } from '../describe.ts';
@@ -56,12 +56,12 @@ function valueText(v: unknown): string {
   return short(Object.entries(v as Record<string, unknown>).map(([k, x]) => `${k}: ${valueText(x)}`).join('; '), 240);
 }
 
-/** An entry's fields one level deep: details and visual description field by field, everything else whole. */
+/** An entry's fields one level deep: details, visual description and the book's own fields one by one, everything else whole. */
 function fieldsOf(e: Entry): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(e)) {
     if (k === 'id' || k === 'type') continue;
-    if ((k === 'details' || k === 'visual') && v && typeof v === 'object' && !Array.isArray(v)) {
+    if ((k === 'details' || k === 'visual' || k === 'fields') && v && typeof v === 'object' && !Array.isArray(v)) {
       for (const [kk, vv] of Object.entries(v)) out[`${k}.${kk}`] = vv;
     } else out[k] = v;
   }
@@ -75,7 +75,9 @@ const BASE_LABELS: Record<string, string> = {
   picture: 'Card picture', looks: 'Looks', tags: 'Tags', body: 'Text', chapter: 'Chapter', bookOrder: 'Book order',
 };
 
-function fieldLabel(type: Entry['type'], key: string): string {
+function fieldLabel(world: World, type: Entry['type'], key: string): string {
+  // The book's own fields (World settings) by their names.
+  if (key.startsWith('fields.')) return customFields(world.manifest, type).find((f) => f.key === key.slice(7))?.name ?? key.slice(7);
   if (key.startsWith('details.')) {
     const f = DETAIL_FIELDS[type].find((x) => x.key === key.slice(8));
     return f ? tm(f.label) : key.slice(8);
@@ -94,7 +96,9 @@ export function entryDiff(then: Entry, now: Entry): { key: string; then: string;
   const out: { key: string; then: string; now: string }[] = [];
   for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
     if (JSON.stringify(a[k] ?? null) === JSON.stringify(b[k] ?? null)) continue;
-    out.push({ key: k, then: valueText(a[k]), now: valueText(b[k]) });
+    // A yes-or-no field of the book's own says yes or no.
+    const show = (v: unknown): string => (k.startsWith('fields.') && typeof v === 'boolean' ? (v ? t('Yes') : t('No')) : valueText(v));
+    out.push({ key: k, then: show(a[k]), now: show(b[k]) });
   }
   return out;
 }
@@ -244,7 +248,7 @@ export function HistoryDialog({ dir, world, entryId, busy, onClose, beforeChange
                     <table class="history-diff">
                       <thead><tr><th>{t('Field')}</th><th>{t('Then')}</th><th>{t('Now')}</th></tr></thead>
                       <tbody>
-                        {diff.map((d) => <tr key={d.key}><th scope="row">{fieldLabel(entry.type, d.key)}</th><td>{d.then || <span class="muted">{t('(empty)')}</span>}</td><td>{d.now || <span class="muted">{t('(empty)')}</span>}</td></tr>)}
+                        {diff.map((d) => <tr key={d.key}><th scope="row">{fieldLabel(world, entry.type, d.key)}</th><td>{d.then || <span class="muted">{t('(empty)')}</span>}</td><td>{d.now || <span class="muted">{t('(empty)')}</span>}</td></tr>)}
                       </tbody>
                     </table>
                     <button type="button" class="primary" disabled={working} onClick={() => void restore([path!], entry.name || entry.id)}><Icon name="cycle" /> {t('Restore this version')}</button>

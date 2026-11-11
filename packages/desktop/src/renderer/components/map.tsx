@@ -4,7 +4,7 @@
  * move it, a place is dragged from the list onto the map (or pinned in the middle of the view), the arrow keys nudge
  * the pin in focus and Delete takes it off. Ctrl+Z and Ctrl+Y undo and redo pin changes.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ZoomTransform } from 'd3-zoom';
 import {
   ENTRY_TYPES, inYear, journeyAt, LIFECYCLE, mapModel, mapPrompt, mapTime, newMapId, TYPE_LABELS, TYPE_SINGULAR, withArtStyle, withoutPin, withPin, WorldIndex, yearLabel,
@@ -14,7 +14,7 @@ import type { MapPicture, PictureService } from '../../shared/api.ts';
 import { usePanZoom, zoomIdentity } from '../zoom.ts';
 import { t, tm } from '../i18n.tsx';
 import { Icon } from './icon.tsx';
-import { Portrait, useImageState } from './cover.tsx';
+import { BookLang, Portrait, useImageState } from './cover.tsx';
 import { Dialog } from './dialog.tsx';
 import { ConfirmDialog } from './confirm.tsx';
 import { Select } from './select.tsx';
@@ -61,6 +61,7 @@ export function MapView({ dir, world, selectedId, onOpen, onPins, onSaveMaps }: 
   /** Save the list of maps (and copy one map's picture in). Resolves with what was saved. */
   onSaveMaps: (maps: WorldMap[], picture?: MapPicture & { map: string }) => Promise<WorldMap[]>;
 }) {
+  const bookLang = useContext(BookLang);
   const maps = world.manifest.maps ?? [];
   const [mapId, setMapId] = useState<string | null>(() => {
     const last = lastMap(dir);
@@ -191,7 +192,7 @@ export function MapView({ dir, world, selectedId, onOpen, onPins, onSaveMaps }: 
         return (
           <ConfirmDialog title={t('Delete the map “{name}”?', { name: doomed.name || doomed.id })} confirmLabel={t('Delete map')} onClose={() => setDoomed(null)}
             onConfirm={() => deleteMap(doomed).then(() => setDoomed(null))}
-            subject={<div class="confirm-world"><span class="confirm-chapter" aria-hidden="true"><Icon name="treasure-map" /></span><div><strong class="confirm-name">{doomed.name}</strong><span class="muted">{doomed.image}</span></div></div>}>
+            subject={<div class="confirm-world"><span class="confirm-chapter" aria-hidden="true"><Icon name="treasure-map" /></span><div><strong class="confirm-name" lang={bookLang}>{doomed.name}</strong><span class="muted">{doomed.image}</span></div></div>}>
             <p>{n === 1 ? t('Its picture is removed, and one place loses its pin on it. The book history keeps a copy.')
               : n ? t('Its picture is removed, and {n} places lose their pin on it. The book history keeps a copy.', { n })
               : t('Its picture is removed. The book history keeps a copy.')}</p>
@@ -215,6 +216,7 @@ function MapCanvas({ dir, model, time, cal, editing, selectedId, onOpen, onShowM
   onChange: (next: Place[], nudge?: string) => void;
   onStopEditing: () => void;
 }) {
+  const bookLang = useContext(BookLang);
   const { map } = model;
   const src = useImageState(dir, map.image);
   // A year on the map (its first day; null: all of time) and the journey drawn on it.
@@ -444,7 +446,7 @@ function MapCanvas({ dir, model, time, cal, editing, selectedId, onOpen, onShowM
                   onMouseLeave={() => unhover(p)} onFocus={(e) => hoverOn(p, e)} onBlur={() => unhover(p)}>
                   <Portrait entry={p.entry} size="sm" />
                 </button>
-                <span class="map-pin-name" aria-hidden="true">{name}</span>
+                <span class="map-pin-name" lang={bookLang} aria-hidden="true">{name}</span>
                 {p.maps.length > 0 && !editing && (
                   <button type="button" class="map-pin-map" onClick={() => onShowMap(p.maps[0]!.id)} aria-label={t('Open the map {name}', { name: p.maps[0]!.name })} title={t('Open the map {name}', { name: p.maps[0]!.name })}>
                     <Icon name="treasure-map" />

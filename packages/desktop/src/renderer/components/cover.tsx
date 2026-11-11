@@ -8,6 +8,12 @@ export { hash, portraitFile, coverImageFile };
 /** The open world's folder, for components deep in the tree that load its images (portraits in hover cards). */
 export const WorldDir = createContext<string | null>(null);
 
+/**
+ * The open book's language when its text shows it (read-aloud.tsx, bookTextLanguage), for the book's own words drawn
+ * in the display font: an English title in the Turkish app keeps its "i" (the font draws a dotted one for Turkish).
+ */
+export const BookLang = createContext<'tr' | 'en' | undefined>(undefined);
+
 /** One image read per file per session: sidebar, cards and hover cards share it. */
 const images = new Map<string, Promise<string | null>>();
 /** The images already read, so a book drawn again (or a copy of one) has its picture from its first frame. */
@@ -115,6 +121,7 @@ export function Portrait({ entry, raceName, size = 'sm' }: { entry: Entry; raceN
  * with the title on top when given. The PDF draws the same art.
  */
 export function WorldCover({ art, image, title }: { art: CoverArt; image?: string | null; title?: string }) {
+  const lang = useContext(BookLang);
   const font = titleFont(art);
   const emblem = emblemBox(art);
   const id = `cv${hash(`${art.top}${art.bottom}${art.glow}${art.stars[0]?.join() ?? ''}`).toString(36)}`;
@@ -139,7 +146,7 @@ export function WorldCover({ art, image, title }: { art: CoverArt; image?: strin
         <rect class="cover-frame thin" x="16" y="16" width="208" height="288" rx="4" />
         {art.icon && art.showEmblem && <g class="cover-emblem" style={{ color: art.iconColor }}><SvgIcon name={art.icon} x={emblem.x} y={emblem.y} size={emblem.size} /></g>}
       </svg>
-      {title !== undefined && art.showTitle && <span class={`cover-title title-${art.titleStyle}${font ? ' has-font' : ''}${art.titlePos ? ' is-placed' : ''}`} style={{ color: art.titleColor, ...font, ...titlePlace(art) }}>{title}</span>}
+      {title !== undefined && art.showTitle && <span lang={lang} class={`cover-title title-${art.titleStyle}${font ? ' has-font' : ''}${art.titlePos ? ' is-placed' : ''}`} style={{ color: art.titleColor, ...font, ...titlePlace(art) }}>{title}</span>}
     </>
   );
 }

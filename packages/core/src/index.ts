@@ -16,9 +16,12 @@ export { references, type Reference } from './rules/references.ts';
 export * from './lifecycle.ts';
 export * from './looks.ts';
 export * from './details.ts';
+export { CUSTOM_FIELD_KINDS, customFields, fieldKey, fieldValueProblem, fieldValueText, parseCustomFields } from './fields.ts';
 export * from './entry-icons.ts';
 export * from './relation-kinds.ts';
 export * from './mentions.ts';
+export { applyRename, planRename, turkishEnding, type RenameHit, type RenameResult } from './rename.ts';
+export { findAll, findPattern, replaceFound, textAround, type FindOptions, type Found } from './replace.ts';
 export * from './story.ts';
 export * from './extract.ts';
 export * from './story-check.ts';
@@ -38,6 +41,8 @@ export function check(world: World): Warning[] {
 }
 export { AI_PHRASING, aiPhrasesIn, aiPhrasing, aiPhrasingRule, aiPhrasingWarnings, type AiPhrase } from './prose-check.ts';
 export { chapterBrief, type BriefTarget } from './story-brief.ts';
+export { CHAPTER_STATUS_LABELS, chapterCast, chapterNames, chapterStatus, type CastGap, type CastRow } from './story-plan.ts';
+export { bareChapterTitle, chapterTitle, splitManuscript, type ImportedChapter } from './manuscript.ts';
 export * from './publish/doc.ts';
 export { artBrief, mapPrompt, PICTURE_VIEW, picturePrompt, withArtStyle, type ArtBrief } from './publish/art.ts';
 export { bookSite, type BookSite, type SiteLabels, type SitePage } from './publish/html.ts';

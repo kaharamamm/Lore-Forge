@@ -1,20 +1,23 @@
 import {
-  ageAtDeathText, DETAIL_FIELDS, detailList, detailOf, raceIcon, raceLabel, racesOf, suggestionIcon, type DetailField, type DetailSection, type IconName,
-  DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_ICON, TYPE_SINGULAR, VISUAL_FIELDS,
+  ageAtDeathText, customFields, DETAIL_FIELDS, type CustomFieldValue, detailList, detailOf, raceIcon, raceLabel, racesOf, suggestionIcon, type DetailField, type DetailSection, type IconName,
+  DEFAULT_STATUS, endFieldVisible, endValue, LIFECYCLE, planRename, raceSuggestions, statusOf, RELATION_GROUPS, relationFits, relationKind, relationKindsFor, relationTargets, TYPE_ICON, TYPE_SINGULAR,
   type Action, type Character, type Entry, type EntryType, type LocationSpan, type LoreEvent, type Participant, type Relation, type RelationGroup, type Warning, type World,
 } from '@lore-forge/core';
 import { worldIndex } from '../hooks.ts';
 import { capital, lower, t, tm } from '../i18n.tsx';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { bookLanguage, useHearName } from './read-aloud.tsx';
+import { nameInBook, RenameDialog, RenameOffer, setNameInBook } from './rename.tsx';
 import { ChipInput, DateField, entrySuggestion, Field, ListEditor, ListText, OpenEntry, RefField, TextField } from './fields.tsx';
 import { LooksPanel } from './looks.tsx';
 import { ProseField } from './prose.tsx';
 import { TypeBadge } from './type.tsx';
 import { WarningItem, type WarningActions } from './warnings.tsx';
 import { Icon } from './icon.tsx';
-import { Portrait, portraitFile } from './cover.tsx';
+import { BookLang, Portrait, portraitFile } from './cover.tsx';
 import { Select } from './select.tsx';
 import { SuggestInput } from './suggest.tsx';
+import { ErasLink } from './world-settings.tsx';
 
 interface Props {
   dir: string;
@@ -29,20 +32,49 @@ interface Props {
   /** Ask AI about this entry. */
   onAsk: () => void;
   onOpen: (id: string) => void;
+  /** The old name changes to the new one where the book still uses it (rename.tsx): every place but `skip`. */
+  onRename: (entryId: string, from: string, to: string, skip: Set<string>, keepOldName: boolean) => Promise<void>;
 }
 
-export function EntryEditor({ dir, world, entry, warnings, actions, onChange, onDelete, onHistory, onAsk, onOpen }: Props) {
+export function EntryEditor({ dir, world, entry, warnings, actions, onChange, onDelete, onHistory, onAsk, onOpen, onRename }: Props) {
+  const bookLang = useContext(BookLang);
   const cal = world.manifest.calendar;
   // Each type section gets a setter typed for its own entry shape.
   const set = <E extends Entry>(e: E) => (patch: Partial<E>) => onChange({ ...e, ...patch });
   const base = set(entry);
+  // A new name: the name the box had when it got the focus, and, once it loses it with another one, how often the
+  // old name is still written in the book, with the offer to change it there too.
+  const nameAtFocus = useRef<string | null>(null);
+  const [offer, setOffer] = useState<{ from: string; to: string; count: number } | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  useEffect(() => {
+    setOffer(null);
+    setReviewing(false);
+    nameAtFocus.current = null;
+  }, [entry.id]);
+  const nameFocus = (): void => {
+    nameAtFocus.current ??= entry.name;
+    // The name the book uses, from the first time this name is edited on.
+    if (nameInBook(dir, entry.id) === undefined && entry.name.trim()) setNameInBook(dir, entry.id, entry.name.trim());
+  };
+  const nameBlur = (e: FocusEvent): void => {
+    if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) return;
+    const was = nameAtFocus.current;
+    nameAtFocus.current = null;
+    if (was === null) return;
+    const from = (nameInBook(dir, entry.id) ?? was).trim();
+    const to = entry.name.trim();
+    if (!from || !to || from === to) return setOffer(null);
+    const count = planRename(world, entry.id, from, to).length;
+    setOffer(count ? { from, to, count } : null);
+  };
   return (
     <OpenEntry.Provider value={onOpen}>
     <article class={`editor t-${entry.type}`} aria-labelledby="entry-title">
       <header class="editor-head">
         <div>
           <p class="eyebrow"><TypeBadge type={entry.type} /></p>
-          <h2 id="entry-title" tabIndex={-1}>{portraitFile(entry) ? <Portrait entry={entry} size="md" /> : <Icon class="title-icon" name={TYPE_ICON[entry.type]} />} {entry.name || t('(no name)')}</h2>
+          <h2 id="entry-title" tabIndex={-1}>{portraitFile(entry) ? <Portrait entry={entry} size="md" /> : <Icon class="title-icon" name={TYPE_ICON[entry.type]} />} <span lang={entry.name ? bookLang : undefined}>{entry.name || t('(no name)')}</span></h2>
           <p class="editor-meta">
             <span class="meta-chip" title={t("The entry's id, used in links and files")}><Icon name="key" /><span class="meta-chip-label">{t('id')}</span><code>{entry.id}</code></span>
             {world.files[entry.id] && <span class="meta-chip" title={t('Its file in the world folder')}><Icon name="open-folder" /><span class="meta-chip-path">{world.files[entry.id]}</span></span>}
@@ -67,9 +99,22 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
 
       <Section id="basics" title={t('Basics')} icon="scroll-unfurled">
         <div class="grid-2">
-          <TextField label={t('Name')} field="name" value={entry.name} onChange={(name) => base({ name: name ?? '' })} />
+          <div class="name-field" onFocusIn={nameFocus} onFocusOut={nameBlur}>
+            <TextField label={t('Name')} field="name" value={entry.name} onChange={(name) => base({ name: name ?? '' })} />
+          </div>
           <ListText label={t('Aliases (comma-separated)')} field="aliases" value={entry.aliases} onChange={(aliases) => base({ aliases })} resetKey={entry.id} />
         </div>
+        {offer && <RenameOffer from={offer.from} to={offer.to} count={offer.count} onReview={() => setReviewing(true)} onDismiss={() => setOffer(null)} />}
+        {reviewing && offer && (
+          <RenameDialog world={world} entryId={entry.id} from={offer.from} to={offer.to} onClose={() => setReviewing(false)}
+            onApply={async (skip, keep) => {
+              await onRename(entry.id, offer.from, offer.to, skip, keep);
+              setNameInBook(dir, entry.id, offer.to);
+              setReviewing(false);
+              setOffer(null);
+            }} />
+        )}
+        <PronunciationField world={world} entry={entry} onChange={(pronunciation) => base({ pronunciation })} />
         <TextField label={t('Summary')} field="summary" value={entry.summary} onChange={(summary) => base({ summary })} multiline hint={t('One or two lines: shown on cards, in hover cards and in the Codex.')} />
         {entry.type === 'character' && <RaceField world={world} e={entry} set={set(entry)} onOpen={onOpen} />}
         {LIFECYCLE[entry.type] && <LifecycleFields world={world} entry={entry} onChange={onChange} />}
@@ -87,6 +132,12 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
         )}
         <DetailFields world={world} entry={entry} section="basics" onChange={onChange} onOpen={onOpen} />
       </Section>
+
+      {customFields(world.manifest, entry.type).length > 0 && (
+        <Section id="fields" title={t('Custom fields')} icon="perspective-dice-six-faces-random">
+          <CustomFieldInputs world={world} entry={entry} onChange={onChange} />
+        </Section>
+      )}
 
       {(
         <Section id="appearance" title={t('Appearance')} icon="photo-camera">
@@ -140,6 +191,31 @@ export function EntryEditor({ dir, world, entry, warnings, actions, onChange, on
 
 function clean<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+}
+
+/**
+ * How the name is said, for Lore-Forge's voices, the World Codex and the website. Hear it says the name in the voice
+ * that reads the book's language, when Lore-Forge has one for it.
+ */
+function PronunciationField({ world, entry, onChange }: { world: World; entry: Entry; onChange: (v: string | undefined) => void }) {
+  const language = useMemo(() => bookLanguage(world), [world.story, world.entries.length]);
+  const hear = useHearName(language);
+  const [problem, setProblem] = useState<string | null>(null);
+  return (
+    <div class="grid-2">
+      <div class="pronunciation-field">
+        <TextField label={t('Pronunciation')} field="pronunciation" value={entry.pronunciation} placeholder={t('e.g. KAM-eh-la-mam')} onChange={(v) => onChange(v?.trim() ? v : undefined)}
+          hint={t('Syllables with hyphens, the stressed one in capitals. Lore-Forge’s voices say the name this way.')} />
+        {hear && (
+          <button type="button" class="ghost small hear-name" disabled={!entry.name.trim()} title={t('How a Lore-Forge voice says the name')}
+            onClick={() => { setProblem(null); hear(entry.name, entry.pronunciation ?? '').catch((e: Error) => setProblem(e.message)); }}>
+            <Icon name="speaker" /> {t('Hear it')}
+          </button>
+        )}
+        {problem && <p class="small error-line" role="alert">{problem}</p>}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -426,6 +502,64 @@ function CustomType({ id, hintId, value, onChange }: { id: string; hintId: strin
     <input ref={box} id={id} type="text" value={text} aria-describedby={hintId} placeholder={t('custom-type')}
       onInput={(e) => { const t = e.currentTarget.value; setText(t); onChange(typeSlug(t.trimStart())); }}
       onBlur={() => { const tidy = typeSlug(text.trim()).replace(/^-+|-+$/g, ''); setText(tidy); if (tidy !== value) onChange(tidy); }} />
+  );
+}
+
+/**
+ * The book's own fields (World settings): text, a number, yes or no, or one of a list. Empty means not set, and
+ * nothing is written to the file.
+ */
+function CustomFieldInputs({ world, entry, onChange }: { world: World; entry: Entry; onChange: (e: Entry) => void }) {
+  const open = useContext(ErasLink);
+  const put = (key: string, v: CustomFieldValue | undefined) => {
+    const values = { ...entry.fields };
+    if (v === undefined || v === '') delete values[key];
+    else values[key] = v;
+    const { fields: _f, ...rest } = entry;
+    onChange((Object.keys(values).length ? { ...rest, fields: values } : rest) as Entry);
+  };
+  return (
+    <>
+      <div class="grid-3 custom-fields">
+        {customFields(world.manifest, entry.type).map((f) => {
+          const field = `fields.${f.key}`;
+          const v = entry.fields?.[f.key];
+          if (f.kind === 'number') return <NumberValue key={f.key} label={f.name} field={field} value={v} onChange={(n) => put(f.key, n)} />;
+          if (f.kind === 'yes-no' || f.kind === 'choice') {
+            const options = f.kind === 'yes-no' ? [{ value: 'yes', label: t('Yes') }, { value: 'no', label: t('No') }] : (f.choices ?? []).map((c) => ({ value: c, label: c }));
+            const current = v === true ? 'yes' : v === false ? 'no' : v === undefined ? '' : String(v);
+            // A value from the file that is not on the list still shows, so it can be seen and changed.
+            if (current && !options.some((o) => o.value === current)) options.push({ value: current, label: current });
+            const pick = (x: string): CustomFieldValue | undefined => (f.kind === 'yes-no' ? (x === 'yes' ? true : x === 'no' ? false : undefined) : x || undefined);
+            return (
+              <Field key={f.key} label={f.name} field={field}>
+                {(id) => <Select id={id} value={current} options={[{ value: '', label: t('Not set') }, ...options]} onChange={(x) => put(f.key, pick(x))} />}
+              </Field>
+            );
+          }
+          return <TextField key={f.key} label={f.name} field={field} value={v === undefined ? undefined : String(v)} onChange={(x) => put(f.key, x)} />;
+        })}
+      </div>
+      {open && <button type="button" class="link custom-fields-edit" onClick={() => open('fields')}><Icon name="cog" /> {t('Change these fields')}</button>}
+    </>
+  );
+}
+
+/** A number in one of the book's own fields: what is typed ("-", "1.") stays until it is a number; a value from the file that is not a number shows as it is. */
+function NumberValue({ label, field, value, onChange }: { label: string; field: string; value: CustomFieldValue | undefined; onChange: (v: number | undefined) => void }) {
+  const shown = value === undefined ? '' : String(value);
+  const [text, setText] = useState(shown);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (!box.current?.contains(document.activeElement)) setText(shown); }, [shown]);
+  return (
+    <div ref={box} onFocusOut={() => setText(shown)}>
+      <TextField label={label} field={field} value={text} onChange={(v) => {
+        const typed = (v ?? '').trim();
+        setText(v ?? '');
+        if (!typed) onChange(undefined);
+        else if (typed !== '-' && Number.isFinite(Number(typed))) onChange(Number(typed));
+      }} />
+    </div>
   );
 }
 

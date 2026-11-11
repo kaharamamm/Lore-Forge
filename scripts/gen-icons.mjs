@@ -31,6 +31,8 @@ const USED = [
   'tied-scroll',
   // sharing a book as one file
   'envelope', 'box-unpacking',
+  // reading a chapter aloud
+  'speaker', 'pause-button',
 ];
 
 const require = createRequire(import.meta.url);
@@ -49,6 +51,8 @@ for (const name of USED) {
  */
 const OWN = {
   genderless: ['M256 25.5a136 136 0 1 0 0 272a136 136 0 1 0 0-272zm0 40a96 96 0 1 1 0 192a96 96 0 1 1 0-192zM236 290v197h40V290z'],
+  // stop-button: a rounded square as wide as 'pause-button', to stand next to it.
+  'stop-button': ['M120 100h272a20 20 0 0 1 20 20v272a20 20 0 0 1-20 20H120a20 20 0 0 1-20-20V120a20 20 0 0 1 20-20z'],
 };
 for (const [name, ds] of Object.entries(OWN)) {
   if (out[name] || set.icons[name]) throw new Error(`${name} is a game-icon already`);

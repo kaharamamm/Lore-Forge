@@ -124,3 +124,20 @@ test('a .gltf must carry its buffers inside; one pointing at other files is refu
   await assert.rejects(importModel(join(dir, 'w'), 'char-a', split), /not valid glTF/);
   assert.deepEqual((await listModels(join(dir, 'w'), 'char-a')).map((m) => m.name), ['ok']);
 });
+
+test('a new world from a template: its calendar, writing and picture style and fields; a bad calendar or field is refused', async () => {
+  const root = await tmp();
+  const dir = join(root, 'game');
+  const calendar = { eras: [{ id: 'AL', name: 'Age of Legends', start: 1, end: 1000 }, { id: 'AH', name: 'Age of Heroes', start: 1001 }], defaultEra: 'AH' };
+  const fields = { item: [{ key: 'damage', name: 'Damage', kind: 'number' as const }] };
+  await createWorld(dir, 'Game', { calendar, writingStyle: ' Fast. ', artStyle: 'Pixel art', fields, cover: { color: '#2f5d3a' } });
+  const w = await loadWorld(dir);
+  assert.deepEqual(w.manifest.calendar, calendar);
+  assert.equal(w.manifest.writingStyle, 'Fast.');
+  assert.equal(w.manifest.artStyle, 'Pixel art');
+  assert.deepEqual(w.manifest.fields, fields);
+  assert.deepEqual(Object.keys(JSON.parse(await readFile(join(dir, 'world.json'), 'utf8'))), ['schemaVersion', 'id', 'name', 'artStyle', 'writingStyle', 'calendar', 'fields', 'cover']);
+  await assert.rejects(createWorld(join(root, 'bad'), 'Bad', { calendar: { eras: [{ id: '1A', name: 'X', start: 1 }], defaultEra: '1A' } }), /abbreviation must start with a letter/);
+  await assert.rejects(createWorld(join(root, 'bad2'), 'Bad', { fields: { item: [{ key: 'size', name: 'Size', kind: 'choice' }] } }), /needs its "choices"/);
+  assert.equal(existsSync(join(root, 'bad')) || existsSync(join(root, 'bad2')), false, 'nothing is written for a refused start');
+});

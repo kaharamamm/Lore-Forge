@@ -1,5 +1,6 @@
 import { monthsOf } from '../dates.ts';
 import { ageAtDeathText, detailRelations, filledDetails } from '../details.ts';
+import { customFields, fieldValueText } from '../fields.ts';
 import { entryIcon, racesOf } from '../entry-icons.ts';
 import { isEnded, LIFECYCLE, statusLabel } from '../lifecycle.ts';
 import { checkWorld } from '../engine.ts';
@@ -43,6 +44,7 @@ function entryFacts(e: Entry, ix: WorldIndex, file: string | undefined): [string
     [msg`Type`, TYPE_SINGULAR[e.type]],
     [msg`Id`, e.id],
     [msg`Also known as`, e.aliases?.join(', ')],
+    [msg`Pronunciation`, e.pronunciation],
     [msg`Tags`, e.tags?.join(', ')],
   ];
   const ref = (r: string | undefined) => (r ? ix.nameOf(r) : undefined);
@@ -74,6 +76,8 @@ function entryFacts(e: Entry, ix: WorldIndex, file: string | undefined): [string
     const list = Array.isArray(value) ? value : [value];
     rows.push([field.label, (field.kind === 'ref' || field.kind === 'refs' ? list.map((r) => ix.nameOf(r)) : list).join(', ')]);
   }
+  // The book's own fields (World settings), in their order.
+  for (const f of customFields(ix.world.manifest, e.type)) rows.push([f.name, fieldValueText(e.fields?.[f.key])]);
   rows.push([msg`File`, file]);
   return rows.filter((r): r is [string, string] => typeof r[1] === 'string' && r[1] !== '');
 }
@@ -290,7 +294,7 @@ export function worldCodex(world: World, options: CodexOptions = {}): Doc {
 
   const names: [string, string][] = [];
   for (const e of world.entries) {
-    names.push([e.name, msg`${TYPE_SINGULAR[e.type]} (${verbatim(e.id)})`]);
+    names.push([e.name, e.pronunciation ? msg`${TYPE_SINGULAR[e.type]} (${verbatim(e.id)}), said ${verbatim(e.pronunciation)}` : msg`${TYPE_SINGULAR[e.type]} (${verbatim(e.id)})`]);
     for (const a of e.aliases ?? []) names.push([a, msg`${TYPE_SINGULAR[e.type]}: alias of ${e.name}`]);
   }
   names.sort((a, b) => normalizeName(a[0]).localeCompare(normalizeName(b[0])));

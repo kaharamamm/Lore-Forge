@@ -5,4 +5,6 @@ setlocal
 set "RES=%~dp0.."
 if not defined LORE_FORGE_FONTS set "LORE_FORGE_FONTS=%RES%\fonts"
 set ELECTRON_RUN_AS_NODE=1
+rem Terminals in VS Code and Cursor pass on the editor's crash report pipe, which prints a CreateFile error once closed.
+set "CHROME_CRASHPAD_PIPE_NAME="
 "%RES%\..\Lore-Forge.exe" "%RES%\app.asar\dist\cli.cjs" %*

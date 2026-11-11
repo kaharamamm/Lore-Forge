@@ -34,6 +34,7 @@ my-world/
 | `book` | Story Book details: `title`, `author`, `publisher`, `dedication`, `epigraph`, `epigraphSource`, `copyright`, `trim`, `rightHandChapters`, `chapterYears` |
 | `cover` | cover colours, picture, emblem, title font and colour, show title or emblem, spine colours |
 | `maps` | the world's maps: `id`, `name`, `image` (its picture, in `maps/`) and the `place` a map shows, if any; see [Maps](#maps) |
+| `fields` | the book's own fields per entry type, such as HP for characters or Rarity for items; see [Custom fields](#custom-fields) |
 
 ### Entries
 
@@ -59,6 +60,8 @@ Mr Camel keeps the smallest tea house on the Street of Kettles…
 
 References use entry ids (`target: item-humming-map`) or names. Unknown keys are kept as they are. Reference fields such as `home`, `ruler` and `leader` count as relationships in the rules and the graphs.
 
+`pronunciation` (optional) says how the name is said: syllables with hyphens and the stressed one in capitals (`KAM-eh-la-mam`), or IPA between slashes (`/ˈkæm.ə.lə.mæm/`). Lore-Forge's voices read the name that way, English ones with English sounds (ah, eh, ee, oo, ay, eye, oh, th, sh, ch, ...) and Turkish ones with Turkish letters (`ka-me-LA-mam`). For a name of several words, give a part for each word. It also shows in the World Codex and on the website.
+
 ### Story chapters
 
 `story/NN-slug.md` with a short header and plain prose:
@@ -67,9 +70,14 @@ References use entry ids (`target: item-humming-map`) or names. Unknown keys are
 title: The Morning the Well Went Quiet
 order: 1
 date: 10.03.512
+pov: char-mr-camel
+status: draft
+summary: The Singing Well falls quiet, and Mr Camel goes to find out why.
 
 Every morning in Camelamamm began with a song…
 ```
+
+`pov` (whose point of view the chapter is told from: a character, by id or name), `status` (`idea`, `draft`, `revised` or `done`) and `summary` (what happens in it, in a line or two) are optional. The planning board in the Story view shows them on the chapter's card. Without a status, a chapter counts as an idea until it has text, and as a draft once it has.
 
 ### Images
 
@@ -123,6 +131,33 @@ pins:
     y: 62.25
 ```
 
+### Custom fields
+
+A book can give each entry type fields of its own, such as HP and Strength for characters or Damage and Rarity for items (World settings → Custom fields). `world.json` lists them by type:
+
+```json
+"fields": {
+  "character": [
+    { "key": "hitPoints", "name": "Hit points", "kind": "number" },
+    { "key": "playable", "name": "Playable", "kind": "yes-no" }
+  ],
+  "item": [{ "key": "rarity", "name": "Rarity", "kind": "choice", "choices": ["common", "rare", "legendary"] }]
+}
+```
+
+- `kind` is `text` (when left out), `number`, `yes-no` or `choice` (with its `choices`).
+- `key` is the value's name in the entry files and in game data. The app makes it from the first name and keeps it when the field is renamed.
+
+An entry keeps its values under `fields`, by key: numbers as numbers, yes or no as `true` or `false`.
+
+```yaml
+fields:
+  hitPoints: 42
+  playable: true
+```
+
+The editor shows them in a **Custom fields** section, the World Codex lists them with the entry's facts, and the snapshot (game data) carries the definitions in `manifest.fields` and the values in each entry. A value that does not fit its field is a `field-value` warning. Values of a field that was deleted stay in the files.
+
 ### Intended marks and ignored proposals
 
 `intended.json` keeps the warnings you marked intended, with your note and the date. `story-ignored.json` keeps the story proposals you ignored, so they are not proposed again.
@@ -172,6 +207,7 @@ The older `1920-03-12` form still works. Each date field shows how it was unders
 | `look-outside-life` | warning | a look starts after its entry ended (died, destroyed, dissolved), or starts or ends before it existed |
 | `look-overlap` | warning | two looks of one entry apply at the same time: they start together, or one runs on by its own end into a later one (a look without an end just gives way to the next) |
 | `map-pin` | warning | a place is pinned on a map the book does not have, or a map is set to show something that is not a place |
+| `field-value` | warning | a value in one of the book's own fields does not fit it: words in a number field, something other than yes or no, or a choice not on the field's list |
 | `story-contradiction` | warning | a story chapter says something different from an entry |
 | `ai-phrasing` | info | a chapter, or an entry's summary, longer details or text, uses stock AI phrasing, an aside between two dashes, or an "It wasn't just X. It was Y." turn (English text) |
 

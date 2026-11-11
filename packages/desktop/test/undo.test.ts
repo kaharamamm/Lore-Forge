@@ -67,6 +67,11 @@ test('fields inside details are undone one by one and keep their place', () => {
   assert.deepEqual((v.entry as unknown as { details: object }).details, { gender: 'Genderless' });
   const w = undo(record(EMPTY_HISTORY, d, c, 0), c)!;
   assert.ok(!('details' in w.entry), 'an empty details object goes');
+  // The book's own fields too: setting one value is one step on that value.
+  const e = camel({ fields: { hp: 30, playable: true } });
+  const f = camel({ fields: { hp: 42, playable: true } });
+  assert.deepEqual(changedPaths(e, f), ['fields.hp']);
+  assert.deepEqual((undo(record(EMPTY_HISTORY, e, f, 0), f)!.entry as unknown as { fields: object }).fields, { hp: 30, playable: true });
 });
 
 test('a change made outside the app since is never undone', () => {

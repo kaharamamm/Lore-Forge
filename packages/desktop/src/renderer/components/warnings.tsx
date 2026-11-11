@@ -83,14 +83,20 @@ export const WarningsPanel = memo(function WarningsPanel({ warnings, selectedId,
     localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
   };
   const count = (s: Warning['severity']) => warnings.filter((w) => !w.intended && w.severity === s).length;
+  const errors = count('error');
+  const warned = count('warning');
+  const intended = warnings.filter((w) => w.intended).length;
   return (
     <aside class="warnings-panel" aria-labelledby="warnings-title">
       <div class="panel-head">
         <h2 id="warnings-title" tabIndex={-1}>{t('Warnings')}</h2>
-        <p class="summary" aria-live="polite">
-          {t('{errors} errors · {warnings} warnings · {intended} intended', { errors: count('error'), warnings: count('warning'), intended: warnings.filter((w) => w.intended).length })}
+        {/* The counts side by side across the panel, coloured only when there is something to count. */}
+        <p class="summary tally" aria-live="polite">
+          <span class={`tally-item is-error${errors ? ' is-on' : ''}`}><Icon name={BADGE.error.icon} /> {errors === 1 ? t('{n} error', { n: errors }) : t('{n} errors', { n: errors })}</span>
+          <span class={`tally-item is-warning${warned ? ' is-on' : ''}`}><Icon name={BADGE.warning.icon} /> {warned === 1 ? t('{n} warning', { n: warned }) : t('{n} warnings', { n: warned })}</span>
+          <span class={`tally-item is-intended${intended ? ' is-on' : ''}`}><Icon name={BADGE.intended.icon} /> {t('{n} intended', { n: intended })}</span>
         </p>
-        <div class="segmented" role="group" aria-label={t('Show warnings for')}>
+        <div class="segmented warnings-scope" role="group" aria-label={t('Show warnings for')}>
           <button type="button" aria-pressed={scope === 'all'} onClick={() => setScope('all')}>{t('All')}</button>
           <button type="button" aria-pressed={scope === 'entry'} disabled={!selectedId} onClick={() => setScope('entry')}>{t('This entry')}</button>
         </div>

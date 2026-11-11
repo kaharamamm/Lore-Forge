@@ -4,6 +4,7 @@ import { GENERATOR } from '../snapshot.ts';
 import type { Entry, LoreEvent, Note, RefImage, StoryChapter, TrimSize, World } from '../types.ts';
 import { WorldIndex } from '../world-index.ts';
 import { chapterDate } from '../story.ts';
+import { bareChapterTitle } from '../manuscript.ts';
 import { imageBlock } from './codex.ts';
 import { worldCoverArt } from '../cover.ts';
 import { anchorOf, bodyBlocks, bookLook, dateWithEra, DEFAULT_TRIM, markDropCaps, TRIMS, type Block, type Doc } from './doc.ts';
@@ -147,7 +148,9 @@ export function storyBook(world: World, opts: BookOptions = {}): Doc {
     written.forEach((ch, n) => {
       // The chapter's date sits at the top right of its opening page, not under the title.
       const d = look.dateStamps ? ix.date(chapterDate(ch)) : undefined;
-      blocks.push({ kind: 'heading', level: 1, text: msg`Chapter ${n + 1}. ${ch.title}`, toc: true, newPage: true, opener: true, ...(d ? { stamp: dateWithEra(d, m.calendar) } : {}) });
+      // A chapter titled only "Chapter 3" (or nothing) is just its number, never "Chapter 1. Chapter 3".
+      const text = !ch.title.trim() || bareChapterTitle(ch.title) ? msg`Chapter ${n + 1}` : msg`Chapter ${n + 1}. ${ch.title}`;
+      blocks.push({ kind: 'heading', level: 1, text, toc: true, newPage: true, opener: true, ...(d ? { stamp: dateWithEra(d, m.calendar) } : {}) });
       blocks.push(...bodyBlocks(ch.body, ix));
     });
     const appendix = opts.appendix !== false && chapters.length > 0;

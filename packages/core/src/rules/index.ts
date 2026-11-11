@@ -10,14 +10,15 @@ import { deadMarkedAlive } from './status.ts';
 import { relationKindRule } from './relation-kind.ts';
 import { lookOutsideLife, lookOverlap, lookTime } from './looks.ts';
 import { mapPin } from './maps.ts';
+import { fieldValue } from './fields.ts';
 import { aiPhrasingRule } from '../prose-check.ts';
 
-export { afterDeath, beforeBirth, participantNotExisting, placeNotExisting, twoPlacesAtOnce, danglingReference, duplicateName, parentCycle, parentBornAfterChild, deadMarkedAlive, invalidDate, dateOrder, fileError, imageView, relationKindRule, lookTime, lookOutsideLife, lookOverlap, mapPin };
+export { afterDeath, beforeBirth, participantNotExisting, placeNotExisting, twoPlacesAtOnce, danglingReference, duplicateName, parentCycle, parentBornAfterChild, deadMarkedAlive, invalidDate, dateOrder, fileError, imageView, relationKindRule, lookTime, lookOutsideLife, lookOverlap, mapPin, fieldValue };
 
 /** The starter rules, in report order. */
 export const builtinRules: readonly Rule[] = [
   afterDeath, beforeBirth, participantNotExisting, placeNotExisting, twoPlacesAtOnce,
   danglingReference, duplicateName, parentCycle, parentBornAfterChild, deadMarkedAlive,
   invalidDate, dateOrder, fileError, imageView, relationKindRule,
-  lookTime, lookOutsideLife, lookOverlap, mapPin, aiPhrasingRule,
+  lookTime, lookOutsideLife, lookOverlap, mapPin, fieldValue, aiPhrasingRule,
 ];

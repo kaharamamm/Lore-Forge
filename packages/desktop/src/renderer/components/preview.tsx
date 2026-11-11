@@ -307,12 +307,16 @@ interface Props {
   onClose: () => void;
   onSave: (kind: PdfKind, options: PublishOptions) => Promise<void>;
   onSaveDocx?: (options: PublishOptions) => Promise<void>;
+  /** The Story Book as an e-book (EPUB). */
+  onSaveEpub?: (options: PublishOptions) => Promise<void>;
   /** Save the book details into world.json. */
   onSaveBook?: (book: BookSettings) => Promise<void>;
+  /** The story read aloud into an audiobook (its own dialog). */
+  onSaveAudiobook?: () => void;
 }
 
 /** In-app preview of the World Codex / Story Book, from the same Doc the PDF uses; "Save PDF" only after looking. */
-export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, onSaveBook }: Props) {
+export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, onSaveEpub, onSaveBook, onSaveAudiobook }: Props) {
   const [types, setTypes] = useState<EntryType[]>(ALL_TYPES);
   const [warnings, setWarnings] = useState(true);
   const [artBriefs, setArtBriefs] = useState(true);
@@ -385,6 +389,7 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
   const toggleType = (t: EntryType) => setTypes((ts) => (ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]));
   const save = async () => { setBusy(true); try { await flushLook(); await onSave(kind, options); } finally { setBusy(false); } };
   const saveDocx = async () => { setBusy(true); try { await flushLook(); await onSaveDocx?.(options); } finally { setBusy(false); } };
+  const saveEpub = async () => { setBusy(true); try { await flushLook(); await onSaveEpub?.(options); } finally { setBusy(false); } };
   const count = world.entries.filter((e) => types.includes(e.type)).length;
 
   return (
@@ -404,6 +409,16 @@ export function PreviewDialog({ dir, world, kind, onClose, onSave, onSaveDocx, o
             {kind === 'book' && onSaveDocx && (
               <button type="button" class="save-docx" disabled={busy} onClick={() => void saveDocx()}>
                 <Icon name="quill-ink" /> {t('Save Word (.docx)…')}
+              </button>
+            )}
+            {kind === 'book' && onSaveEpub && (
+              <button type="button" class="save-epub" disabled={busy} onClick={() => void saveEpub()} title={t('For phones and e-readers: Apple Books, Google Play Books, Kobo, Calibre, and a Kindle through Send to Kindle')}>
+                <Icon name="open-book" /> {t('Save e-book (EPUB)…')}
+              </button>
+            )}
+            {kind === 'book' && onSaveAudiobook && (
+              <button type="button" class="save-audiobook" disabled={busy} onClick={onSaveAudiobook} title={t('A Lore-Forge voice reads the story into one sound file, with a mark at each chapter')}>
+                <Icon name="speaker" /> {t('Save audiobook…')}
               </button>
             )}
             <button type="button" class="ghost" onClick={onClose}>{t('Close')} <kbd>Esc</kbd></button>

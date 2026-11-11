@@ -18,6 +18,9 @@ const configs = [
   // The `lore` command line, shipped inside the app and run by Electron as plain Node (resources/bin/lore).
   { ...common, entryPoints: ['src/cli.ts'], outfile: 'dist/cli.cjs', platform: 'node', format: 'cjs', sourcemap: false, external: ['pdfkit'], logOverride: { 'empty-import-meta': 'silent' } },
   { ...common, entryPoints: ['src/main/preload.ts'], outfile: 'dist/preload.cjs', platform: 'node', format: 'cjs', external: ['electron'] },
+  // The voice process, where the built-in voices speak (an Electron utility process). ONNX Runtime is a native module,
+  // so it stays in node_modules.
+  { ...common, entryPoints: ['src/voice/voice-process.ts'], outfile: 'dist/voice.cjs', platform: 'node', format: 'cjs', sourcemap: false, external: ['electron', 'onnxruntime-node'] },
   // React Flow runs on Preact through preact/compat.
   // The changelogs (Patch notes in the library) come in as text.
   { ...common, entryPoints: ['src/renderer/main.tsx'], outfile: 'dist/renderer/app.js', platform: 'browser', format: 'iife', jsx: 'automatic', jsxImportSource: 'preact', loader: { '.md': 'text' },

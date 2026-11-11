@@ -21,7 +21,7 @@ import {
 } from './images.ts';
 import { bundledResources, Library, readManifestInfo, type LibraryOptions } from './library.ts';
 
-export const SERVER_VERSION = '1.4.0';
+export const SERVER_VERSION = '1.5.0';
 
 export interface ServerOptions extends LibraryOptions {
   /** fetch for the image services (tests replace it). */
@@ -80,6 +80,7 @@ const entrySchema = z.object({
   type: z.enum(ENTRY_TYPES).optional().describe('Needed for a new entry.'),
   name: z.string().optional(),
   aliases: opt(textList).describe('Other names, nicknames, titles with the name.'),
+  pronunciation: opt(z.string()).describe('How an invented name is said, for Lore-Forge\'s voices: syllables with hyphens and the stressed one in capitals ("KAM-eh-la-mam"), or IPA between slashes.'),
   summary: opt(z.string()).describe('One or two lines; shown on cards and hover cards.'),
   body: opt(z.string()).describe('Markdown text about the entry. Names of other entries link themselves.'),
   status: opt(z.string()).describe('character alive|dead|unknown, place standing|destroyed|unknown, faction active|dissolved|unknown, item intact|destroyed|lost|unknown.'),
@@ -97,6 +98,7 @@ const entrySchema = z.object({
   looks: opt(z.array(lookSchema)).describe('Other looks over time. When the appearance changes for good or for a while (a war wound, a coronation, new clothes, growing old), add a look instead of rewriting visual. Each look given changes the look with its id (else its name), only in the fields given, or is added; looks you leave out stay.'),
   picture: opt(z.object({ icon: z.string().optional(), color: z.string().optional(), accent: z.string().optional(), image: z.string().optional() })).describe('Card look: a game-icons.net icon name and #rrggbb colours, or one of its images.'),
   chapter: opt(z.string()), bookOrder: opt(z.number()),
+  fields: opt(z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))).describe('Values for the book\'s own fields of this type (get_book lists them), by key or name: {"hp": 30, "playable": true, "rarity": "rare"}. Only the values given change; null removes one.'),
   pins: opt(z.array(z.object({
     map: z.string().describe('The map\'s name or id.'),
     x: z.union([z.number(), z.string()]).optional().describe('Percent of the picture from its left edge (0 to 100).'),
@@ -140,6 +142,13 @@ const coverSchema = z.object({
   font: opt(z.string()).describe('Title font, e.g. Cinzel Decorative, Uncial Antiqua, IM Fell English, EB Garamond, Pirata One.'),
 }).loose().describe('How the book looks on the shelf. create_image with entry "cover" makes a cover picture.');
 
+const customFieldSchema = z.object({
+  key: z.string().optional().describe('The value\'s name in the entry files and in game data. Made from the name when left out; keep it when renaming a field.'),
+  name: z.string(),
+  kind: z.enum(['text', 'number', 'yes-no', 'choice']).optional().describe('Default text. yes-no values are true or false.'),
+  choices: z.array(z.string()).optional().describe('The values a choice field can have.'),
+}).loose();
+
 const bookFields = {
   description: opt(z.string()).describe('One line about the world.'),
   artStyle: opt(z.string()).describe('One style line used for every picture of this book.'),
@@ -147,9 +156,10 @@ const bookFields = {
   calendar: calendarSchema.optional(),
   details: detailsSchema.optional(),
   cover: coverSchema.optional(),
+  fields: z.record(z.string(), z.array(customFieldSchema).nullable()).optional().describe('The book\'s own fields per entry type (character, place, faction, item, event, note), such as HP and Strength for characters or Damage and Rarity for items, for game data. A type given replaces its list; [] or null removes it. Entries set their values with fields: {key: value}.'),
 };
 
-const toPatch = (a: { name?: string; description?: string | null; artStyle?: string | null; writingStyle?: string | null; calendar?: z.infer<typeof calendarSchema>; details?: Record<string, unknown>; cover?: Record<string, unknown> }): BookPatch => ({
+const toPatch = (a: { name?: string; description?: string | null; artStyle?: string | null; writingStyle?: string | null; calendar?: z.infer<typeof calendarSchema>; details?: Record<string, unknown>; cover?: Record<string, unknown>; fields?: Record<string, unknown[] | null> }): BookPatch => ({
   ...(a.name ? { name: a.name } : {}),
   ...(a.description !== undefined ? { description: a.description } : {}),
   ...(a.artStyle !== undefined ? { artStyle: a.artStyle } : {}),
@@ -157,6 +167,7 @@ const toPatch = (a: { name?: string; description?: string | null; artStyle?: str
   ...(a.calendar ? { calendar: a.calendar } : {}),
   ...(a.details ? { book: a.details } : {}),
   ...(a.cover ? { cover: a.cover } : {}),
+  ...(a.fields ? { fields: a.fields } : {}),
 });
 
 // ------------------------------------------------------------------------------------------------ server
@@ -212,14 +223,14 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('get_book', {
     title: 'Read a book',
-    description: 'A book at a glance: description, art style, writing style, calendar, Story Book details, cover, every entry in short (id, type, name, status, dates, summary, looks), the chapters, and the warning counts.',
+    description: 'A book at a glance: description, art style, writing style, calendar, Story Book details, cover, its own fields per entry type, every entry in short (id, type, name, status, dates, summary, looks), the chapters, and the warning counts.',
     inputSchema: { book: bookRef },
     annotations: { readOnlyHint: true },
   }, async (a) => attempt(() => bookOverview(lib, lib.resolveBook(a.book))));
 
   server.registerTool('update_book', {
     title: 'Change a book',
-    description: 'Change a book\'s name, description, art style, writing style, calendar, Story Book details or cover look. Only the fields given change; null removes one.',
+    description: 'Change a book\'s name, description, art style, writing style, calendar, Story Book details, cover look or its own fields per entry type. Only the fields given change; null removes one.',
     inputSchema: { book: bookRef, name: z.string().optional().describe('New name (the id and folder stay).'), ...bookFields },
   }, async (a) => attempt(async () => {
     const dir = writable(a.book);
@@ -294,7 +305,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('write_chapter', {
     title: 'Write a chapter',
-    description: 'Write one story chapter (Markdown prose). A chapter with the same title is replaced; otherwise it is added after the last one. Use the exact names of entries in the text. Returns the names and facts the chapter mentions that the world does not have yet (proposals), any contradictions with the entries, and, for a dated chapter, the looks the entries it names have on that date (looks): check that the text describes them that way.',
+    description: 'Write one story chapter (Markdown prose). A chapter with the same title is replaced; otherwise it is added after the last one. Use the exact names of entries in the text. Returns the names and facts the chapter mentions that the world does not have yet (proposals), any contradictions with the entries, and, for a dated chapter, the looks the entries it names have on that date (looks): check that the text describes them that way. A chapter can be planned before it is written: its title, summary, pov and status "idea", with empty text; the user sees it as a card on the planning board in the Story view.',
     inputSchema: {
       book: bookRef,
       title: z.string(),
@@ -302,8 +313,14 @@ export function createServer(opts: ServerOptions = {}): McpServer {
       date: z.string().optional().describe('In-world date the chapter is set at.'),
       number: z.number().int().positive().optional().describe('Reading position for a new chapter (1 = first). Default: after the last.'),
       replace: z.union([z.string(), z.number()]).optional().describe('Replace this chapter (its number or title), e.g. to rename it.'),
+      pov: z.string().optional().describe('Whose point of view the chapter is told from: a character, by name or id. "" removes it.'),
+      status: z.enum(['idea', 'draft', 'revised', 'done']).optional().describe('How far the chapter is. Without one it counts as an idea while it has no text and as a draft once it has.'),
+      summary: z.string().optional().describe('What happens in the chapter, in a line or two (its card on the planning board). "" removes it.'),
     },
-  }, async (a) => attempt(() => writeChapter(writable(a.book), { title: a.title, text: a.text, ...(a.date !== undefined ? { date: a.date } : {}), ...(a.number ? { number: a.number } : {}), ...(a.replace !== undefined ? { replace: a.replace } : {}) })));
+  }, async (a) => attempt(() => writeChapter(writable(a.book), {
+    title: a.title, text: a.text, ...(a.date !== undefined ? { date: a.date } : {}), ...(a.number ? { number: a.number } : {}), ...(a.replace !== undefined ? { replace: a.replace } : {}),
+    ...(a.pov !== undefined ? { pov: a.pov } : {}), ...(a.status !== undefined ? { status: a.status } : {}), ...(a.summary !== undefined ? { summary: a.summary } : {}),
+  })));
 
   server.registerTool('edit_chapter', {
     title: 'Change part of a chapter',
@@ -465,11 +482,11 @@ export function createServer(opts: ServerOptions = {}): McpServer {
 
   server.registerTool('export_book', {
     title: 'Export a book',
-    description: 'Write the Story Book (PDF or Word) or the World Codex (PDF, every entry with art briefs) to a file. Default: the book\'s exports folder.',
+    description: 'Write the Story Book (PDF, Word or an EPUB e-book) or the World Codex (PDF, every entry with art briefs) to a file. Default: the book\'s exports folder.',
     inputSchema: {
       book: bookRef,
       kind: z.enum(['story-book', 'codex']).optional().describe('Default story-book.'),
-      format: z.enum(['pdf', 'docx']).optional().describe('Default pdf. Word is for the Story Book only.'),
+      format: z.enum(['pdf', 'docx', 'epub']).optional().describe('Default pdf. Word and EPUB are for the Story Book only.'),
       output: z.string().optional().describe('A file or folder path.'),
     },
   }, async (a) => attempt(() => exportBook(lib.resolveBook(a.book), { kind: a.kind ?? 'story-book', format: a.format ?? 'pdf', ...(a.output ? { output: a.output } : {}), ...(fontDir ? { fontDir } : {}), ...(coverFontDir ? { coverFontDir } : {}) })));

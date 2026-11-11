@@ -2,7 +2,8 @@ import type { ModelFile } from '@lore-forge/core/node';
 import type { UpdateState } from './update-state.ts';
 import type { DisplaySettings, DisplayState } from './display.ts';
 import type { Lang } from './i18n.ts';
-import type { CodexOptions, BookOptions, BookSettings, Calendar, ImageView, WorldCoverSettings, WorldFile, WorldMap } from '@lore-forge/core';
+import type { BuiltInVoice, SpokenName } from './voices.ts';
+import type { CodexOptions, BookOptions, BookSettings, Calendar, ImageView, WorldCoverSettings, WorldFile, WorldManifest, WorldMap } from '@lore-forge/core';
 
 export type PdfKind = 'codex' | 'book';
 
@@ -45,6 +46,8 @@ export interface CreateWorldOptions {
   image?: string;
   /** The rest of the cover: emblem, title and emblem switches, font. */
   cover?: WorldCoverSettings;
+  /** A ready start (New book, Start from): the calendar, the writing and picture style, fields of its own. */
+  template?: Pick<WorldManifest, 'writingStyle' | 'artStyle' | 'fields'> & { calendar?: Calendar };
 }
 
 /** A picture service for AI-made pictures (Connect AI). */
@@ -241,12 +244,34 @@ export interface LoreApi {
   exportPdf(dir: string, kind: PdfKind, options?: PublishOptions): Promise<PdfExport | null>;
   /** Ask where to save, then write the print Story Book as a Word .docx. Null if cancelled. */
   exportDocx(dir: string, options?: PublishOptions): Promise<{ docx: string } | null>;
+  /** Choose a manuscript (Word, Markdown or text): its chapters, to add to the story; null when cancelled. */
+  importManuscript(): Promise<{ name: string; chapters: { title: string; body: string }[] } | null>;
+  /** The voices Lore-Forge brings (offline English voices); none where this computer cannot run them. */
+  builtInVoices(): Promise<BuiltInVoice[]>;
+  /**
+   * Speech in a built-in voice: samples from -1 to 1, and how many a second. `speed` 1 is normal. Sentences asked for
+   * with a `batch` name can be dropped together while they still wait their turn (dropSpeech).
+   */
+  speakBuiltIn(text: string, voice: string, speed: number, names?: SpokenName[], batch?: string): Promise<{ audio: Float32Array; sampleRate: number }>;
+  /** The sentences of a batch that are not being made yet are let go; their speakBuiltIn calls come back without sound. */
+  dropSpeech(batch: string): void;
+  /** An audiobook: where to save it (null when cancelled), then its sound as it is made, then the end, or a stop. */
+  audiobookStart(dir: string): Promise<{ id: string; file: string } | null>;
+  /** Opus packets, one after the other: each one's size, and the samples (at 48 kHz) in each. */
+  audiobookAdd(id: string, data: Uint8Array, sizes: number[], samples: number[]): Promise<void>;
+  /** Writes the audiobook file, with the book's cover. */
+  audiobookFinish(id: string, dir: string, info: AudiobookInfo): Promise<{ file: string; bytes: number }>;
+  audiobookCancel(id: string): Promise<void>;
+  /** The Story Book as an e-book (EPUB), where the user chooses; null when cancelled. */
+  exportEpub(dir: string, options?: PublishOptions): Promise<{ epub: string; chapters: number; pictures: number; notes: string[] } | null>;
   /** Write the book details (title, author, dedication, ...) into world.json's "book". Empty fields are removed. Returns what was saved. */
   saveBook(dir: string, book: BookSettings): Promise<BookSettings>;
   /** Replace world.json's "calendar" (eras, default era, months); other calendar keys stay. Rejects a calendar with problems. Returns what was saved. */
   saveCalendar(dir: string, calendar: Calendar): Promise<Calendar>;
   /** world.json "writingStyle" and "artStyle" (empty removes one); what is saved. */
   saveStyle(dir: string, style: { writingStyle: string; artStyle: string }): Promise<{ writingStyle?: string; artStyle?: string }>;
+  /** world.json "fields", the book's own fields per entry type; what was saved (none: {}). */
+  saveFields(dir: string, fields: NonNullable<WorldManifest['fields']>): Promise<NonNullable<WorldManifest['fields']>>;
   /**
    * Replace world.json's "cover" (empty fields removed). `picked` is an image from pickImageFile: it is copied into
    * images/ and becomes the cover picture. Returns what was saved.
@@ -369,4 +394,20 @@ declare global {
   interface Window {
     lore: LoreApi;
   }
+}
+
+/** What an audiobook says about itself: its header from the encoder, where its sound ends, its tags and chapters. */
+export interface AudiobookInfo {
+  /** The encoder's identification header (OpusHead). */
+  head: Uint8Array;
+  /** Where the sound ends, in samples at 48 kHz from the start of the stream (the encoder's pre-skip included). */
+  end: number;
+  title: string;
+  author?: string;
+  /** The voice that reads it. */
+  reader: string;
+  /** The book's language: en or tr. */
+  language: string;
+  /** Each chapter's title and where it starts, in seconds. */
+  chapters: { title: string; start: number }[];
 }

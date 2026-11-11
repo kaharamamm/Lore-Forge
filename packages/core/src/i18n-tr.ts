@@ -325,6 +325,11 @@ const FILES: Record<string, string> = {
   'A {0} entry should live in {1}/, not {2}/.': 'Bu bir {0} kaydı; {2}/ klasöründe değil, {1}/ klasöründe olmalı.',
   'The header must be a set of "key: value" lines.': 'Başlık bilgisi “anahtar: değer” satırlarından oluşmalı.',
   '"order" should be a number.': '“order” bir sayı olmalı.',
+  '"status" should be idea, draft, revised or done.': '“status” idea, draft, revised ya da done olmalı.',
+  'Idea': 'Fikir',
+  'Draft': 'Taslak',
+  'Revised': 'Düzeltildi',
+  'Done': 'Bitti',
   'Untitled chapter': 'Başlıksız bölüm',
   '{0} must look like { "schemaVersion": 1, "ignored": [...] }.': '{0} şu biçimde olmalı: { "schemaVersion": 1, "ignored": [...] }.',
   '{0} is not valid JSON: {1}': '{0} geçerli bir JSON değil: {1}',
@@ -679,6 +684,7 @@ const DOCUMENTS: Record<string, string> = {
   'A map of {0}.': '{0} haritası.',
   'No places are pinned on this map yet.': 'Bu haritaya henüz hiçbir yer iğnelenmedi.',
   '{0}: alias of {1}': '{0}: {1} için diğer ad',
+  '{0} ({1}), said {2}': '{0} ({1}), telaffuzu: {2}',
   'Appendix: consistency warnings': 'Ek: tutarlılık uyarıları',
   'No open warnings.': 'Açık uyarı yok.',
   'Marked intended by the author (treat as canon)': 'Yazarın kasıtlı saydıkları (kanon kabul edin)',
@@ -709,6 +715,7 @@ const DOCUMENTS: Record<string, string> = {
   'Rights: {0}': 'Haklar: {0}',
   Id: 'Kimlik',
   'Also known as': 'Diğer adları',
+  Pronunciation: 'Telaffuz',
   Tags: 'Etiketler',
   'Age at death': 'Ölüm yaşı',
   'Lived at': 'Yaşadığı yerler',
@@ -726,6 +733,7 @@ const DOCUMENTS: Record<string, string> = {
   'Appendix: Chronicle': 'Ek: Kronik',
   'The Story': 'Hikâye',
   'Chapter {0}. {1}': 'Bölüm {0}. {1}',
+  'Chapter {0}': 'Bölüm {0}',
   '(No text written for this page yet.)': '(Bu sayfa için henüz metin yazılmadı.)',
   'The events and lore pages of the world, in story order.': 'Dünyanın olayları ve bilgi sayfaları, hikâye sırasıyla.',
   "Assembled by {0} from the story manuscript and the world's events and notes. The text is the author's own; Lore-Forge only orders and typesets it.":
@@ -796,4 +804,26 @@ const MAPS: Record<string, string> = {
   'Map {0} in "maps" has the id of an earlier map ("{1}"). It was left out.': '“maps” içindeki {0}. harita, önceki bir haritanın kimliğini taşıyor (“{1}”). Bu harita dışarıda bırakıldı.',
 };
 
-export const CORE_TR: Readonly<Record<string, string>> = Object.freeze({ ...VERBS, ...DATES, ...WORDS, ...WARNINGS, ...FILES, ...RULES, ...LABELS, ...DOCUMENTS, ...LOOKS, ...MAPS });
+const FIELDS: Record<string, string> = {
+  // The book's own fields (world.json "fields", an entry's "fields", rules/fields.ts). "Alan" is a field.
+  'Field value of the wrong kind': 'Yanlış türde alan değeri',
+  "A value in one of the book's own fields (World settings) does not fit the field: words in a number field, something other than yes or no, or a choice that is not on the field's list.":
+    'Kitabın kendi alanlarından birindeki (Dünya ayarları) bir değer alana uymuyor: sayı alanında sözcükler, evet ya da hayır dışında bir şey, ya da alanın listesinde olmayan bir seçenek.',
+  '{0}: "{1}" should be a number, not "{2}" (source: {3}).': '{0}: “{1}” bir sayı olmalı, “{2}” değil (kaynak: {3}).',
+  '{0}: "{1}" should be yes or no, not "{2}" (source: {3}).': '{0}: “{1}” evet ya da hayır olmalı, “{2}” değil (kaynak: {3}).',
+  '{0}: "{1}" should be one of {2}, not "{3}" (source: {4}).': '{0}: “{1}” şunlardan biri olmalı: {2}; “{3}” değil (kaynak: {4}).',
+  Yes: 'Evet',
+  No: 'Hayır',
+  '"fields" should be a set of "key: value" lines.': '“fields” “anahtar: değer” satırlarından oluşmalı.',
+  '"fields.{0}" should be text, a number, or true or false.': '“fields.{0}” metin, sayı ya da true veya false olmalı.',
+  '"fields" should list fields for each type of entry, such as { "character": [{ "key": "hp", "name": "HP", "kind": "number" }] }. The fields were left out.':
+    '“fields” her kayıt türü için alanları listelemeli, örneğin { "character": [{ "key": "hp", "name": "HP", "kind": "number" }] }. Alanlar dışarıda bırakıldı.',
+  '"fields" has "{0}", which is not a type of entry ({1}). Those fields were left out.': '“fields” içinde “{0}” var, ama bu bir kayıt türü değil ({1}). Bu alanlar dışarıda bırakıldı.',
+  '"fields.{0}" should be a list of fields. They were left out.': '“fields.{0}” bir alan listesi olmalı. Bu alanlar dışarıda bırakıldı.',
+  'Field {0} in "fields.{1}" needs a text "key" and "name", and a "kind" of text, number, yes-no or choice. It was left out.':
+    '“fields.{1}” içindeki {0}. alanın metin olarak “key” ve “name” alanları olmalı; “kind” da text, number, yes-no ya da choice olmalı. Bu alan dışarıda bırakıldı.',
+  'Field {0} in "fields.{1}" has the key of an earlier field ("{2}"). It was left out.': '“fields.{1}” içindeki {0}. alan, önceki bir alanın anahtarını taşıyor (“{2}”). Bu alan dışarıda bırakıldı.',
+  'The choice field "{0}" in "fields.{1}" needs its "choices". It was left out.': '“fields.{1}” içindeki “{0}” seçenek alanının “choices” listesi olmalı. Bu alan dışarıda bırakıldı.',
+};
+
+export const CORE_TR: Readonly<Record<string, string>> = Object.freeze({ ...VERBS, ...DATES, ...WORDS, ...WARNINGS, ...FILES, ...RULES, ...LABELS, ...DOCUMENTS, ...LOOKS, ...MAPS, ...FIELDS });

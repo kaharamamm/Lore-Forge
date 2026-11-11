@@ -1,0 +1,4 @@
+The pronunciation dictionaries en-us.txt and en-gb.txt are made by scripts/build-lexicons.mjs from the Misaki
+dictionaries by hexgrad (https://github.com/hexgrad/misaki, commit fba1236595f2d2bf21d414ba6e57d25256afada3):
+the "gold" and "silver" dictionaries of each accent, one reading a word. They are licensed under the Apache
+License, Version 2.0: see LICENSE.txt or https://www.apache.org/licenses/LICENSE-2.0
