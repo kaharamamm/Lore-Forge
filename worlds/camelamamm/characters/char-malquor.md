@@ -1,7 +1,7 @@
 ---
 id: char-malquor
 type: character
-name: Malquora
+name: Malquor
 aliases:
   - Steward Malquor
 summary: Steward of Water of Camelamamm and secret head of the Dry Hand, who dammed the Singing Well to sell its water.

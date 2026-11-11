@@ -16,7 +16,7 @@ Every world is a plain folder of Markdown and YAML, checked live for contradicti
 
 [**Download**](#download) · [Features](#features) · [Write with AI](#write-with-an-ai-assistant) · [Quick start](#quick-start) · [User guide](docs/USER-GUIDE.md) · [World format](docs/FORMAT.md)
 
-<img src="docs/media/demo.gif" alt="Lore-Forge demo: opening Camelamamm from the library shelf, the world home, editing Queen Samira so an after-death error appears and marking it intended, the timeline, the relationship web, a story chapter with proposals and the Story Book preview" width="100%">
+<img src="docs/media/demo.gif" alt="Lore-Forge demo: opening Camelamamm from the library shelf, editing Queen Samira so an after-death error appears and marking it intended, the timeline, the relationship web, Mr Camel's journey on the map, a story chapter with proposals, the planning board, and the Story Book preview with its audiobook option" width="100%">
 
 </div>
 
@@ -60,30 +60,35 @@ The builds are not code-signed (signing needs paid certificates), so the first s
 - **Your files, not a cloud.** A world is a folder of Markdown with YAML front matter. It works offline, lives happily in git, diffs cleanly and can be read by other tools. **Share…** packs a whole book into one file to send to a friend (a double-click opens it), or makes a website of it that opens in any browser, or game data for your engine. Nothing you write leaves your machine unless you connect an AI app or picture service yourself.
 - **Works with your AI.** Ask Claude, Codex, Cursor or another MCP app for a story and it writes the whole book in Lore-Forge: entries, relationships, chapters and pictures, checked for contradictions. Or ask from inside a book: the **Ask AI** tab runs Claude Code or Codex on your own plan and shows each change as it happens.
 - **Built for game worlds.** Custom calendars and eras, partial dates, a LegendKeeper-style timeline, family trees, relationship webs, maps with your places pinned on them, art briefs and reference images for artists and 3D tools. Fields of your own per entry type (HP, damage, rarity) go into game data with their values. An entry can change its look over time (after a war, in old age), each look with its own pictures and 3D models.
-- **From notes to a book.** Write the story chapter by chapter, or import a manuscript from Word, Markdown or plain text; Lore-Forge proposes entries from your prose and exports a typeset Story Book (PDF, Word, EPUB e-book or Markdown), with A4 among the trim sizes and Word matching the PDF including the cover.
+- **From notes to a book.** Write the story chapter by chapter, or import a manuscript from Word, Markdown or plain text, and plan it on a board of chapter cards. Lore-Forge proposes entries from your prose and exports a typeset Story Book (PDF, Word, EPUB e-book or Markdown), with A4 among the trim sizes and Word matching the PDF including the cover.
+- **Hear your story.** **Read aloud** reads a chapter in one of thirteen English voices that run on your computer, free and without the internet, and **Save audiobook…** turns the whole story into one audio file with chapter marks and the cover. Names are said the way their pronunciation is written.
 
 ## Features
 
 <table>
   <tr>
     <td width="50%" valign="top"><img src="docs/media/library.png" alt="The library: each world is a book on a shelf" width="100%"><br><b>Library.</b> Worlds as books on shelves. Drag freely to rearrange; <b>New book</b> stays first on the top shelf. Duplicate keeps the cover colours and stays on the shelf.</td>
-    <td width="50%" valign="top"><img src="docs/media/world-home.png" alt="World home with the book cover and entry cards" width="100%"><br><b>World home.</b> Cover, counts and a card for every entry. An amber warnings chip appears only when something is open.</td>
+    <td width="50%" valign="top"><img src="docs/media/world-home.png" alt="World home with the book cover and entry cards" width="100%"><br><b>World home.</b> Cover, counts and a card for every entry. <b>Share…</b> sends the book as one file, a website or game data.</td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><img src="docs/media/entry.png" alt="The entry editor for Mr Camel" width="100%"><br><b>Editor.</b> Structured fields per type, dates on your own calendar, linked names. A circular entry image sits in the title when one is set.</td>
-    <td width="50%" valign="top"><img src="docs/media/warnings.png" alt="An after-death error in the warnings panel" width="100%"><br><b>Consistency warnings.</b> Live, with <i>Go to</i> and <i>Mark intended</i>. No empty “no warnings” noise on the chips.</td>
+    <td width="50%" valign="top"><img src="docs/media/entry.png" alt="The entry editor for Mr Camel" width="100%"><br><b>Editor.</b> Structured fields per type, dates on your own calendar, linked names, fields of your own, and how a name is said. A circular entry image sits in the title when one is set.</td>
+    <td width="50%" valign="top"><img src="docs/media/warnings.png" alt="An after-death error for Queen Samira in the entry and in the warnings panel" width="100%"><br><b>Consistency warnings.</b> Live, with <i>Go to</i> and <i>Mark intended</i>, in the entry and in the side panel.</td>
   </tr>
   <tr>
     <td width="50%" valign="top"><img src="docs/media/relationships.png" alt="The relationship web around Mr Camel" width="100%"><br><b>Relationship web and family tree.</b> Drag to link entries.</td>
     <td width="50%" valign="top"><img src="docs/media/timeline.png" alt="The timeline with eras, lifespans and events" width="100%"><br><b>Timeline.</b> LegendKeeper-style Gantt on d3: era bands, swimlanes, icon+title bars, image cards, an overview strip, and a Lanes | Stacked toggle.</td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><img src="docs/media/story.png" alt="The Story space with a chapter and proposals" width="100%"><br><b>Story.</b> A chapter-by-chapter manuscript that proposes entries from your text.</td>
+    <td width="50%" valign="top"><img src="docs/media/story.png" alt="The Story space with a chapter and proposals" width="100%"><br><b>Story.</b> A chapter-by-chapter manuscript that proposes entries from your text. <b>Replace…</b> works across every chapter, and <b>Ask AI</b> works on a chapter or the part you chose.</td>
     <td width="50%" valign="top"><img src="docs/media/story-book-pdf.png" alt="Cover and first pages of the exported Story Book PDF" width="100%"><br><b>Story Book and World Codex.</b> PDF, Word, EPUB and Markdown. A4 among the sizes; copyright page and drop-cap options; Word matches the PDF, cover included.</td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><img src="docs/media/map.png" alt="The map of the Sunsea with Camelamamm, the Glass Dunes and the Hollow of Echoes pinned on it, and the card for Camelamamm" width="100%"><br><b>Maps.</b> Your places pinned on your own map pictures, or on one the AI draws from your places. Point at a pin to see who lives there and what happened there; move through the years to see events at their places, and draw someone's journey.</td>
+    <td width="50%" valign="top"><img src="docs/media/map.png" alt="The map of the Sunsea with Mr Camel's journey drawn through Camelamamm, the Glass Dunes and the Hollow of Echoes, and the card for Camelamamm" width="100%"><br><b>Maps.</b> Your places pinned on your own map pictures, or on one the AI draws from your places. Point at a pin to see who lives there and what happened there; move through the years to see events at their places, and draw someone's journey.</td>
     <td width="50%" valign="top"><img src="docs/media/ask-ai.png" alt="Ask AI adding a rival tea merchant for Mr Camel, with each step and an Undo button, beside the new entry" width="100%"><br><b>Ask AI.</b> Claude Code or Codex works on the open book with Lore-Forge's own tools. Each step shows as it happens, and <b>Undo</b> takes a task back.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/media/board.png" alt="The planning board with a card for each of the six chapters, and the grid of who is in which chapter" width="100%"><br><b>Planning board.</b> Every chapter as a card with its date, point of view, what happens and how far it is. Drag to reorder, plan chapters not yet written, and see who is in which chapter.</td>
+    <td width="50%" valign="top"><img src="docs/media/read-aloud.png" alt="Read aloud in the first chapter, with the sentence being read marked and the voice and speed below" width="100%"><br><b>Read aloud and audiobook.</b> Thirteen English voices that run on your computer without the internet. The sentence being read is marked; <b>Save audiobook…</b> reads the whole story into one file.</td>
   </tr>
 </table>
 

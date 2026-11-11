@@ -2619,7 +2619,8 @@ export function App() {
           $<HTMLButtonElement>('.start-tour')!.click();
           await until(() => !!$('.tour-card'));
           const steps = Number(/of (\d+)/.exec($('.tour-count')?.textContent ?? '')?.[1] ?? 0);
-          expect(steps >= 5 && steps <= 8, `the tour has 5 to 8 steps (${steps})`);
+          expect(steps >= 8 && steps <= 13, `the tour has 8 to 13 steps (${steps})`);
+          const sideAtStart = localStorage.getItem('lore:side') ?? 'warnings';
           const seen: string[] = [];
           for (let i = 0; i < steps; i++) {
             expect(await until(() => $('.tour')?.dataset['step'] === String(i) && !($<HTMLButtonElement>('.tour-next')?.disabled ?? true), 10000), `tour step ${i + 1} is ready`);
@@ -2629,6 +2630,8 @@ export function App() {
             const inside = card.left >= 0 && card.top >= 0 && card.right <= innerWidth + 1 && card.bottom <= innerHeight + 1;
             const title = $('.tour-title')?.textContent ?? '';
             seen.push(title);
+            if (title === 'Ask AI') expect(!!$('#side-ask:not([hidden])'), 'the Ask AI step shows the Ask AI panel');
+            if (title === 'Planning board') expect(!!$('.board'), 'the board step shows the planning board');
             expect(spot.width > 10 && spot.height > 10 && inside && !$('.tour-spot.is-none'), `tour step ${i + 1} "${title}" points at something and its card is inside the window (spot ${Math.round(spot.left)},${Math.round(spot.top)} ${Math.round(spot.width)}x${Math.round(spot.height)}${$('.tour-spot.is-none') ? ' none' : ''}, card ${Math.round(card.left)},${Math.round(card.top)} ${Math.round(card.width)}x${Math.round(card.height)}, window ${innerWidth}x${innerHeight})`);
             if (i === 3) {
               $<HTMLButtonElement>('.tour-back')!.click();
@@ -2640,7 +2643,8 @@ export function App() {
             $<HTMLButtonElement>('.tour-next')!.click();
           }
           expect(await until(() => !$('.tour')), 'Finish closes the tour');
-          expect(seen.length === steps && /library/i.test(seen[0] ?? '') && seen.some((t) => /Story/.test(t)) && seen.some((t) => /Warnings/.test(t)), `the tour covers the library, the sample, an entry, warnings and story (${seen.join(' / ')})`);
+          expect(seen.length === steps && /library/i.test(seen[0] ?? '') && ['Story', 'Warnings', 'Map', 'Ask AI', 'Planning board', 'Story Book and World Codex'].every((x) => seen.includes(x)), `the tour covers the library, the sample, an entry, the map, warnings, Ask AI, the story, the board and the books (${seen.join(' / ')})`);
+          expect((localStorage.getItem('lore:side') ?? 'warnings') === sideAtStart, 'the side panel is back on the tab it showed before the tour');
           summary['tour'] = seen.join(' / ');
           await window.lore.smokeShow(false);
         }
@@ -3376,7 +3380,9 @@ export function App() {
   const [tourStep, setTourStep] = useState(0);
   // Whether the sample is off the shelf (Settings), so the tour points at the shelf instead of its book.
   const [sampleHidden, setSampleHidden] = useState(false);
-  const startTour = () => { setTourStep(0); setTouring(true); void window.lore.settings().then((x) => setSampleHidden(!!x.hideSample)); };
+  // The tour shows Warnings and Ask AI in turn; the side panel goes back to the one that was open when it ends.
+  const sideBeforeTour = useRef(side);
+  const startTour = () => { sideBeforeTour.current = side; setTourStep(0); setTouring(true); void window.lore.settings().then((x) => setSampleHidden(!!x.hideSample)); };
   const [sample, setSample] = useState<string | null>(null);
   const [bundled, setBundled] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
@@ -3430,6 +3436,7 @@ export function App() {
   }, []);
   const endTour = () => {
     setTouring(false);
+    setSide(sideBeforeTour.current);
     void window.lore.saveSettings({ tourDone: true });
   };
   const show = (v: View, mode?: RelationMode) => transition(() => { if (mode) setRelMode(mode); setReveal(undefined); setPreview(null); setView(v); });
@@ -3439,15 +3446,19 @@ export function App() {
     sampleHidden
       ? { title: t('The sample world'), text: t('Camelamamm is a small desert world that comes with Lore-Forge, with characters, places, events, a story and pictures. It is off your shelf now (Show sample world in Settings puts it back), but the tour can still open it: Next opens it.'), anchor: '#library-shelf', go: () => (dirRef.current ? closeWorld() : undefined) }
       : { title: t('The sample world'), text: t('Camelamamm is a small desert world that comes with Lore-Forge, with characters, places, events, a story and pictures. Next opens it.'), anchor: `.shelf-book[data-key="${CSS.escape(sample)}"]`, go: () => (dirRef.current ? closeWorld() : undefined) },
-    { title: t('World home'), text: t('Each world opens on its home page: the cover (click it to change it), what is in the world, and a card for every entry.'), anchor: '.home-hero', go: async () => { await inSample(); show('home'); } },
-    { title: t('An entry'), text: t('Entries are characters, places, factions, items, events and lore. Each has facts, links to others, a visual description, and Images or 3D model tabs.'), anchor: '.editor', go: async () => {
+    { title: t('World home'), text: t('Each world opens on its home page: the cover (click it to change it), what is in the world, and a card for every entry. Share… sends the book as one file, a website or game data.'), anchor: '.home-hero', go: async () => { await inSample(); show('home'); } },
+    { title: t('An entry'), text: t('Entries are characters, places, factions, items, events and lore. Each has facts, links to others, a visual description, how its name is said, and Images or 3D model tabs.'), anchor: '.editor', go: async () => {
       const w = await inSample();
       const e = w?.entries.find((x) => x.images?.length) ?? w?.entries[0];
       if (e) transition(() => { setSelectedId(e.id); setReveal(undefined); setPreview(null); setView('editor'); });
     } },
     { title: t('Relationships and timeline'), text: t('The tabs up here show the world as a timeline, a family tree and a relationship web, all built from the links in the entries.'), anchor: '.tabs', go: async () => { await inSample(); show('relations', 'web'); } },
-    { title: t('Warnings'), text: t('Lore-Forge checks the world as you write: someone acting after their death, a broken link, a date outside its era. Click a warning to jump there, or mark it as intended.'), anchor: '.warnings-panel', go: async () => { await inSample(); show('relations', 'web'); } },
-    { title: t('Story'), text: t('Write chapters here. Lore-Forge spots the people and places you mention, suggests new entries, and checks the story against the lore.'), anchor: '.main-story', go: async () => { await inSample(); show('story'); } },
+    { title: t('Map'), text: t('Pin your places on a map: add a picture of one, or have an AI draw it. The year slider shows what happened where, and a journey draws someone’s way across the map.'), anchor: '.map-view', go: async () => { await inSample(); show('map'); } },
+    { title: t('Warnings'), text: t('Lore-Forge checks the world as you write: someone acting after their death, a broken link, a date outside its era. Click a warning to jump there, or mark it as intended.'), anchor: '.warnings-panel', go: async () => { await inSample(); setSide('warnings'); show('relations', 'web'); } },
+    { title: t('Ask AI'), text: t('Give Claude Code or Codex a task on this book, on your own plan: write the next chapter, describe every character, fix the warnings. Undo takes back what it changed.'), anchor: '.side-pane', go: async () => { await inSample(); setSide('ask'); show('relations', 'web'); } },
+    { title: t('Story'), text: t('Write chapters here, or import a manuscript from Word. Lore-Forge spots the people and places you mention, suggests new entries, and checks the story against the lore. Under the chapter title: Replace, Ask AI and Read aloud.'), anchor: '.main-story', go: async () => { await inSample(); setSide('warnings'); setBoard(false); show('story'); } },
+    { title: t('Planning board'), text: t('Board shows every chapter as a card with its date, point of view and how far along it is. Drag a card to move the chapter.'), anchor: '.board', go: async () => { await inSample(); setBoard(true); show('story'); } },
+    { title: t('Story Book and World Codex'), text: t('Turn the story into a book: a PDF, a Word file, an e-book, or an audiobook read by a Lore-Forge voice. The World Codex gathers every entry into one PDF.'), anchor: '.publish-actions', go: async () => { await inSample(); setBoard(false); show('story'); } },
     { title: t('Make it yours'), text: t('The sample stays as it is. Duplicate it to get a copy you can edit, or go back to the library and start a New book of your own.'), anchor: '.home-duplicate', go: async () => { await inSample(); show('home'); } },
   ] : [];
   const overlays = (

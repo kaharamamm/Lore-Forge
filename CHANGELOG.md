@@ -24,6 +24,7 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 - In the Story's chapter list, **New chapter** is under the chapters, where the new one goes, and **Import…** is at the top. The open chapter's arrows and delete button sit in its card.
 - Read aloud shows **Loading the voice…** while a voice gets ready, and a new voice or speed no longer waits for sentences made in the old one.
 - In the Story, **Replace…**, **Ask AI** and **Read aloud** always sit on their own line under the chapter title, whatever its length.
+- **Take the tour** also shows the Map, Ask AI, the planning board, and the Story Book and World Codex, and says where Replace, Read aloud, Share… and pronunciations are. It has twelve steps.
 
 ### Fixed
 
@@ -31,6 +32,7 @@ All notable changes to Lore-Forge are listed here. The format follows [Keep a Ch
 - **Match case** and **Whole words** in Replace in the story sit on one line beside their boxes.
 - With the app in Turkish, an English book's title, chapter titles and names keep their English "I" in the title font (no longer "HUMMİNG"), and with the app in English a Turkish book's keep their "İ". The language is read from the book's own text.
 - On Windows, the `lore` command and Lore-Forge started from a terminal in VS Code or Cursor no longer print a crash reporter error (`registration_protocol_win.cc ... CreateFile`).
+- In the sample world, the Steward of Water is called Malquor again, as in the story, so the Story no longer proposes him as a new character.
 
 ## [1.2.0] - 2026-11-09
 

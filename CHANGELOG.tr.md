@@ -24,6 +24,7 @@ Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a C
 - Hikâye'nin bölüm listesinde **Yeni bölüm** düğmesi, yeni bölümün ekleneceği yerde, bölümlerin altında; **İçe aktar…** ise en üstte. Açık bölümün okları ve silme düğmesi kendi kartında duruyor.
 - Sesli okuma bir ses hazırlanırken **Ses yükleniyor…** yazıyor; yeni bir ses ya da hız seçildiğinde eski sesle yapılan cümleler artık beklenmiyor.
 - Hikâye'de **Değiştir…**, **Yapay zekâya sor** ve **Sesli oku** düğmeleri, başlık ne kadar uzun olursa olsun, her zaman bölüm başlığının altında kendi satırlarında duruyor.
+- **Turu başlat** artık Harita, Yapay zekâya sor, planlama panosu ile Hikâye Kitabı ve Dünya Kodeksi adımlarını da gösteriyor; Değiştir, Sesli oku, Paylaş… ve telaffuzların yerini de anlatıyor. Turda on iki adım var.
 
 ### Düzeltilenler
 
@@ -31,6 +32,7 @@ Lore-Forge'daki tüm önemli değişiklikler burada listelenir. Biçim [Keep a C
 - Hikâyede değiştirme penceresindeki **Büyük küçük harf aynı olsun** ve **Yalnızca tam sözcükler** artık kutularının yanında tek satırda duruyor.
 - Uygulama Türkçeyken İngilizce bir kitabın adı, bölüm başlıkları ve adları başlık yazı tipinde İngilizce "I" harfini koruyor (artık "HUMMİNG" değil); uygulama İngilizceyken de Türkçe bir kitabınkiler "İ" harfini koruyor. Dil, kitabın kendi metninden anlaşılıyor.
 - Windows'ta `lore` komutu ve VS Code ya da Cursor terminalinden başlatılan Lore-Forge artık bir çökme raporlama hatası (`registration_protocol_win.cc ... CreateFile`) yazmıyor.
+- Örnek dünyada Su Kâhyası yeniden hikâyedeki gibi Malquor adını taşıyor; Hikâye artık onu yeni bir karakter olarak önermiyor.
 
 ## [1.2.0] - 2026-11-09
 
